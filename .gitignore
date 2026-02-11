@@ -190,8 +190,8 @@ cython_debug/
 go.work
 
 # Go module cache
-go.sum
-*.mod
+# Note: go.sum should be committed for reproducible builds
+# *.mod (go.mod should be committed)
 
 # IDE files
 *.swp
@@ -468,14 +468,14 @@ pids
 .local/
 
 # Go build cache
-go.sum
+# Note: go.sum should be committed for reproducible builds
 
 # Test files
 *_test.go
 *_test.go~
 
 # Go mod download cache
-go.mod
+# Note: go.mod should be committed for reproducible builds
 
 # Go binaries
 *.exe
