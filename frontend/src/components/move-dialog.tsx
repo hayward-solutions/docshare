@@ -177,8 +177,8 @@ export function MoveDialog({
       toast.success('Moved successfully');
       onOpenChange(false);
       onMoved();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to move item');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to move item');
     } finally {
       setIsMoving(false);
     }

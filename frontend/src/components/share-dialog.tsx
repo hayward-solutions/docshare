@@ -92,7 +92,7 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
        try {
          const res = await apiMethods.get<User[]>('/api/users/search', { search: searchQuery, limit: 5 });
          
-         const data = res as any; 
+          const data = res as { success: boolean; data?: { users?: User[] } | User[] };
          if (data.success && data.data) {
             if (Array.isArray(data.data)) {
               setUsers(data.data);
@@ -125,8 +125,8 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
       setSelectedGroup('');
       fetchShares();
       setActiveTab('permissions');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to share file');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to share file');
     } finally {
       setIsLoading(false);
     }
@@ -137,8 +137,8 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
       await apiMethods.delete(`/api/shares/${shareId}`);
       toast.success('Share removed');
       fetchShares();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to remove share');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove share');
     }
   };
 
@@ -147,8 +147,8 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
       await apiMethods.put(`/api/shares/${shareId}`, { permission: newPermission });
       toast.success('Permission updated');
       fetchShares();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update permission');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update permission');
     }
   };
 
@@ -246,7 +246,7 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
 
               <div className="space-y-2">
                 <Label>Permission</Label>
-                <Select value={permission} onValueChange={(val: any) => setPermission(val)}>
+                <Select value={permission} onValueChange={(val: 'view' | 'download' | 'edit') => setPermission(val)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

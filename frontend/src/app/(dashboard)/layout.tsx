@@ -11,7 +11,6 @@ import {
   Settings, 
   LogOut, 
   Menu, 
-  X,
   Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,98 @@ import { cn } from '@/lib/utils';
 import { LoadingPage } from '@/components/loading';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
+  user: {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    avatarURL?: string;
+    role?: string;
+  };
+  pathname: string;
+  setIsMobileOpen: (open: boolean) => void;
+  logout: () => void;
+}) => {
+  const navigation = [
+    { name: 'My Files', href: '/files', icon: Files },
+    { name: 'Shared With Me', href: '/shared', icon: Share2 },
+    { name: 'Groups', href: '/groups', icon: Users },
+    { name: 'Account Settings', href: '/settings', icon: Settings },
+  ];
+
+  if (user?.role === 'admin') {
+    navigation.push({ name: 'Admin', href: '/admin', icon: Shield });
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-4 py-4">
+      <div className="px-6 py-2">
+        <h1 className="text-xl font-bold text-white">DocShare</h1>
+      </div>
+      <ScrollArea className="flex-1 overflow-hidden">
+        <nav className="space-y-1 px-3 pr-4">
+          {navigation.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => setIsMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+      </ScrollArea>
+      <div className="px-3 py-2">
+       <div className="flex items-center gap-3 rounded-lg bg-slate-800 px-3 py-3">
+         <Avatar className="h-9 w-9">
+           <AvatarImage src={user?.avatarURL} />
+           <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
+         </Avatar>
+         <div className="flex flex-1 flex-col overflow-hidden">
+           <span className="truncate text-sm font-medium text-white">
+             {user?.firstName} {user?.lastName}
+           </span>
+           <span className="truncate text-xs text-slate-400">{user?.email}</span>
+         </div>
+         <DropdownMenu>
+           <DropdownMenuTrigger asChild>
+             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+               <Settings className="h-4 w-4" />
+             </Button>
+           </DropdownMenuTrigger>
+           <DropdownMenuContent align="end" className="w-56">
+             <DropdownMenuLabel>My Account</DropdownMenuLabel>
+             <DropdownMenuSeparator />
+             <DropdownMenuItem asChild>
+               <Link href="/settings" className="flex items-center">
+                 <Settings className="mr-2 h-4 w-4" />
+                 Account Settings
+               </Link>
+             </DropdownMenuItem>
+             <DropdownMenuSeparator />
+             <DropdownMenuItem onClick={logout} className="text-red-600">
+               <LogOut className="mr-2 h-4 w-4" />
+               Log out
+             </DropdownMenuItem>
+           </DropdownMenuContent>
+         </DropdownMenu>
+       </div>
+     </div>
+   </div>
+  );
+};
 
 export default function DashboardLayout({
   children,
@@ -50,88 +141,10 @@ export default function DashboardLayout({
     return <LoadingPage />;
   }
 
-  const navigation = [
-    { name: 'My Files', href: '/files', icon: Files },
-    { name: 'Shared With Me', href: '/shared', icon: Share2 },
-    { name: 'Groups', href: '/groups', icon: Users },
-    { name: 'Account Settings', href: '/settings', icon: Settings },
-  ];
-
-  if (user?.role === 'admin') {
-    navigation.push({ name: 'Admin', href: '/admin', icon: Shield });
-  }
-
-   const NavContent = () => (
-     <div className="flex h-full flex-col gap-4 py-4">
-       <div className="px-6 py-2">
-         <h1 className="text-xl font-bold text-white">DocShare</h1>
-       </div>
-       <ScrollArea className="flex-1 overflow-hidden">
-         <nav className="space-y-1 px-3 pr-4">
-           {navigation.map((item) => {
-             const isActive = pathname.startsWith(item.href);
-             return (
-               <Link
-                 key={item.name}
-                 href={item.href}
-                 onClick={() => setIsMobileOpen(false)}
-                 className={cn(
-                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                   isActive
-                     ? 'bg-blue-600 text-white'
-                     : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                 )}
-               >
-                 <item.icon className="h-5 w-5" />
-                 {item.name}
-               </Link>
-             );
-           })}
-         </nav>
-       </ScrollArea>
-       <div className="px-3 py-2">
-        <div className="flex items-center gap-3 rounded-lg bg-slate-800 px-3 py-3">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={user?.avatarURL} />
-            <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <span className="truncate text-sm font-medium text-white">
-              {user?.firstName} {user?.lastName}
-            </span>
-            <span className="truncate text-xs text-slate-400">{user?.email}</span>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/settings" className="flex items-center">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Account Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-red-600">
-                <LogOut className="mr-2 h-4 w-4" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="flex min-h-screen bg-slate-50">
       <div className="hidden w-64 flex-col bg-slate-900 md:flex">
-        <NavContent />
+        <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
       </div>
 
       <div className="flex flex-1 flex-col">
@@ -144,7 +157,7 @@ export default function DashboardLayout({
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-r-slate-800">
-              <NavContent />
+              <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
             </SheetContent>
           </Sheet>
         </header>

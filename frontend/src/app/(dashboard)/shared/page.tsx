@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { File, Share } from '@/lib/types';
+import { File } from '@/lib/types';
 import { apiMethods } from '@/lib/api';
-import { Badge } from '@/components/ui/badge';
+
 import {
   Table,
   TableBody,

@@ -22,7 +22,6 @@ interface UploadingFile {
 
 export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
 
   const uploadFileToServer = useCallback(async (uploadFile: UploadingFile) => {
     setUploadingFiles(prev => prev.map(f => 
@@ -66,13 +65,11 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
     }));
 
     setUploadingFiles(prev => [...prev, ...newFiles]);
-    setIsUploading(true);
 
     for (const uploadFile of newFiles) {
       await uploadFileToServer(uploadFile);
     }
     
-    setIsUploading(false);
     onUploadComplete();
   }, [uploadFileToServer, onUploadComplete]);
 

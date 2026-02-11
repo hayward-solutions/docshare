@@ -64,8 +64,7 @@ export default function FilesPage() {
       if (res.success) {
         setFiles(res.data);
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Failed to load files');
     } finally {
       setIsLoading(false);
@@ -82,7 +81,7 @@ export default function FilesPage() {
       await apiMethods.delete(`/api/files/${id}`);
       toast.success('File deleted');
       fetchFiles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete file');
     }
   };

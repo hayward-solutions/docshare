@@ -36,8 +36,8 @@ export function CreateFolderDialog({ parentID, onFolderCreated }: CreateFolderDi
       setOpen(false);
       setName('');
       onFolderCreated();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create folder');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create folder');
     } finally {
       setIsLoading(false);
     }

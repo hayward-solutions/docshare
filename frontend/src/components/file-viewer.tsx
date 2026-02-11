@@ -6,7 +6,7 @@ import { apiMethods } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { Button } from '@/components/ui/button';
 import { Download, AlertCircle, Loader2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -36,7 +36,6 @@ export function FileViewer({ file }: FileViewerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
-  const requestCountRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
