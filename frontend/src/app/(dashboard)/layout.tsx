@@ -37,7 +37,7 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
     email?: string;
     avatarURL?: string;
     role?: string;
-  };
+  } | null;
   pathname: string;
   setIsMobileOpen: (open: boolean) => void;
   logout: () => void;
