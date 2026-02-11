@@ -1,0 +1,870 @@
+# DocShare Architecture
+
+This document describes the architecture, design decisions, and technical implementation details of DocShare.
+
+## Table of Contents
+
+1. [System Architecture](#system-architecture)
+2. [Backend Architecture](#backend-architecture)
+3. [Frontend Architecture](#frontend-architecture)
+4. [Data Models](#data-models)
+5. [Authentication & Authorization](#authentication--authorization)
+6. [File Storage Strategy](#file-storage-strategy)
+7. [Permission System](#permission-system)
+8. [Preview Generation](#preview-generation)
+9. [Security Considerations](#security-considerations)
+10. [Design Decisions](#design-decisions)
+
+## System Architecture
+
+### High-Level Overview
+
+DocShare follows a traditional client-server architecture with the following components:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                        Client                             │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Next.js Frontend (SSR + Client Components)        │  │
+│  │  - Pages: App Router                               │  │
+│  │  - State: Zustand                                  │  │
+│  │  - UI: Radix + shadcn/ui                           │  │
+│  └────────────────────────────────────────────────────┘  │
+└───────────────────────────┬──────────────────────────────┘
+                            │ HTTPS/REST
+                            │
+┌───────────────────────────▼──────────────────────────────┐
+│                    API Gateway Layer                      │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Go Fiber HTTP Server                              │  │
+│  │  - Middleware: Auth, CORS, Logging                 │  │
+│  │  - Routes: RESTful endpoints                       │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────┬─────────────────────┬─────────────────────┘
+               │                     │
+┌──────────────▼──────────┐   ┌──────▼─────────────────────┐
+│   Business Logic        │   │   Storage Layer            │
+│  ┌──────────────────┐   │   │  ┌──────────────────────┐  │
+│  │   Handlers       │   │   │  │  Storage Service     │  │
+│  │  - Auth          │   │   │  │  (MinIO Client)      │  │
+│  │  - Files         │   │   │  └──────────────────────┘  │
+│  │  - Shares        │   │   │                            │
+│  │  - Groups        │   │   │  ┌──────────────────────┐  │
+│  │  - Users         │   │   │  │  Preview Service     │  │
+│  └──────────────────┘   │   │  │  (Gotenberg Client)  │  │
+│  ┌──────────────────┐   │   │  └──────────────────────┘  │
+│  │   Services       │   │   │                            │
+│  │  - Access        │   │   └────────────────────────────┘
+│  │  - Preview       │   │
+│  └──────────────────┘   │
+└──────────┬──────────────┘
+           │
+┌──────────▼──────────────────────────────────────────────┐
+│                   Data Layer                            │
+│  ┌─────────────────┐      ┌─────────────────────────┐  │
+│  │  PostgreSQL     │      │  MinIO (S3)             │  │
+│  │  - User Data    │      │  - File Objects         │  │
+│  │  - Metadata     │      │  - Preview Cache        │  │
+│  │  - Permissions  │      └─────────────────────────┘  │
+│  └─────────────────┘                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Component Responsibilities
+
+| Component | Responsibility | Technology |
+|-----------|----------------|------------|
+| **Frontend** | User interface, client-side rendering, form validation | Next.js 16, React 19, TypeScript |
+| **API Server** | Request routing, authentication, authorization, business logic | Go, Fiber framework |
+| **Database** | Persistent storage of metadata, users, permissions | PostgreSQL 16 |
+| **Object Storage** | Binary file storage, scalability | MinIO (S3-compatible) |
+| **Preview Service** | Document conversion (Office → PDF) | Gotenberg (LibreOffice) |
+
+## Backend Architecture
+
+### Layer Separation
+
+The backend follows a clean layered architecture:
+
+```
+cmd/
+  server/main.go          # Entry point, dependency injection
+
+internal/
+  handlers/               # HTTP request handlers (Presentation Layer)
+    ├── auth.go          # Authentication endpoints
+    ├── files.go         # File management endpoints
+    ├── shares.go        # Sharing endpoints
+    ├── groups.go        # Group management endpoints
+    └── users.go         # User management endpoints
+
+  services/              # Business logic (Service Layer)
+    ├── access.go        # Permission checking service
+    └── preview.go       # Preview generation service
+
+  models/                # Domain entities (Domain Layer)
+    ├── user.go
+    ├── file.go
+    ├── share.go
+    ├── group.go
+    └── group_membership.go
+
+  storage/               # Storage abstraction (Infrastructure Layer)
+    └── minio.go         # MinIO client wrapper
+
+  database/              # Database management (Infrastructure Layer)
+    └── database.go      # Connection, migrations
+
+  middleware/            # HTTP middleware
+    ├── auth.go          # JWT authentication
+    └── logging.go       # Request logging
+
+  config/                # Configuration management
+    └── config.go        # Environment variable loading
+
+pkg/                     # Shared utilities
+  ├── logger/            # Structured logging
+  ├── utils/             # JWT, validation helpers
+  └── previewtoken/      # Preview token generation
+```
+
+### Request Flow
+
+1. **Request Reception**: Fiber receives HTTP request
+2. **Middleware Chain**: 
+   - CORS check
+   - Request logging
+   - Authentication (if required)
+   - Authorization (if required)
+3. **Handler Execution**: Route-specific handler processes request
+4. **Service Call**: Handler delegates business logic to services
+5. **Data Access**: Services interact with database/storage
+6. **Response**: JSON response returned to client
+
+### Dependency Injection
+
+Dependencies are injected at application startup in `cmd/server/main.go`:
+
+```go
+// Initialize infrastructure
+db := database.Connect(cfg.DB)
+storageClient := storage.NewMinIOClient(cfg.MinIO)
+
+// Create services
+accessService := services.NewAccessService(db)
+previewService := services.NewPreviewService(db, storageClient, cfg.Gotenberg)
+
+// Create handlers with injected dependencies
+filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService)
+```
+
+This approach:
+- Makes testing easier (mock dependencies)
+- Reduces coupling between layers
+- Improves code organization
+
+## Frontend Architecture
+
+### App Router Structure
+
+Next.js 14+ App Router with route groups:
+
+```
+src/app/
+  layout.tsx              # Root layout (providers, metadata)
+  page.tsx                # Landing page
+  
+  (auth)/                 # Auth route group (special layout)
+    layout.tsx            # Auth layout (centered, no nav)
+    login/
+      page.tsx            # Login page
+    register/
+      page.tsx            # Registration page
+  
+  (dashboard)/            # Dashboard route group (requires auth)
+    layout.tsx            # Dashboard layout (sidebar, nav)
+    files/
+      page.tsx            # Root files list
+      [id]/
+        page.tsx          # Folder contents
+    shared/
+      page.tsx            # Files shared with me
+    groups/
+      page.tsx            # Groups list
+      [id]/
+        page.tsx          # Group details & members
+    admin/
+      page.tsx            # Admin user management
+```
+
+### State Management Strategy
+
+**Zustand** for minimal global state:
+- User authentication state
+- Current file path/breadcrumbs
+- UI state (modals, loading)
+
+**Server Components** for data fetching:
+- Files list
+- Group membership
+- User details
+
+**Client Components** for interactivity:
+- File upload with progress
+- Drag-and-drop
+- Share dialogs
+- Context menus
+
+### Component Architecture
+
+```
+components/
+  ui/                    # shadcn/ui primitives (button, dialog, etc.)
+  file-icon.tsx          # File type icon resolver
+  file-viewer.tsx        # File preview modal
+  file-inspector.tsx     # File metadata sidebar
+  upload-zone.tsx        # Drag-drop upload component
+  share-dialog.tsx       # Sharing modal
+  move-dialog.tsx        # Move file dialog
+  create-folder-dialog.tsx
+  loading.tsx            # Loading states
+  providers.tsx          # Context providers wrapper
+```
+
+### API Client Pattern
+
+Centralized API client in `lib/api.ts`:
+
+```typescript
+// Automatic token injection
+// Automatic error handling
+// Automatic redirect on 401
+
+export const apiMethods = {
+  get: <T>(endpoint, params) => api<T>(endpoint, { method: 'GET', params }),
+  post: <T>(endpoint, body) => api<T>(endpoint, { method: 'POST', body }),
+  put: <T>(endpoint, body) => api<T>(endpoint, { method: 'PUT', body }),
+  delete: <T>(endpoint) => api<T>(endpoint, { method: 'DELETE' }),
+  upload: <T>(endpoint, formData) => // Special handling for multipart
+}
+```
+
+## Data Models
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────┐
+│      User       │
+│─────────────────│
+│ ID (PK)         │◄──────┐
+│ Email (unique)  │       │
+│ PasswordHash    │       │
+│ FirstName       │       │OwnerID
+│ LastName        │       │
+│ Role            │       │
+│ AvatarURL       │       │
+└─────────────────┘       │
+         │                │
+         │                │
+         │CreatedByID     │
+         │                │
+         ▼                │
+┌─────────────────┐       │
+│     Group       │       │
+│─────────────────│       │
+│ ID (PK)         │       │
+│ Name            │       │
+│ Description     │       │
+│ CreatedByID (FK)│       │
+└─────────────────┘       │
+         │                │
+         │                │
+         │GroupID         │
+         │                │
+         ▼                │
+┌─────────────────┐       │
+│GroupMembership  │       │
+│─────────────────│       │
+│ ID (PK)         │       │
+│ GroupID (FK)    │       │
+│ UserID (FK)     │───────┤
+│ Role            │       │
+└─────────────────┘       │
+                          │
+                          │
+┌─────────────────┐       │
+│      File       │       │
+│─────────────────│       │
+│ ID (PK)         │───────┘
+│ Name            │
+│ MimeType        │
+│ Size            │
+│ IsDirectory     │
+│ ParentID (FK)   │───┐
+│ OwnerID (FK)    │   │
+│ StoragePath     │   │
+│ ThumbnailPath   │   │
+└─────────────────┘   │
+         │            │
+         │            │(self-reference)
+         │ParentID    │
+         └────────────┘
+         │
+         │FileID
+         │
+         ▼
+┌─────────────────┐
+│     Share       │
+│─────────────────│
+│ ID (PK)         │
+│ FileID (FK)     │
+│ SharedByID (FK) │───────┐
+│ SharedWithUserID│        │
+│ SharedWithGroupID        │
+│ Permission      │        │
+│ ExpiresAt       │        │
+└─────────────────┘        │
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │    User     │
+                    └─────────────┘
+```
+
+### Key Model Decisions
+
+#### 1. File Model
+
+**Unified File & Folder Model**: Both files and folders are stored in the same table with an `IsDirectory` boolean flag.
+
+**Rationale**:
+- Simplifies permission inheritance (folders can be shared like files)
+- Enables recursive operations (move, delete, share)
+- Cleaner API (single endpoint for both types)
+
+**Trade-offs**:
+- Slightly more complex queries (always need `WHERE is_directory = ?`)
+- NULL fields for directories (size, mimeType = "application/directory")
+
+#### 2. Share Model
+
+**Flexible Recipient**: Share can target either a user (`SharedWithUserID`) or a group (`SharedWithGroupID`).
+
+**Constraint**: Exactly one must be non-NULL (enforced at application level).
+
+**Rationale**:
+- Single table for both share types
+- Simpler querying ("give me all shares for file X")
+
+**Permission Levels**:
+- `view`: Can see metadata and preview
+- `download`: Can download content
+- `edit`: Can modify and reshare
+
+**Permission Hierarchy**: `edit` > `download` > `view`
+
+#### 3. Group Membership
+
+**Three Roles**:
+- `owner`: Can delete group, modify all settings
+- `admin`: Can add/remove members, change roles
+- `member`: Standard membership
+
+**Multiple Owners**: System allows multiple owners (not enforced uniqueness).
+
+## Authentication & Authorization
+
+### Authentication Flow
+
+```
+┌─────────┐                               ┌─────────┐
+│ Client  │                               │ Server  │
+└────┬────┘                               └────┬────┘
+     │                                         │
+     │  POST /api/auth/register                │
+     │  { email, password, firstName, ... }    │
+     │────────────────────────────────────────>│
+     │                                         │
+     │                                         │ 1. Hash password (bcrypt)
+     │                                         │ 2. Create user record
+     │                                         │ 3. Generate JWT token
+     │                                         │
+     │  { token: "jwt...", user: {...} }       │
+     │<────────────────────────────────────────│
+     │                                         │
+     │  Store token in localStorage            │
+     │                                         │
+     │                                         │
+     │  GET /api/files                         │
+     │  Header: Authorization: Bearer jwt...   │
+     │────────────────────────────────────────>│
+     │                                         │
+     │                                         │ 1. Extract token
+     │                                         │ 2. Validate signature
+     │                                         │ 3. Check expiration
+     │                                         │ 4. Load user from DB
+     │                                         │ 5. Attach to context
+     │                                         │
+     │  { data: [...] }                        │
+     │<────────────────────────────────────────│
+     │                                         │
+```
+
+### JWT Token Structure
+
+```json
+{
+  "user_id": "uuid-here",
+  "email": "user@example.com",
+  "role": "user",
+  "exp": 1234567890
+}
+```
+
+**Token Lifetime**: Configurable via `JWT_EXPIRATION_HOURS` (default: 24 hours)
+
+**Storage**: localStorage (client-side)
+- ⚠️ Vulnerable to XSS
+- ✅ Survives page refresh
+- Alternative: HttpOnly cookies (more secure, requires CSRF protection)
+
+### Authorization Middleware
+
+**RequireAuth Middleware**:
+1. Extract `Authorization: Bearer <token>` header
+2. Validate JWT signature and expiration
+3. Load user from database
+4. Attach user to request context
+5. Proceed to handler
+
+**AdminOnly Middleware**:
+1. Check if user exists in context
+2. Verify `user.Role == "admin"`
+3. Return 403 if not admin
+
+### Permission Checking
+
+Implemented in `services/access.go`:
+
+```go
+func (a *AccessService) HasAccess(
+    ctx context.Context, 
+    userID uuid.UUID, 
+    fileID uuid.UUID, 
+    requiredPermission SharePermission
+) bool
+```
+
+**Algorithm**:
+1. Check if user is file owner → grant access
+2. Check for direct share to user with sufficient permission
+3. Check for share to user's groups with sufficient permission
+4. If file has parent, recursively check parent permissions
+5. Repeat until root or access granted
+
+**Permission Inheritance**: 
+- Share on folder applies to all descendants
+- Implemented via recursive parent traversal
+
+## File Storage Strategy
+
+### Hybrid Storage Model
+
+**Metadata** → PostgreSQL
+- File name, size, MIME type
+- Ownership, timestamps
+- Relationships (parent, shares)
+
+**Binary Content** → MinIO (S3)
+- Actual file bytes
+- Scalable, distributed storage
+- Presigned URLs for direct client access
+
+### Storage Path Strategy
+
+Files are stored in MinIO with the following path structure:
+
+```
+files/<uuid>/<filename>
+previews/<uuid>.pdf
+thumbnails/<uuid>.jpg
+```
+
+**UUID-based paths**:
+- Prevents name collisions
+- Obscures file structure
+- Enables secure direct URLs
+
+### Upload Flow
+
+```
+┌────────┐                 ┌─────────┐               ┌─────────┐
+│ Client │                 │  Backend│               │  MinIO  │
+└───┬────┘                 └────┬────┘               └────┬────┘
+    │                           │                         │
+    │ 1. POST /api/files/upload │                         │
+    │    (multipart/form-data)  │                         │
+    │──────────────────────────>│                         │
+    │                           │                         │
+    │                           │ 2. Generate UUID        │
+    │                           │ 3. Stream to MinIO      │
+    │                           │────────────────────────>│
+    │                           │                         │
+    │                           │ 4. Store metadata in DB │
+    │                           │                         │
+    │                           │ 5. Trigger preview gen  │
+    │                           │    (background)         │
+    │                           │                         │
+    │ 6. Return file metadata   │                         │
+    │<──────────────────────────│                         │
+    │                           │                         │
+```
+
+### Download Flow
+
+**Option 1: Presigned URLs** (preferred for large files)
+```
+Client → Backend: GET /api/files/{id}/download-url
+Backend → Client: { url: "https://minio/..." }
+Client → MinIO: Direct download (no backend involved)
+```
+
+**Option 2: Proxied Download** (for small files or access logging)
+```
+Client → Backend: GET /api/files/{id}/download
+Backend → MinIO: Fetch file
+Backend → Client: Stream file bytes
+```
+
+## Preview Generation
+
+### Supported Formats
+
+| Format | Method | Output |
+|--------|--------|--------|
+| PDF | Direct | Original PDF |
+| Images (JPEG, PNG, GIF) | Direct | Original image |
+| Office (DOCX, XLSX, PPTX) | Gotenberg | Converted to PDF |
+| Text (TXT, MD) | Direct | Plain text |
+
+### Preview Generation Flow
+
+```
+┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+│   Backend    │         │  Gotenberg   │         │    MinIO     │
+└──────┬───────┘         └──────┬───────┘         └──────┬───────┘
+       │                        │                        │
+       │ 1. User uploads DOCX   │                        │
+       │ 2. File stored in MinIO│                        │
+       │────────────────────────┼───────────────────────>│
+       │                        │                        │
+       │ 3. Trigger preview gen │                        │
+       │    (background job)    │                        │
+       │                        │                        │
+       │ 4. Fetch DOCX from     │                        │
+       │    MinIO               │                        │
+       │<───────────────────────┼────────────────────────│
+       │                        │                        │
+       │ 5. Send to Gotenberg   │                        │
+       │    POST /forms/libreoffice/convert             │
+       │───────────────────────>│                        │
+       │                        │                        │
+       │                        │ 6. Convert with        │
+       │                        │    LibreOffice         │
+       │                        │                        │
+       │ 7. Return PDF bytes    │                        │
+       │<───────────────────────│                        │
+       │                        │                        │
+       │ 8. Store preview in    │                        │
+       │    MinIO (previews/)   │                        │
+       │────────────────────────┼───────────────────────>│
+       │                        │                        │
+       │ 9. Update DB with      │                        │
+       │    preview path        │                        │
+       │                        │                        │
+```
+
+### Preview Tokens
+
+For security, preview URLs include time-limited tokens:
+
+```
+GET /api/files/{id}/preview
+→ { url: "http://backend/api/files/{id}/proxy?token=..." }
+```
+
+**Token Generation**:
+```go
+token := GeneratePreviewToken(fileID, userID, expiresAt)
+// HMAC-SHA256(fileID || userID || expiresAt, secret)
+```
+
+**Token Validation**:
+- Verify signature
+- Check expiration
+- Verify user has access to file
+
+## Security Considerations
+
+### Password Security
+
+- **Hashing**: bcrypt with cost factor 10
+- **No plaintext**: Passwords never stored unencrypted
+- **Field exclusion**: `PasswordHash` excluded from JSON serialization (`json:"-"`)
+
+### JWT Security
+
+- **Secret rotation**: Change `JWT_SECRET` regularly in production
+- **Expiration**: Tokens expire after configurable period
+- **Signature verification**: All tokens verified on each request
+- **User validation**: User existence checked on each authenticated request
+
+### Authorization
+
+- **Recursive permission checks**: Folder shares apply to descendants
+- **Expiration support**: Shares can have expiration dates
+- **Permission levels**: Granular control (view, download, edit)
+- **Owner bypass**: Owners always have full access
+
+### CORS Configuration
+
+Current configuration (development):
+```go
+AllowOrigins: "http://localhost:3001,http://127.0.0.1:3001"
+```
+
+**Production**: Update to actual domain(s)
+
+### File Upload Security
+
+- **Size limit**: 100MB by default (configurable)
+- **MIME type validation**: Checked on upload
+- **Path sanitization**: UUID-based paths prevent traversal
+- **Virus scanning**: Not implemented (consider adding ClamAV)
+
+### SQL Injection Prevention
+
+- **ORM usage**: GORM parameterizes all queries
+- **No raw SQL**: Direct queries avoided
+- **Input validation**: All inputs validated before use
+
+### XSS Prevention
+
+- **React escaping**: React automatically escapes rendered content
+- **Content-Type headers**: Proper headers prevent MIME sniffing
+- **CSP headers**: Consider adding Content Security Policy
+
+## Design Decisions
+
+### Why Go for Backend?
+
+**Pros**:
+- High performance, low memory footprint
+- Strong concurrency support (goroutines)
+- Fast compilation, single binary deployment
+- Excellent standard library
+- Static typing with good DX
+
+**Alternatives considered**:
+- Node.js: Less type-safe, higher memory usage
+- Python: Slower runtime, GIL limitations
+- Rust: Steeper learning curve, longer compile times
+
+### Why Fiber over net/http?
+
+**Pros**:
+- Express-like API (familiar to many developers)
+- Built-in middleware ecosystem
+- Better performance than many alternatives
+- Excellent documentation
+
+**Alternatives considered**:
+- Chi: More idiomatic Go, but less feature-rich
+- Echo: Similar to Fiber, slightly different API
+- Gin: Older, less active development
+
+### Why Next.js over Create React App?
+
+**Pros**:
+- Server-side rendering (better SEO, faster initial load)
+- Built-in routing (App Router)
+- API routes (could host backend too)
+- Image optimization
+- Production-ready defaults
+
+**Alternatives considered**:
+- Vite + React Router: More configuration needed
+- Remix: Newer, smaller ecosystem
+- SvelteKit: Different framework, less mature
+
+### Why MinIO over Filesystem?
+
+**Pros**:
+- S3-compatible API (cloud-portable)
+- Distributed storage (scalability)
+- Built-in redundancy
+- Presigned URLs (offload traffic from backend)
+- Separate scaling from compute
+
+**Alternatives considered**:
+- Local filesystem: Not scalable, single point of failure
+- AWS S3: Requires AWS account, vendor lock-in
+- Azure Blob: Similar to S3
+
+### Why PostgreSQL over MySQL?
+
+**Pros**:
+- Better JSON support (for future flexibility)
+- More advanced features (CTEs, window functions)
+- True UUID type
+- Better full-text search
+
+**Alternatives considered**:
+- MySQL: Simpler, but fewer features
+- MongoDB: NoSQL, but relational data fits SQL better
+- SQLite: Not suitable for multi-user production
+
+### Single Table for Files and Folders?
+
+**Decision**: Store both in `files` table with `is_directory` flag
+
+**Pros**:
+- Unified permission system
+- Simpler recursive operations
+- Single API endpoint for both types
+
+**Cons**:
+- Some NULL fields for directories
+- Slightly more complex queries
+
+**Alternative**: Separate `folders` table
+- More normalized
+- But complicates permission inheritance
+
+### Recursive Permission Checking?
+
+**Decision**: Check permissions up the folder tree on each access
+
+**Pros**:
+- Always accurate (no stale cache)
+- Simpler implementation
+- Share updates take effect immediately
+
+**Cons**:
+- Slower for deeply nested files
+- Multiple DB queries per access check
+
+**Alternative**: Denormalized permission cache
+- Faster reads
+- But complex invalidation logic
+
+### Preview Generation: Sync or Async?
+
+**Decision**: Synchronous for now (blocking upload response)
+
+**Pros**:
+- Simpler implementation
+- Preview immediately available
+- Easier error handling
+
+**Cons**:
+- Slower upload response
+- Blocks API server thread
+
+**Future**: Move to background job queue (Redis + workers)
+
+### Token Storage: localStorage or Cookies?
+
+**Decision**: localStorage
+
+**Pros**:
+- Simple implementation
+- Works with CORS
+- Easy to access from JS
+
+**Cons**:
+- Vulnerable to XSS
+- Manual token management
+
+**Alternative**: HttpOnly cookies
+- More secure (XSS-proof)
+- But requires CSRF protection
+- More complex with CORS
+
+## Performance Considerations
+
+### Database Indexes
+
+Key indexes for performance:
+
+```sql
+-- Files
+CREATE INDEX idx_files_owner_id ON files(owner_id);
+CREATE INDEX idx_files_parent_id ON files(parent_id);
+CREATE INDEX idx_files_is_directory ON files(is_directory);
+
+-- Shares
+CREATE INDEX idx_shares_file_id ON shares(file_id);
+CREATE INDEX idx_shares_shared_by_id ON shares(shared_by_id);
+CREATE INDEX idx_shares_shared_with_user_id ON shares(shared_with_user_id);
+CREATE INDEX idx_shares_shared_with_group_id ON shares(shared_with_group_id);
+
+-- Group Memberships
+CREATE INDEX idx_group_memberships_user_id ON group_memberships(user_id);
+CREATE INDEX idx_group_memberships_group_id ON group_memberships(group_id);
+
+-- Users
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+```
+
+### Connection Pooling
+
+- **Database**: GORM manages connection pool automatically
+- **MinIO**: HTTP client with keep-alive
+- **Gotenberg**: HTTP client with connection reuse
+
+### Caching Opportunities
+
+**Not currently implemented, but recommended for production**:
+
+1. **User data cache** (Redis): Reduce DB lookups on auth
+2. **Permission cache** (Redis): Cache expensive recursive checks
+3. **Preview cache** (MinIO): Already stored, served via presigned URLs
+4. **Metadata cache** (Redis): Cache frequently accessed file metadata
+
+### Scalability Strategy
+
+**Horizontal Scaling**:
+- Backend: Stateless, can run multiple instances behind load balancer
+- Frontend: Static build, serve from CDN
+- Database: PostgreSQL read replicas for read-heavy workloads
+- Storage: MinIO distributed mode
+
+**Vertical Scaling**:
+- Increase backend server resources for concurrent connections
+- Increase PostgreSQL resources for complex queries
+- Increase MinIO nodes for storage capacity
+
+## Future Improvements
+
+### Short Term
+1. **Background preview generation**: Move to job queue
+2. **Pagination**: Add to all list endpoints
+3. **Search**: Full-text search for file names
+4. **Audit logs**: Track all file access and modifications
+5. **Rate limiting**: Prevent abuse
+
+### Medium Term
+1. **Virus scanning**: Integrate ClamAV or similar
+2. **File versioning**: Keep history of file changes
+3. **Trash/recovery**: Soft delete with restore
+4. **Notification system**: Alert users of new shares
+5. **Activity feed**: Show recent actions
+
+### Long Term
+1. **Real-time collaboration**: WebRTC or WebSocket for live editing
+2. **Mobile apps**: React Native or native iOS/Android
+3. **Public sharing**: Share links without authentication
+4. **Advanced permissions**: Custom permission combinations
+5. **Multi-tenant**: Support multiple organizations
