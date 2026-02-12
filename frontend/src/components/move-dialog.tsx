@@ -50,10 +50,10 @@ interface MoveDialogProps {
 async function fetchDirectoryTree(dir: File): Promise<DirectoryNode> {
   const childrenRes = await apiMethods.get<File[]>(`/api/files/${dir.id}/children`);
   const childDirectories = childrenRes.success
-    ? childrenRes.data.filter((child) => child.isDirectory)
+    ? childrenRes.data.filter((child: File) => child.isDirectory)
     : [];
 
-  const children = await Promise.all(childDirectories.map((child) => fetchDirectoryTree(child)));
+  const children = await Promise.all(childDirectories.map((child: File) => fetchDirectoryTree(child)));
 
   return {
     id: dir.id,
@@ -120,11 +120,11 @@ export function MoveDialog({
         throw new Error('Failed to load folders');
       }
 
-      const rootDirectories = rootRes.data.filter((entry) => entry.isDirectory);
-      const tree = await Promise.all(rootDirectories.map((dir) => fetchDirectoryTree(dir)));
+      const rootDirectories = rootRes.data.filter((entry: File) => entry.isDirectory);
+      const tree = await Promise.all(rootDirectories.map((dir: File) => fetchDirectoryTree(dir)));
 
       setDirectories(tree);
-      setExpanded(Object.fromEntries(rootDirectories.map((dir) => [dir.id, true])));
+      setExpanded(Object.fromEntries(rootDirectories.map((dir: File) => [dir.id, true])));
     } catch (error) {
       console.error(error);
       toast.error('Failed to load folders');
@@ -177,8 +177,8 @@ export function MoveDialog({
       toast.success('Moved successfully');
       onOpenChange(false);
       onMoved();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to move item');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to move item');
     } finally {
       setIsMoving(false);
     }

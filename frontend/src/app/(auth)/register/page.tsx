@@ -27,8 +27,8 @@ export default function RegisterPage() {
       await register({ email, password, firstName, lastName });
       toast.success('Account created successfully');
       router.push('/files');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to register');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to register');
     } finally {
       setIsLoading(false);
     }

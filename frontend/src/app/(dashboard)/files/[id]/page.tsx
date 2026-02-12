@@ -15,14 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Breadcrumb,
-  BreadcrumbItem as BreadcrumbItemComponent,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
+
 import {
   Table,
   TableBody,
@@ -87,8 +80,7 @@ export default function FileDetailPage() {
           setChildren(childrenRes.data);
         }
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Failed to load file data');
       router.push('/files');
     } finally {
@@ -110,7 +102,7 @@ export default function FileDetailPage() {
       } else {
         fetchData();
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete file');
     }
   };
