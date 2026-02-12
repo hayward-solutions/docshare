@@ -7,8 +7,11 @@ import { File } from '@/lib/types';
 import { apiMethods } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { useAuth } from '@/lib/auth';
+import { usePreferences } from '@/lib/preferences';
+import { useFileSelection } from '@/lib/use-file-selection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -42,20 +45,29 @@ import { UploadZone } from '@/components/upload-zone';
 import { MoveDialog } from '@/components/move-dialog';
 import { FileInspector } from '@/components/file-inspector';
 import { ShareDialog } from '@/components/share-dialog';
+import { BulkActionBar } from '@/components/bulk-action-bar';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 export default function FilesPage() {
   const { user } = useAuth();
+  const { viewMode, setViewMode } = usePreferences();
   const [files, setFiles] = useState<File[]>([]);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [movingFile, setMovingFile] = useState<File | null>(null);
   const [sharingFile, setSharingFile] = useState<File | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [bulkMoving, setBulkMoving] = useState(false);
+  const [bulkSharing, setBulkSharing] = useState(false);
   const router = useRouter();
+
+  const filteredFiles = files.filter(f => 
+    f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selection = useFileSelection(filteredFiles);
 
   const fetchFiles = useCallback(async () => {
     setIsLoading(true);
@@ -86,6 +98,22 @@ export default function FilesPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const count = selection.count;
+    if (!confirm(`Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selection.selectedIds).map((id) => apiMethods.delete(`/api/files/${id}`)),
+      );
+      toast.success(`${count} item${count > 1 ? 's' : ''} deleted`);
+      selection.deselectAll();
+      fetchFiles();
+    } catch {
+      toast.error('Failed to delete some files');
+      fetchFiles();
+    }
+  };
+
   const handleDownload = async (fileId: string, fileName: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : undefined;
     await downloadFile({
@@ -95,9 +123,7 @@ export default function FilesPage() {
     });
   };
 
-  const filteredFiles = files.filter(f => 
-    f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const canShareAll = selection.selectedFiles.every((f) => user?.id === f.ownerID);
 
   return (
     <div className="space-y-6">
@@ -158,15 +184,22 @@ export default function FilesPage() {
           {filteredFiles.map((file) => (
             <div
               key={file.id}
-              className="group relative flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow-md"
+              className={`group relative flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow-md ${selection.isSelected(file.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
             >
               <Link href={`/files/${file.id}`} className="absolute inset-0 z-0" />
               <div className="flex items-start justify-between">
-                <FileIconComponent 
-                  mimeType={file.mimeType} 
-                  isDirectory={file.isDirectory} 
-                  className="h-10 w-10 text-blue-600" 
-                />
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selection.isSelected(file.id)}
+                    onCheckedChange={() => selection.toggle(file.id)}
+                    className={`relative z-10 ${selection.count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                  />
+                  <FileIconComponent 
+                    mimeType={file.mimeType} 
+                    isDirectory={file.isDirectory} 
+                    className="h-10 w-10 text-blue-600" 
+                  />
+                </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="relative z-10 -mr-2 -mt-2 h-8 w-8 opacity-0 group-hover:opacity-100">
@@ -229,6 +262,13 @@ export default function FilesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[40px] pl-4">
+                  <Checkbox
+                    checked={selection.allSelected}
+                    onCheckedChange={selection.toggleAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead className="w-[50px]"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Owner</TableHead>
@@ -239,7 +279,13 @@ export default function FilesPage() {
             </TableHeader>
             <TableBody>
               {filteredFiles.map((file) => (
-                <TableRow key={file.id} className="group">
+                <TableRow key={file.id} className={`group ${selection.isSelected(file.id) ? 'bg-blue-50' : ''}`}>
+                  <TableCell className="pl-4">
+                    <Checkbox
+                      checked={selection.isSelected(file.id)}
+                      onCheckedChange={() => selection.toggle(file.id)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <FileIconComponent 
                       mimeType={file.mimeType} 
@@ -319,6 +365,15 @@ export default function FilesPage() {
         </div>
       )}
 
+      <BulkActionBar
+        selectedFiles={selection.selectedFiles}
+        canShare={canShareAll}
+        onShare={() => setBulkSharing(true)}
+        onMove={() => setBulkMoving(true)}
+        onDelete={handleBulkDelete}
+        onClear={selection.deselectAll}
+      />
+
       {movingFile && (
         <MoveDialog
           open={!!movingFile}
@@ -335,12 +390,39 @@ export default function FilesPage() {
         />
       )}
 
+      {bulkMoving && (
+        <MoveDialog
+          open={bulkMoving}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoving(false);
+          }}
+          fileIds={Array.from(selection.selectedIds)}
+          fileName={`${selection.count} items`}
+          isDirectory={selection.selectedFiles.some((f) => f.isDirectory)}
+          onMoved={() => {
+            selection.deselectAll();
+            fetchFiles();
+          }}
+        />
+      )}
+
       {sharingFile && (
         <ShareDialog
           open={!!sharingFile}
           onOpenChange={(open) => !open && setSharingFile(null)}
           fileId={sharingFile.id}
           fileName={sharingFile.name}
+        />
+      )}
+
+      {bulkSharing && (
+        <ShareDialog
+          open={bulkSharing}
+          onOpenChange={(open) => {
+            if (!open) setBulkSharing(false);
+          }}
+          fileIds={Array.from(selection.selectedIds)}
+          fileName={`${selection.count} items`}
         />
       )}
 

@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FileIconComponent } from '@/components/file-icon';
 import { Loading } from '@/components/loading';
 import { toast } from 'sonner';
@@ -66,6 +67,7 @@ export default function SharedWithMePage() {
               <TableRow>
                 <TableHead className="w-[40px]"></TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Owner</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Shared</TableHead>
               </TableRow>
@@ -80,6 +82,21 @@ export default function SharedWithMePage() {
                     <Link href={`/files/${file.id}`} className="hover:underline">
                       {file.name}
                     </Link>
+                  </TableCell>
+                  <TableCell>
+                    {file.owner ? (
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={file.owner.avatarURL} />
+                          <AvatarFallback>{file.owner.firstName?.[0]}{file.owner.lastName?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-sm max-w-[120px]">
+                          {file.owner.firstName} {file.owner.lastName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Unknown</span>
+                    )}
                   </TableCell>
                   <TableCell>{file.isDirectory ? '-' : formatBytes(file.size)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">

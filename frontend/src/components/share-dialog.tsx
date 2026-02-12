@@ -33,13 +33,16 @@ import { toast } from 'sonner';
 import { User, Group, Share } from '@/lib/types';
 
 interface ShareDialogProps {
-  fileId: string;
+  fileId?: string;
+  fileIds?: string[];
   fileName: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialogProps) {
+export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: ShareDialogProps) {
+  const resolvedIds = fileIds ?? (fileId ? [fileId] : []);
+  const isBulk = resolvedIds.length > 1;
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const dialogOpen = isControlled ? open : internalOpen;
@@ -55,15 +58,18 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchShares = useCallback(async () => {
+    if (isBulk) return;
+    const id = resolvedIds[0];
+    if (!id) return;
     try {
-      const res = await apiMethods.get<Share[]>(`/api/files/${fileId}/shares`);
+      const res = await apiMethods.get<Share[]>(`/api/files/${id}/shares`);
       if (res.success) {
         setShares(res.data);
       }
     } catch (error) {
       console.error('Failed to fetch shares', error);
     }
-  }, [fileId]);
+  }, [isBulk, resolvedIds]);
 
   const fetchGroups = useCallback(async () => {
     try {
@@ -114,17 +120,26 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
     
     setIsLoading(true);
     try {
-      await apiMethods.post(`/api/files/${fileId}/share`, {
-        userID: selectedUser || undefined,
-        groupID: selectedGroup || undefined,
-        permission
-      });
-      toast.success('File shared successfully');
+      await Promise.all(
+        resolvedIds.map((id) =>
+          apiMethods.post(`/api/files/${id}/share`, {
+            userID: selectedUser || undefined,
+            groupID: selectedGroup || undefined,
+            permission,
+          }),
+        ),
+      );
+      toast.success(isBulk ? `${resolvedIds.length} items shared` : 'File shared successfully');
       setSearchQuery('');
       setSelectedUser('');
       setSelectedGroup('');
-      fetchShares();
-      setActiveTab('permissions');
+      if (!isBulk) {
+        fetchShares();
+        setActiveTab('permissions');
+      } else {
+        onOpenChange?.(false);
+        setInternalOpen(false);
+      }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to share file');
     } finally {
@@ -168,11 +183,13 @@ export function ShareDialog({ fileId, fileName, open, onOpenChange }: ShareDialo
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="share">Share</TabsTrigger>
-            <TabsTrigger value="permissions">Manage Access ({shares.length})</TabsTrigger>
-          </TabsList>
+        <Tabs value={isBulk ? 'share' : activeTab} onValueChange={setActiveTab} className="w-full">
+          {!isBulk && (
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="share">Share</TabsTrigger>
+              <TabsTrigger value="permissions">Manage Access ({shares.length})</TabsTrigger>
+            </TabsList>
+          )}
           
           <TabsContent value="share" className="space-y-4 py-4">
             <div className="space-y-4">

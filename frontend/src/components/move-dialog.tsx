@@ -40,7 +40,8 @@ interface FolderOption {
 interface MoveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fileId: string;
+  fileId?: string;
+  fileIds?: string[];
   fileName: string;
   isDirectory: boolean;
   currentParentID?: string;
@@ -101,11 +102,13 @@ export function MoveDialog({
   open,
   onOpenChange,
   fileId,
+  fileIds,
   fileName,
   isDirectory,
   currentParentID,
   onMoved,
 }: MoveDialogProps) {
+  const resolvedIds = fileIds ?? (fileId ? [fileId] : []);
   const [directories, setDirectories] = useState<DirectoryNode[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedFolderID, setSelectedFolderID] = useState('');
@@ -144,17 +147,19 @@ export function MoveDialog({
   }, [open, currentParentID, loadDirectories]);
 
   const blockedFolderIDs = useMemo(() => {
-    if (!isDirectory) {
-      return new Set<string>();
+    const blocked = new Set<string>();
+    for (const id of resolvedIds) {
+      const node = findNode(directories, id);
+      if (node) {
+        for (const descId of collectDescendantIDs(node)) {
+          blocked.add(descId);
+        }
+      } else {
+        blocked.add(id);
+      }
     }
-
-    const node = findNode(directories, fileId);
-    if (!node) {
-      return new Set<string>([fileId]);
-    }
-
-    return collectDescendantIDs(node);
-  }, [directories, fileId, isDirectory]);
+    return blocked;
+  }, [directories, resolvedIds]);
 
   const folderOptions = useMemo(
     () => flattenTree(directories).filter((option) => !blockedFolderIDs.has(option.id)),
@@ -173,8 +178,12 @@ export function MoveDialog({
   const handleMove = async () => {
     setIsMoving(true);
     try {
-      await apiMethods.put(`/api/files/${fileId}`, { parentID: selectedFolderID });
-      toast.success('Moved successfully');
+      await Promise.all(
+        resolvedIds.map((id) =>
+          apiMethods.put(`/api/files/${id}`, { parentID: selectedFolderID }),
+        ),
+      );
+      toast.success(resolvedIds.length > 1 ? `${resolvedIds.length} items moved` : 'Moved successfully');
       onOpenChange(false);
       onMoved();
     } catch (error: unknown) {
@@ -184,7 +193,8 @@ export function MoveDialog({
     }
   };
 
-  const isUnchangedDestination = (currentParentID ?? '') === selectedFolderID;
+  const isUnchangedDestination =
+    resolvedIds.length === 1 && (currentParentID ?? '') === selectedFolderID;
 
   const renderTree = (nodes: DirectoryNode[], depth = 0) =>
     nodes
