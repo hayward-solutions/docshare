@@ -80,6 +80,7 @@ func (h *GroupsHandler) List(c *fiber.Ctx) error {
 	var groups []models.Group
 	if err := h.DB.
 		Model(&models.Group{}).
+		Preload("Memberships").
 		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id").
 		Where("group_memberships.user_id = ?", currentUser.ID).
 		Order("groups.created_at DESC").
