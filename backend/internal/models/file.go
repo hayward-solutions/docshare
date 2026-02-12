@@ -18,4 +18,5 @@ type File struct {
 	Owner      User    `json:"owner,omitempty" gorm:"foreignKey:OwnerID;references:ID"`
 	Shares     []Share `json:"-" gorm:"foreignKey:FileID"`
 	SharedWith int64   `json:"sharedWith" gorm:"-"`
+	ParentName string  `json:"parentName,omitempty" gorm:"-"`
 }

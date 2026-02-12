@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth';
 import { usePreferences } from '@/lib/preferences';
 import { useFileSelection } from '@/lib/use-file-selection';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -18,6 +19,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import {
   Table,
@@ -37,7 +44,10 @@ import {
   ChevronRight,
   ArrowLeft,
   Info,
-  Share2
+  Share2,
+  Search,
+  FolderOpen,
+  Globe
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
@@ -67,8 +77,15 @@ export default function FileDetailPage() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkSharing, setBulkSharing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<'here' | 'everywhere'>('here');
+  const [searchResults, setSearchResults] = useState<File[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const selection = useFileSelection(children);
+  const isSearchActive = searchQuery.length >= 2;
+  const displayedFiles = isSearchActive ? searchResults : children;
+
+  const selection = useFileSelection(displayedFiles);
   const canShareAll = selection.selectedFiles.every((f) => user?.id === f.ownerID);
 
   const fetchData = useCallback(async () => {
@@ -100,6 +117,34 @@ export default function FileDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const params: Record<string, string> = { q: searchQuery };
+        if (searchScope === 'here' && file?.isDirectory) {
+          params.directoryID = id;
+        }
+        const res = await apiMethods.get<File[]>('/api/files/search', params);
+        if (res.success) {
+          setSearchResults(res.data);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, searchScope, id, file?.isDirectory]);
 
   const handleDelete = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
@@ -172,6 +217,38 @@ const handleDownload = async (fileId: string, fileName: string) => {
             {file.name}
           </h1>
         </div>
+
+        {file.isDirectory && (
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search in folder..."
+              className="pl-9 pr-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchScope(searchScope === 'here' ? 'everywhere' : 'here')}
+                    className="absolute right-2 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    {searchScope === 'here' ? (
+                      <FolderOpen className="h-3.5 w-3.5" />
+                    ) : (
+                      <Globe className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {searchScope === 'here' ? 'Searching this folder' : 'Searching everywhere'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
         
         <div className="flex items-center gap-2">
           {!file.isDirectory && (
@@ -236,21 +313,37 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
       {file.isDirectory ? (
         <>
-          <UploadZone parentID={file.id} onUploadComplete={fetchData} />
+          {!isSearchActive && <UploadZone parentID={file.id} onUploadComplete={fetchData} />}
+
+          {isSearchActive && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {isSearching ? (
+                <span>Searching...</span>
+              ) : (
+                <span>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;</span>
+              )}
+            </div>
+          )}
           
-          {children.length === 0 ? (
+          {(isLoading || isSearching) ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+              {['s1', 's2', 's3', 's4', 's5'].map((key) => (
+                <div key={key} className="h-32 animate-pulse rounded-lg bg-slate-200" />
+              ))}
+            </div>
+          ) : displayedFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="rounded-full bg-slate-100 p-4">
                 <FileIconComponent mimeType="" isDirectory={true} className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold">Empty folder</h3>
+              <h3 className="mt-4 text-lg font-semibold">{isSearchActive ? 'No results found' : 'Empty folder'}</h3>
               <p className="text-sm text-muted-foreground">
-                Upload files or create a subfolder.
+                {isSearchActive ? 'Try a different search term.' : 'Upload files or create a subfolder.'}
               </p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-              {children.map((child) => (
+              {displayedFiles.map((child) => (
                 <div
                   key={child.id}
                   className={`group relative flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow-md ${selection.isSelected(child.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
@@ -308,7 +401,16 @@ const handleDownload = async (fileId: string, fileName: string) => {
                       {child.name}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {child.isDirectory ? 'Folder' : formatBytes(child.size)}
+                      {child.parentName ? (
+                        <span className="flex items-center gap-1">
+                          <FolderOpen className="h-3 w-3" />
+                          {child.parentName}
+                        </span>
+                      ) : child.isDirectory ? (
+                        'Folder'
+                      ) : (
+                        formatBytes(child.size)
+                      )}
                     </p>
                   </div>
                 </div>
@@ -334,7 +436,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {children.map((child) => (
+                  {displayedFiles.map((child) => (
                     <TableRow key={child.id} className={`group ${selection.isSelected(child.id) ? 'bg-blue-50' : ''}`}>
                       <TableCell className="pl-4">
                         <Checkbox
@@ -350,9 +452,17 @@ const handleDownload = async (fileId: string, fileName: string) => {
                         />
                       </TableCell>
                       <TableCell className="font-medium">
-                        <Link href={`/files/${child.id}`} className="hover:underline">
-                          {child.name}
-                        </Link>
+                        <div className="flex flex-col">
+                          <Link href={`/files/${child.id}`} className="hover:underline">
+                            {child.name}
+                          </Link>
+                          {child.parentName && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <FolderOpen className="h-3 w-3" />
+                              {child.parentName}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{child.isDirectory ? '-' : formatBytes(child.size)}</TableCell>
                       <TableCell>{format(new Date(child.updatedAt), 'MMM d, yyyy')}</TableCell>
