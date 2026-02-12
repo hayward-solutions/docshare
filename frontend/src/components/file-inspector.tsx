@@ -14,11 +14,31 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { FileIconComponent } from '@/components/file-icon';
-import { Loader2, Calendar, HardDrive, User as UserIcon, Users } from 'lucide-react';
+import { Loader2, Calendar, HardDrive, User as UserIcon, Users, Globe, LogIn, Check, Link } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiMethods } from '@/lib/api';
 import { File, Share } from '@/lib/types';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+
+function CopyPublicLinkButton({ fileId }: { fileId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/shared/${fileId}` : '';
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    toast.success('Link copied');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Button variant="outline" size="sm" className="h-6 text-[11px] mt-1.5" onClick={handleCopy}>
+      {copied ? <Check className="mr-1 h-3 w-3 text-green-600" /> : <Link className="mr-1 h-3 w-3" />}
+      {copied ? 'Copied' : 'Copy link'}
+    </Button>
+  );
+}
 
 interface FileInspectorProps {
   open: boolean;
@@ -211,32 +231,51 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                     )}
 
                     {shares.map((share) => (
-                      <div key={share.id} className="flex items-center justify-between space-x-3 rounded-lg p-2 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-3 overflow-hidden">
-                          <Avatar className="h-8 w-8">
-                            {share.sharedWithUser ? (
-                              <>
-                                <AvatarImage src={share.sharedWithUser.avatarURL} />
-                                <AvatarFallback>{share.sharedWithUser.firstName[0]}</AvatarFallback>
-                              </>
-                            ) : (
-                              <AvatarFallback><Users className="h-4 w-4" /></AvatarFallback>
-                            )}
-                          </Avatar>
-                          <div className="truncate">
-                            <p className="text-sm font-medium truncate">
-                              {share.sharedWithUser 
-                                ? `${share.sharedWithUser.firstName} ${share.sharedWithUser.lastName}`
-                                : share.sharedWithGroup?.name || 'Unknown Group'}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {share.sharedWithUser ? share.sharedWithUser.email : 'Group'}
-                            </p>
+                      <div key={share.id} className="rounded-lg p-2 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center justify-between space-x-3">
+                          <div className="flex items-center space-x-3 overflow-hidden">
+                            <Avatar className="h-8 w-8">
+                              {share.shareType === 'public_anyone' ? (
+                                <AvatarFallback className="bg-green-100 text-green-700"><Globe className="h-4 w-4" /></AvatarFallback>
+                              ) : share.shareType === 'public_logged_in' ? (
+                                <AvatarFallback className="bg-amber-100 text-amber-700"><LogIn className="h-4 w-4" /></AvatarFallback>
+                              ) : share.sharedWithUser ? (
+                                <>
+                                  <AvatarImage src={share.sharedWithUser.avatarURL} />
+                                  <AvatarFallback>{share.sharedWithUser.firstName[0]}</AvatarFallback>
+                                </>
+                              ) : (
+                                <AvatarFallback><Users className="h-4 w-4" /></AvatarFallback>
+                              )}
+                            </Avatar>
+                            <div className="truncate">
+                              <p className="text-sm font-medium truncate">
+                                {share.shareType === 'public_anyone'
+                                  ? 'Public (anyone)'
+                                  : share.shareType === 'public_logged_in'
+                                  ? 'Public (logged in)'
+                                  : share.sharedWithUser 
+                                  ? `${share.sharedWithUser.firstName} ${share.sharedWithUser.lastName}`
+                                  : share.sharedWithGroup?.name || 'Unknown Group'}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {share.shareType === 'public_anyone'
+                                  ? 'Anyone with the link'
+                                  : share.shareType === 'public_logged_in'
+                                  ? 'Any logged-in user'
+                                  : share.sharedWithUser ? share.sharedWithUser.email : 'Group'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="shrink-0">
+                            {getPermissionBadge(share.permission)}
                           </div>
                         </div>
-                        <div className="shrink-0">
-                          {getPermissionBadge(share.permission)}
-                        </div>
+                        {(share.shareType === 'public_anyone' || share.shareType === 'public_logged_in') && (
+                          <div className="ml-11">
+                            <CopyPublicLinkButton fileId={share.fileID} />
+                          </div>
+                        )}
                       </div>
                     ))}
                     

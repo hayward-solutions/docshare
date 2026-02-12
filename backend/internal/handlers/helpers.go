@@ -18,3 +18,12 @@ func isValidSharePermission(value string) bool {
 		return false
 	}
 }
+
+func isValidShareType(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "private", "public_anyone", "public_logged_in":
+		return true
+	default:
+		return false
+	}
+}

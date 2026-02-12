@@ -73,6 +73,31 @@ func (a *AuthMiddleware) RequireAuth(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func (a *AuthMiddleware) OptionalAuth(c *fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return c.Next()
+	}
+
+	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
+	if tokenString == authHeader || tokenString == "" {
+		return c.Next()
+	}
+
+	claims, err := utils.ValidateToken(tokenString)
+	if err != nil {
+		return c.Next()
+	}
+
+	var user models.User
+	if err := a.DB.First(&user, "id = ?", claims.UserID).Error; err != nil {
+		return c.Next()
+	}
+
+	c.Locals(currentUserKey, &user)
+	return c.Next()
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a

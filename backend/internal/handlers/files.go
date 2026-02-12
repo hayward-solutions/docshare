@@ -860,6 +860,148 @@ func (h *FilesHandler) deleteRecursive(ctx context.Context, fileID uuid.UUID) er
 	return h.DB.Delete(&models.File{}, "id = ?", file.ID).Error
 }
 
+func (h *FilesHandler) PublicGet(c *fiber.Ctx) error {
+	fileID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid file id")
+	}
+
+	currentUser := middleware.GetCurrentUser(c)
+	isLoggedIn := currentUser != nil
+
+	if isLoggedIn {
+		if h.Access.HasAccess(c.Context(), currentUser.ID, fileID, models.SharePermissionView) {
+			var file models.File
+			if err := h.DB.Preload("Owner").First(&file, "id = ?", fileID).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return utils.Error(c, fiber.StatusNotFound, "file not found")
+				}
+				return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+			}
+			return utils.Success(c, fiber.StatusOK, file)
+		}
+	}
+
+	shareType := h.Access.GetPublicShareType(c.Context(), fileID)
+	if shareType == nil {
+		return utils.Error(c, fiber.StatusNotFound, "file not found")
+	}
+
+	if *shareType == models.ShareTypePublicLoggedIn && !isLoggedIn {
+		return utils.Error(c, fiber.StatusUnauthorized, "login required to access this file")
+	}
+
+	var file models.File
+	if err := h.DB.Preload("Owner").First(&file, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+	}
+
+	return utils.Success(c, fiber.StatusOK, file)
+}
+
+func (h *FilesHandler) PublicDownload(c *fiber.Ctx) error {
+	fileID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid file id")
+	}
+
+	currentUser := middleware.GetCurrentUser(c)
+	isLoggedIn := currentUser != nil
+
+	if isLoggedIn && h.Access.HasAccess(c.Context(), currentUser.ID, fileID, models.SharePermissionDownload) {
+		return h.downloadFile(c, fileID)
+	}
+
+	requireLogin := false
+	if !h.Access.HasPublicAccess(c.Context(), fileID, models.SharePermissionDownload, false) {
+		requireLogin = true
+		if !h.Access.HasPublicAccess(c.Context(), fileID, models.SharePermissionDownload, true) {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+	}
+
+	if requireLogin && !isLoggedIn {
+		return utils.Error(c, fiber.StatusUnauthorized, "login required to access this file")
+	}
+
+	return h.downloadFile(c, fileID)
+}
+
+func (h *FilesHandler) PublicChildren(c *fiber.Ctx) error {
+	fileID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid file id")
+	}
+
+	currentUser := middleware.GetCurrentUser(c)
+	isLoggedIn := currentUser != nil
+
+	shareType := h.Access.GetPublicShareType(c.Context(), fileID)
+	hasPrivateAccess := isLoggedIn && h.Access.HasAccess(c.Context(), currentUser.ID, fileID, models.SharePermissionView)
+
+	if shareType == nil && !hasPrivateAccess {
+		return utils.Error(c, fiber.StatusNotFound, "directory not found")
+	}
+
+	if shareType != nil && *shareType == models.ShareTypePublicLoggedIn && !isLoggedIn && !hasPrivateAccess {
+		return utils.Error(c, fiber.StatusUnauthorized, "login required to access this directory")
+	}
+
+	var parent models.File
+	if err := h.DB.First(&parent, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "directory not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading directory")
+	}
+	if !parent.IsDirectory {
+		return utils.Error(c, fiber.StatusBadRequest, "file is not a directory")
+	}
+
+	var children []models.File
+	if err := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC").Find(&children).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading children")
+	}
+
+	return utils.Success(c, fiber.StatusOK, children)
+}
+
+func (h *FilesHandler) downloadFile(c *fiber.Ctx, fileID uuid.UUID) error {
+	var file models.File
+	if err := h.DB.First(&file, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+	}
+	if file.IsDirectory {
+		return utils.Error(c, fiber.StatusBadRequest, "cannot download a directory")
+	}
+
+	obj, err := h.Storage.Download(c.Context(), file.StoragePath)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed downloading file")
+	}
+
+	stat, err := obj.Stat()
+	if err != nil {
+		obj.Close()
+		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
+	}
+
+	contentType := stat.ContentType
+	if contentType == "" {
+		contentType = file.MimeType
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", file.Name))
+	return c.SendStream(obj, int(stat.Size))
+}
+
 func (h *FilesHandler) isDescendant(ancestorID, candidateChildID uuid.UUID) (bool, error) {
 	current := candidateChildID
 	for {

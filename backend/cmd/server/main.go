@@ -93,6 +93,11 @@ func main() {
 
 	api.Get("/files/:id/proxy", filesHandler.ProxyPreview)
 
+	publicFileRoutes := api.Group("/public/files", authMiddleware.OptionalAuth)
+	publicFileRoutes.Get("/:id", filesHandler.PublicGet)
+	publicFileRoutes.Get("/:id/download", filesHandler.PublicDownload)
+	publicFileRoutes.Get("/:id/children", filesHandler.PublicChildren)
+
 	fileRoutes := api.Group("/files", authMiddleware.RequireAuth)
 	fileRoutes.Post("/upload", filesHandler.Upload)
 	fileRoutes.Post("/directory", filesHandler.CreateDirectory)
