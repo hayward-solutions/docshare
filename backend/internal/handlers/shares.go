@@ -242,7 +242,8 @@ func (h *SharesHandler) ListSharedWithMe(c *fiber.Ctx) error {
 		Joins("JOIN shares ON shares.file_id = files.id").
 		Joins("LEFT JOIN group_memberships gm ON gm.group_id = shares.shared_with_group_id").
 		Where("shares.expires_at IS NULL OR shares.expires_at > NOW()").
-		Where("shares.shared_with_user_id = ? OR gm.user_id = ?", currentUser.ID, currentUser.ID)
+		Where("shares.shared_with_user_id = ? OR gm.user_id = ?", currentUser.ID, currentUser.ID).
+		Where("files.owner_id != ?", currentUser.ID)
 
 	search := strings.TrimSpace(c.Query("search"))
 	if search != "" {
