@@ -97,6 +97,7 @@ func main() {
 	fileRoutes.Post("/upload", filesHandler.Upload)
 	fileRoutes.Post("/directory", filesHandler.CreateDirectory)
 	fileRoutes.Get("/", filesHandler.ListRoot)
+	fileRoutes.Get("/search", filesHandler.Search)
 	fileRoutes.Get("/:id/children", filesHandler.ListChildren)
 	fileRoutes.Get("/:id/download", filesHandler.Download)
 	fileRoutes.Get("/:id/download-url", filesHandler.DownloadURL)

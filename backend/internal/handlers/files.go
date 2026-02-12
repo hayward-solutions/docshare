@@ -549,6 +549,115 @@ func (h *FilesHandler) ConvertPreview(c *fiber.Ctx) error {
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"url": url})
 }
 
+func (h *FilesHandler) Search(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	q := strings.TrimSpace(c.Query("q"))
+	if len(q) < 2 {
+		return utils.Error(c, fiber.StatusBadRequest, "search query must be at least 2 characters")
+	}
+
+	searchValue := "%" + strings.ToLower(q) + "%"
+	directoryIDRaw := strings.TrimSpace(c.Query("directoryID"))
+
+	var files []models.File
+
+	if directoryIDRaw != "" {
+		dirID, err := parseUUID(directoryIDRaw)
+		if err != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid directoryID")
+		}
+
+		var dir models.File
+		if err := h.DB.First(&dir, "id = ?", dirID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return utils.Error(c, fiber.StatusNotFound, "directory not found")
+			}
+			return utils.Error(c, fiber.StatusInternalServerError, "failed loading directory")
+		}
+		if !dir.IsDirectory {
+			return utils.Error(c, fiber.StatusBadRequest, "specified ID is not a directory")
+		}
+		if !h.Access.HasAccess(c.Context(), currentUser.ID, dir.ID, models.SharePermissionView) {
+			return utils.Error(c, fiber.StatusForbidden, "access denied")
+		}
+
+		var descendantIDs []struct{ ID uuid.UUID }
+		if err := h.DB.Raw(`
+			WITH RECURSIVE descendants AS (
+				SELECT id FROM files WHERE id = ? AND deleted_at IS NULL
+				UNION ALL
+				SELECT f.id FROM files f
+				INNER JOIN descendants d ON f.parent_id = d.id
+				WHERE f.deleted_at IS NULL
+			)
+			SELECT id FROM descendants WHERE id != ?
+		`, dirID, dirID).Scan(&descendantIDs).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
+		}
+
+		if len(descendantIDs) == 0 {
+			return utils.Success(c, fiber.StatusOK, []models.File{})
+		}
+
+		ids := make([]uuid.UUID, len(descendantIDs))
+		for i, d := range descendantIDs {
+			ids[i] = d.ID
+		}
+
+		if err := h.DB.Preload("Owner").
+			Where("id IN ? AND LOWER(name) LIKE ?", ids, searchValue).
+			Order("is_directory DESC, name ASC").
+			Limit(50).
+			Find(&files).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
+		}
+	} else {
+		if err := h.DB.Preload("Owner").
+			Where("owner_id = ? AND LOWER(name) LIKE ?", currentUser.ID, searchValue).
+			Order("is_directory DESC, name ASC").
+			Limit(50).
+			Find(&files).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
+		}
+	}
+
+	h.enrichParentNames(files)
+
+	return utils.Success(c, fiber.StatusOK, files)
+}
+
+func (h *FilesHandler) enrichParentNames(files []models.File) {
+	parentIDs := make([]uuid.UUID, 0)
+	for _, f := range files {
+		if f.ParentID != nil {
+			parentIDs = append(parentIDs, *f.ParentID)
+		}
+	}
+	if len(parentIDs) == 0 {
+		return
+	}
+
+	var parents []models.File
+	h.DB.Select("id", "name").Where("id IN ?", parentIDs).Find(&parents)
+
+	parentMap := make(map[uuid.UUID]string)
+	for _, p := range parents {
+		parentMap[p.ID] = p.Name
+	}
+
+	for i := range files {
+		if files[i].ParentID != nil {
+			if name, ok := parentMap[*files[i].ParentID]; ok {
+				files[i].ParentName = name
+			}
+		}
+	}
+}
+
 type updateFileRequest struct {
 	Name     *string `json:"name"`
 	ParentID *string `json:"parentID"`
