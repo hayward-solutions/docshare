@@ -90,16 +90,16 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[400px] sm:w-[540px] p-0 h-screen">
-        <div className="flex h-full flex-col">
-          <SheetHeader className="px-6 py-4 border-b">
+      <SheetContent side="right" className="w-[400px] sm:w-[540px] p-0">
+        <div className="flex h-full flex-col overflow-hidden">
+          <SheetHeader className="shrink-0 px-6 py-4 border-b">
             <SheetTitle>File Details</SheetTitle>
             <SheetDescription>
               View metadata and access information.
             </SheetDescription>
           </SheetHeader>
           
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             {isLoading ? (
               <div className="flex h-full items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

@@ -142,13 +142,13 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <div className="hidden w-64 flex-col bg-slate-900 md:flex">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <div className="hidden w-64 shrink-0 flex-col bg-slate-900 md:flex">
         <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
       </div>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b bg-white px-4 md:hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 md:hidden">
           <h1 className="text-lg font-bold">DocShare</h1>
           <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
             <SheetTrigger asChild>
