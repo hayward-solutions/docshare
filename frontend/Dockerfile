@@ -11,7 +11,6 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=http://localhost:8080
 
-RUN npm install
 RUN npm run build
 
 FROM gcr.io/distroless/nodejs22-debian12 AS runner
