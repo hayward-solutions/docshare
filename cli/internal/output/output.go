@@ -144,6 +144,19 @@ func RelativeTime(t time.Time) string {
 	}
 }
 
+// VersionInfo prints CLI and server version details.
+func VersionInfo(cliVersion string, server *api.VersionInfo) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "CLI version:\t%s\n", cliVersion)
+	if server != nil {
+		fmt.Fprintf(w, "Server version:\t%s\n", server.Version)
+		fmt.Fprintf(w, "API version:\t%s\n", server.APIVersion)
+	} else {
+		fmt.Fprintf(w, "Server version:\tunreachable\n")
+	}
+	w.Flush()
+}
+
 func shortMIME(mime string) string {
 	// "application/pdf" -> "pdf", "image/png" -> "png"
 	parts := strings.Split(mime, "/")

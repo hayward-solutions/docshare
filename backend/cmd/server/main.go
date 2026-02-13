@@ -79,6 +79,7 @@ func main() {
 	})
 
 	api := app.Group("/api")
+	api.Get("/version", handlers.GetVersion)
 
 	authRoutes := api.Group("/auth")
 	authRoutes.Post("/register", authHandler.Register)

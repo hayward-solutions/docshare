@@ -1,6 +1,7 @@
 import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, User } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -133,4 +134,8 @@ export const userAPI = {
     }
     return { success: false, error: 'Upload failed' };
   }
+};
+
+export const versionAPI = {
+  get: async () => apiMethods.get<{ version: string; apiVersion: string }>('/api/version'),
 };

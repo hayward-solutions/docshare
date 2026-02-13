@@ -80,3 +80,9 @@ type LoginResponse struct {
 	Token string `json:"token"`
 	User  User   `json:"user"`
 }
+
+// VersionInfo is returned by GET /api/version.
+type VersionInfo struct {
+	Version    string `json:"version"`
+	APIVersion string `json:"apiVersion"`
+}
