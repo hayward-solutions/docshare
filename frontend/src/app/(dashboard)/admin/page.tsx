@@ -61,7 +61,7 @@ export default function AdminPage() {
     setIsLoading(true);
     try {
       const res = await apiMethods.get<User[]>('/api/users', { page, limit: 20, search: search || undefined });
-      if (res.success) {
+      if (res.success && res.data) {
         setUsers(res.data);
         if (res.pagination) {
           setPagination(res.pagination);

@@ -86,9 +86,9 @@ export default function ActivityPage() {
   const fetchActivities = useCallback(async (pageNum: number, append: boolean = false) => {
     try {
       const res = await activityAPI.list(pageNum, 20);
-      if (res.success) {
+      if (res.success && res.data) {
         if (append) {
-          setActivities(prev => [...prev, ...res.data]);
+          setActivities(prev => [...prev, ...res.data!]);
         } else {
           setActivities(res.data);
         }
@@ -129,7 +129,7 @@ export default function ActivityPage() {
     ));
 
     try {
-      await activityAPI.markRead(id);
+      await activityAPI.markAsRead(id);
     } catch (error) {
       console.error('Failed to mark activity as read:', error);
       setActivities(prev => prev.map(a => 

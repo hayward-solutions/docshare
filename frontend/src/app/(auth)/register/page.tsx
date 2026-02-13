@@ -24,7 +24,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await register({ email, password, firstName, lastName });
+      await register(email, password, firstName, lastName);
       toast.success('Account created successfully');
       router.push('/files');
     } catch (error: unknown) {
