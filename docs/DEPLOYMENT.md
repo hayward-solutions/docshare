@@ -25,8 +25,31 @@ The fastest way to get DocShare running locally:
 # Clone repository
 git clone <repository-url>
 cd docshare
+```
 
-# Start all services with Docker Compose
+### Choosing the Right Configuration
+
+| File | Use Case | When to Use |
+|------|----------|-------------|
+| `docker-compose.dev.yml` | **Development** | Building/contributing to DocShare |
+| `docker-compose.yml` | **Production** | Running pre-built release images |
+
+### Development (Recommended for contributors)
+
+```bash
+# Start all services (builds from local source)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Access the application
+# Frontend: http://localhost:3001
+# Backend: http://localhost:8080
+# MinIO Console: http://localhost:9001
+```
+
+### Production
+
+```bash
+# Start all services (uses pre-built images)
 docker-compose up -d
 
 # Access the application
@@ -72,21 +95,24 @@ That's it! The application is now running with:
 
 ### Option 1: Full Docker Development
 
-**Best for:** Quick start, consistent environment
+**Best for:** Quick start, consistent environment, building from source
 
 ```bash
-# Start all services
-docker-compose up -d
+# Start all services (builds from local source)
+docker-compose -f docker-compose.dev.yml up -d
 
 # View logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose -f docker-compose.dev.yml logs -f backend
+docker-compose -f docker-compose.dev.yml logs -f frontend
 
 # Stop all services
-docker-compose down
+docker-compose -f docker-compose.dev.yml down
 
 # Stop and remove volumes (fresh start)
-docker-compose down -v
+docker-compose -f docker-compose.dev.yml down -v
+
+# Rebuild after code changes
+docker-compose -f docker-compose.dev.yml up -d --build
 ```
 
 ### Option 2: Hybrid Development
@@ -337,7 +363,12 @@ Follow the same environment variable setup as Option 2, then run backend and fro
 
 6. **Deploy**
    ```bash
-   docker-compose -f docker-compose.prod.yml up -d
+   docker-compose up -d
+   ```
+
+   Or with explicit file:
+   ```bash
+   docker-compose -f docker-compose.yml up -d
    ```
 
 #### Option 2: Kubernetes with Helm (Large Scale)

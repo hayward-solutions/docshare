@@ -27,7 +27,13 @@ Thank you for your interest in contributing to DocShare! This document provides 
 
 3. **Start the development environment**
    ```bash
-   docker-compose up -d
+   docker-compose -f docker-compose.dev.yml up -d
+   ```
+
+   This builds the backend and frontend from local source code.
+   To rebuild after making changes:
+   ```bash
+   docker-compose -f docker-compose.dev.yml up -d --build
    ```
 
 4. **Create a feature branch**

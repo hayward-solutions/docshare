@@ -60,7 +60,9 @@ services:
       - "--libreoffice-restart-after=10"
 
   backend:
-    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: docshare-backend
     environment:
       DB_HOST: postgres
@@ -89,7 +91,9 @@ services:
         condition: service_completed_successfully
 
   frontend:
-    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: docshare-frontend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080
