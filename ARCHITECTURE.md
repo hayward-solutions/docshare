@@ -5,15 +5,17 @@ This document describes the architecture, design decisions, and technical implem
 ## Table of Contents
 
 1. [System Architecture](#system-architecture)
-2. [Backend Architecture](#backend-architecture)
-3. [Frontend Architecture](#frontend-architecture)
-4. [Data Models](#data-models)
-5. [Authentication & Authorization](#authentication--authorization)
-6. [File Storage Strategy](#file-storage-strategy)
-7. [Permission System](#permission-system)
-8. [Preview Generation](#preview-generation)
-9. [Security Considerations](#security-considerations)
-10. [Design Decisions](#design-decisions)
+2. [Technology Stack](#technology-stack)
+3. [Project Structure](#project-structure)
+4. [Backend Architecture](#backend-architecture)
+5. [Frontend Architecture](#frontend-architecture)
+6. [Data Models](#data-models)
+7. [Authentication & Authorization](#authentication--authorization)
+8. [File Storage Strategy](#file-storage-strategy)
+9. [Permission System](#permission-system)
+10. [Preview Generation](#preview-generation)
+11. [Security Considerations](#security-considerations)
+12. [Design Decisions](#design-decisions)
 
 ## System Architecture
 
@@ -23,7 +25,7 @@ DocShare follows a traditional client-server architecture with the following com
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                        Client                             │
+│                        Client                            │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  Next.js Frontend (SSR + Client Components)        │  │
 │  │  - Pages: App Router                               │  │
@@ -34,7 +36,7 @@ DocShare follows a traditional client-server architecture with the following com
                             │ HTTPS/REST
                             │
 ┌───────────────────────────▼──────────────────────────────┐
-│                    API Gateway Layer                      │
+│                    API Gateway Layer                     │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  Go Fiber HTTP Server                              │  │
 │  │  - Middleware: Auth, CORS, Logging                 │  │
@@ -61,11 +63,11 @@ DocShare follows a traditional client-server architecture with the following com
            │
 ┌──────────▼──────────────────────────────────────────────┐
 │                   Data Layer                            │
-│  ┌─────────────────┐      ┌─────────────────────────┐  │
-│  │  PostgreSQL     │      │  MinIO (S3)             │  │
-│  │  - User Data    │      │  - File Objects         │  │
-│  │  - Metadata     │      │  - Preview Cache        │  │
-│  │  - Permissions  │      └─────────────────────────┘  │
+│  ┌─────────────────┐      ┌─────────────────────────┐   │
+│  │  PostgreSQL     │      │  MinIO (S3)             │   │
+│  │  - User Data    │      │  - File Objects         │   │
+│  │  - Metadata     │      │  - Preview Cache        │   │
+│  │  - Permissions  │      └─────────────────────────┘   │
 │  └─────────────────┘                                    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -80,6 +82,76 @@ DocShare follows a traditional client-server architecture with the following com
 | **Object Storage** | Binary file storage, scalability | MinIO (S3-compatible) |
 | **Preview Service** | Document conversion (Office → PDF) | Gotenberg (LibreOffice) |
 | **Audit Service** | Audit logging, activity feed, and S3 log export | Go |
+
+## Technology Stack
+
+### Backend
+
+- **Language**: Go 1.24+
+- **Web Framework**: Fiber v2
+- **ORM**: GORM
+- **Database**: PostgreSQL 16
+- **Storage**: MinIO (S3-compatible)
+- **Authentication**: JWT (golang-jwt/jwt/v5)
+- **Password Hashing**: bcrypt (golang.org/x/crypto)
+
+### Frontend
+
+- **Framework**: Next.js 16.1.6
+- **Runtime**: React 19.2.3
+- **Language**: TypeScript 5
+- **Styling**: TailwindCSS 4
+- **UI Components**: Radix UI + shadcn/ui
+- **State Management**: Zustand
+- **Icons**: Lucide React
+
+### Infrastructure
+
+- **Container Runtime**: Docker + Docker Compose
+- **Reverse Proxy**: (Not included - use Nginx, Traefik, or Caddy)
+- **Document Conversion**: Gotenberg 8
+
+## Project Structure
+
+```
+docshare/
+├── backend/
+│   ├── cmd/
+│   │   └── server/          # Application entry point
+│   ├── internal/
+│   │   ├── config/          # Configuration management
+│   │   ├── database/        # Database connection & migrations
+│   │   ├── handlers/        # HTTP request handlers (controllers)
+│   │   ├── middleware/      # HTTP middleware (auth, logging, CORS)
+│   │   ├── models/          # Database models & entities
+│   │   ├── services/        # Business logic services
+│   │   └── storage/         # Storage abstraction (MinIO)
+│   ├── pkg/
+│   │   ├── logger/          # Structured logging utilities
+│   │   ├── previewtoken/    # Preview token generation
+│   │   └── utils/           # Shared utilities (JWT, validation)
+│   ├── Dockerfile
+│   ├── go.mod
+│   └── go.sum
+├── frontend/
+│   ├── src/
+│   │   ├── app/             # Next.js app router pages
+│   │   │   ├── (auth)/      # Authentication pages (login, register)
+│   │   │   └── (dashboard)/ # Protected dashboard pages (files, shared, activity, settings, admin)
+│   │   ├── components/      # React components
+│   │   │   └── ui/          # shadcn/ui components
+│   │   └── lib/             # Utilities, API client, types
+│   ├── public/              # Static assets
+│   ├── Dockerfile
+│   ├── package.json
+│   └── tsconfig.json
+├── docker-compose.yml       # Multi-service orchestration
+├── README.md                # Project overview
+├── ARCHITECTURE.md          # This file
+├── API.md                   # API reference documentation
+├── DEPLOYMENT.md            # Deployment guide
+└── CONTRIBUTING.md           # Development guidelines
+```
 
 ## Backend Architecture
 
@@ -330,14 +402,14 @@ export const apiMethods = {
 │─────────────────│
 │ ID (PK)         │
 │ FileID (FK)     │
-│ SharedByID (FK) │───────┐
-│ SharedWithUserID│        │
-│ SharedWithGroupID        │
-│ Permission      │        │
-│ ExpiresAt       │        │
-└─────────────────┘        │
-                           │
-                           ▼
+│ SharedByID (FK) │─────────┐
+│ SharedWithUserID│         │
+│ SharedWithGroupID         │
+│ Permission      │         │
+│ ExpiresAt       │         │
+└─────────────────┘         │
+                            │
+                            ▼
                      ┌─────────────┐
                      │    User     │
                      └─────────────┘
@@ -595,12 +667,12 @@ Backend → Client: Stream file bytes
 
 ### Supported Formats
 
-| Format | Method | Output |
-|--------|--------|--------|
-| PDF | Direct | Original PDF |
-| Images (JPEG, PNG, GIF) | Direct | Original image |
+| Format                    | Method    | Output           |
+|---------------------------|-----------|------------------|
+| PDF                       | Direct    | Original PDF     |
+| Images (JPEG, PNG, GIF)   | Direct    | Original image   |
 | Office (DOCX, XLSX, PPTX) | Gotenberg | Converted to PDF |
-| Text (TXT, MD) | Direct | Plain text |
+| Text (TXT, MD)            | Direct    | Plain text       |
 
 ### Preview Generation Flow
 
@@ -621,7 +693,7 @@ Backend → Client: Stream file bytes
        │<───────────────────────┼────────────────────────│
        │                        │                        │
        │ 5. Send to Gotenberg   │                        │
-       │    POST /forms/libreoffice/convert             │
+       │    POST /forms/libreoffice/convert              │
        │───────────────────────>│                        │
        │                        │                        │
        │                        │ 6. Convert with        │
@@ -689,6 +761,8 @@ For long-term retention and external analysis, audit logs are periodically expor
 Users can view and download their own audit logs via the **Account Settings > Audit Log** tab, providing transparency into how their data is accessed and modified.
 
 ## Security Considerations
+
+> For comprehensive security policy, deployment best practices, and vulnerability reporting, see [SECURITY.md](./SECURITY.md).
 
 ### Password Security
 

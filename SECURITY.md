@@ -14,9 +14,7 @@ We take the security of DocShare seriously. If you discover a security vulnerabi
 
 ### How to Report
 
-**Please do not report security vulnerabilities through public GitHub issues.**
-
-Instead, please send an email to: **security@docshare.dev**
+Please [open an issue](https://github.com/docshare/docshare/issues/new) on GitHub to report security vulnerabilities.
 
 When reporting a vulnerability, please include:
 
@@ -34,8 +32,7 @@ When reporting a vulnerability, please include:
 
 ### Security Coordinators
 
-- **Primary Security Contact**: security@docshare.dev
-- **Project Maintainers**: Available through GitHub for non-security issues
+Report security issues via [GitHub Issues](https://github.com/docshare/docshare/issues/new).
 
 ## Security Best Practices
 
@@ -139,6 +136,6 @@ We follow a responsible disclosure policy:
 
 ## Questions
 
-If you have questions about this security policy or need to report a security issue, please contact us at **security@docshare.dev**.
+If you have questions about this security policy or need to report a security issue, please [open an issue](https://github.com/docshare/docshare/issues/new) on GitHub.
 
 Thank you for helping keep DocShare and its users safe! 🛡️
