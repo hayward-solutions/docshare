@@ -8,9 +8,11 @@ A fast, single-binary command-line interface for managing files on your DocShare
 2. [Quick Start](#quick-start)
 3. [Authentication](#authentication)
 4. [Commands](#commands)
+   - [General](#general)
    - [Files](#files)
    - [Upload & Download](#upload--download)
    - [Sharing](#sharing)
+   - [Transfer](#transfer)
 5. [Path Resolution](#path-resolution)
 6. [Global Flags](#global-flags)
 7. [Configuration](#configuration)
@@ -331,6 +333,56 @@ Use `docshare info <file>` or the web UI to find share IDs.
 ```bash
 docshare shared
 ```
+
+---
+
+### Transfer
+
+Transfer files securely between users using short-lived transfer codes. Both sender and receiver must be authenticated.
+
+#### `transfer send` — Send a file
+
+```bash
+docshare transfer send report.pdf
+docshare transfer send ./folder/file.txt --timeout 10m
+```
+
+Creates a transfer and waits for a receiver to connect. The sender's file is only uploaded after the receiver has connected.
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `--timeout` | How long to wait for receiver (e.g., `5m`, `10m`, `1h`). Default: `5m` |
+
+#### `transfer receive` — Receive a file
+
+```bash
+docshare transfer receive ABC123
+docshare transfer receive ABC123 --output ./Downloads
+```
+
+Connects to a transfer using a code and downloads the file.
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `-o`, `--output` | Output directory for received file (default: current directory) |
+
+#### `transfer list` — List pending transfers
+
+```bash
+docshare transfer list
+```
+
+Shows pending transfers you've initiated that are waiting for a receiver.
+
+#### `transfer cancel` — Cancel a transfer
+
+```bash
+docshare transfer cancel ABC123
+```
+
+Cancels a pending transfer. Only the sender can cancel.
 
 ---
 

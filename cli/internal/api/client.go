@@ -250,3 +250,48 @@ func (c *Client) DownloadToFile(rawURL, dest string) error {
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
+
+func (c *Client) UploadTransferFile(path string, file *os.File, size int64) error {
+	req, err := c.newRequest(http.MethodPost, path, file)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Length", fmt.Sprintf("%d", size))
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return &APIError{Status: resp.StatusCode, Message: string(body)}
+	}
+
+	return nil
+}
+
+func (c *Client) DownloadTransferFile(path string, dest *os.File) error {
+	req, err := c.newRequest(http.MethodGet, path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/octet-stream")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return &APIError{Status: resp.StatusCode, Message: string(body)}
+	}
+
+	_, err = io.Copy(dest, resp.Body)
+	return err
+}

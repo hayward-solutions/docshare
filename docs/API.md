@@ -15,9 +15,10 @@ Complete REST API reference for DocShare.
    - [Users](#user-endpoints)
    - [Files](#file-endpoints)
    - [Shares](#share-endpoints)
-    - [Groups](#group-endpoints)
-    - [Activities](#activity-endpoints)
-    - [Audit Log](#audit-log-endpoints)
+   - [Groups](#group-endpoints)
+   - [Transfers](#transfer-endpoints)
+   - [Activities](#activity-endpoints)
+   - [Audit Log](#audit-log-endpoints)
 
 ## Overview
 
@@ -1752,6 +1753,255 @@ Remove a user from a group.
 - Cannot remove the last owner
 
 ---
+
+---
+
+## Transfer Endpoints
+
+Transfer endpoints enable secure file transfers between authenticated users using short-lived transfer codes. Files are streamed directly between sender and receiver without being persisted to storage.
+
+### Transfer Flow
+
+1. **Sender** creates a transfer with `POST /transfers` → receives a code (e.g., `A1B2C3`)
+2. **Sender** polls `GET /transfers/:code` until receiver connects
+3. **Receiver** connects with `POST /transfers/:code/connect`
+4. **Sender** uploads via `POST /transfers/:code/upload` (file streams to server, then to receiver)
+5. **Either party** completes with `POST /transfers/:code/complete`
+
+### Create Transfer
+
+Create a new transfer and reserve a code.
+
+**Endpoint:** `POST /transfers`
+
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "fileName": "report.pdf",
+  "fileSize": 1048576,
+  "timeout": 300
+}
+```
+
+**Validation:**
+- `fileName`: Required, 1-255 characters
+- `fileSize`: Required, positive integer
+- `timeout`: Optional, timeout in seconds (default: 300)
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "code": "A1B2C3",
+    "fileName": "report.pdf",
+    "fileSize": 1048576,
+    "expiresAt": "2024-02-11T12:05:00Z"
+  }
+}
+```
+
+**Notes:**
+- Code is a 6-character alphanumeric string
+- Transfer expires after the timeout period
+- Only the sender can cancel the transfer
+
+---
+
+### Get Transfer Status
+
+Poll for transfer status. Used by sender to detect receiver connection.
+
+**Endpoint:** `GET /transfers/:code`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "pending",
+    "code": "A1B2C3",
+    "fileName": "report.pdf",
+    "fileSize": 1048576,
+    "expiresAt": "2024-02-11T12:05:00Z"
+  }
+}
+```
+
+**Status Values:**
+- `pending`: Waiting for receiver to connect
+- `active`: Receiver has connected, ready for transfer
+- `completed`: Transfer finished successfully
+- `cancelled`: Transfer was cancelled
+- `expired`: Transfer timed out
+
+**Sender Response (when receiver connected):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "receiver_connected",
+    "code": "A1B2C3",
+    "fileName": "report.pdf",
+    "fileSize": 1048576,
+    "recipientID": "660e8400-e29b-41d4-a716-446655440001"
+  }
+}
+```
+
+---
+
+### Connect to Transfer
+
+Receiver connects to a transfer.
+
+**Endpoint:** `POST /transfers/:code/connect`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "connected",
+    "fileName": "report.pdf",
+    "fileSize": 1048576
+  }
+}
+```
+
+**Error Responses:**
+- `404`: Transfer not found
+- `410`: Transfer expired or cancelled
+- `409`: Transfer not in pending state
+
+**Notes:**
+- Sender cannot connect to their own transfer
+- Connecting marks transfer as `active`
+
+---
+
+### Upload Transfer File
+
+Upload file content during an active transfer.
+
+**Endpoint:** `POST /transfers/:code/upload`
+
+**Authentication:** Required (must be sender)
+
+**Headers:**
+- `Content-Type`: `application/octet-stream`
+- `Content-Length`: File size in bytes
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "received": true
+  }
+}
+```
+
+**Notes:**
+- File is streamed through the server to the receiver
+- No file is persisted to storage
+
+---
+
+### Download Transfer File
+
+Download file content during an active transfer.
+
+**Endpoint:** `GET /transfers/:code/download`
+
+**Authentication:** Required (must be recipient)
+
+**Response (200):**
+- **Content-Type**: `application/octet-stream`
+- **Content-Disposition**: `attachment; filename="report.pdf"`
+- **X-Filename**: Original filename
+- **X-FileSize**: File size in bytes
+- **Body**: File content
+
+**Notes:**
+- Must be the designated recipient
+- Transfer must be in `active` state
+
+---
+
+### Complete Transfer
+
+Mark a transfer as complete.
+
+**Endpoint:** `POST /transfers/:code/complete`
+
+**Authentication:** Required (sender or recipient)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "completed"
+  }
+}
+```
+
+---
+
+### Cancel Transfer
+
+Cancel a pending or active transfer.
+
+**Endpoint:** `DELETE /transfers/:code`
+
+**Authentication:** Required (must be sender)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "cancelled"
+  }
+}
+```
+
+**Notes:**
+- Only the sender can cancel
+- Cannot cancel a completed transfer
+
+---
+
+### List My Transfers
+
+List pending transfers initiated by the authenticated user.
+
+**Endpoint:** `GET /transfers`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "A1B2C3",
+      "fileName": "report.pdf",
+      "fileSize": 1048576,
+      "status": "pending",
+      "expiresAt": "2024-02-11T12:05:00Z"
+    }
+  ]
+}
+```
 
 ---
 
