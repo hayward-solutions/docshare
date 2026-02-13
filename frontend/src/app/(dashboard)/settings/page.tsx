@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useActivityToast } from '@/hooks/use-activity-toast';
 import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -46,6 +47,7 @@ export default function AccountSettingsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [serverVersion, setServerVersion] = useState<{ version: string; apiVersion: string } | null>(null);
+  const { successWithRefresh } = useActivityToast();
 
   // Profile form state
   const [firstName, setFirstName] = useState('');
@@ -120,7 +122,7 @@ export default function AccountSettingsPage() {
       });
 
       if (res.success) {
-        toast.success('Profile updated successfully');
+        successWithRefresh('Profile updated successfully');
         await loadUser();
       }
     } catch (error) {
@@ -153,7 +155,7 @@ export default function AccountSettingsPage() {
       });
 
       if (res.success) {
-        toast.success('Password changed successfully');
+        successWithRefresh('Password changed successfully');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -247,7 +249,7 @@ export default function AccountSettingsPage() {
         setNewTokenName('');
         setNewTokenExpiry('30d');
         setIsCreateTokenOpen(false);
-        toast.success('API token created successfully');
+        successWithRefresh('API token created successfully');
       }
     } catch (error) {
       toast.error('Failed to create API token');
@@ -262,7 +264,7 @@ export default function AccountSettingsPage() {
       const res = await tokenAPI.revoke(id);
       if (res.success) {
         setTokens(tokens.filter((t) => t.id !== id));
-        toast.success('API token revoked successfully');
+        successWithRefresh('API token revoked successfully');
       }
     } catch (error) {
       toast.error('Failed to revoke API token');

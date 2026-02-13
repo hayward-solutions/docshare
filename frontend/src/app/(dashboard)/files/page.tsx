@@ -9,6 +9,7 @@ import { downloadFile } from '@/lib/download';
 import { useAuth } from '@/lib/auth';
 import { usePreferences } from '@/lib/preferences';
 import { useFileSelection } from '@/lib/use-file-selection';
+import { useActivityToast } from '@/hooks/use-activity-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,6 +67,7 @@ export default function FilesPage() {
   const [searchScope, setSearchScope] = useState<'everywhere' | 'here'>('here');
   const [searchResults, setSearchResults] = useState<File[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const { successWithRefresh } = useActivityToast();
   const [movingFile, setMovingFile] = useState<File | null>(null);
   const [sharingFile, setSharingFile] = useState<File | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -128,7 +130,7 @@ export default function FilesPage() {
     if (!confirm('Are you sure you want to delete this file?')) return;
     try {
       await apiMethods.delete(`/api/files/${id}`);
-      toast.success('File deleted');
+      successWithRefresh('File deleted');
       fetchFiles();
     } catch {
       toast.error('Failed to delete file');
@@ -142,7 +144,7 @@ export default function FilesPage() {
       await Promise.all(
         Array.from(selection.selectedIds).map((id) => apiMethods.delete(`/api/files/${id}`)),
       );
-      toast.success(`${count} item${count > 1 ? 's' : ''} deleted`);
+      successWithRefresh(`${count} item${count > 1 ? 's' : ''} deleted`);
       selection.deselectAll();
       fetchFiles();
     } catch {

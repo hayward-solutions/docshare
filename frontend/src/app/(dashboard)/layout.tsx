@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { activityAPI } from '@/lib/api';
+import { ActivityProvider, useActivity } from '@/contexts/activity-context';
 import { 
   Files, 
   Users, 
@@ -45,6 +46,7 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
   logout: () => void;
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
+  const { triggerRefresh } = useActivity();
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -57,8 +59,45 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
         console.error('Failed to fetch unread count:', error);
       }
     };
+
     fetchUnreadCount();
+    const pollingInterval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(pollingInterval);
   }, []);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await activityAPI.unreadCount();
+        if (res.success) {
+          setUnreadCount(res.data.count);
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+
+    if (pathname.startsWith('/activity')) {
+      fetchUnreadCount();
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await activityAPI.unreadCount();
+        if (res.success) {
+          setUnreadCount(res.data.count);
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+
+    if (triggerRefresh > 0) {
+      fetchUnreadCount();
+    }
+  }, [triggerRefresh]);
 
   const navigation = [
     { name: 'My Files', href: '/files', icon: Files },
@@ -166,30 +205,32 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <div className="hidden w-64 shrink-0 flex-col bg-slate-900 md:flex">
-        <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
-      </div>
+    <ActivityProvider>
+      <div className="flex h-screen overflow-hidden bg-slate-50">
+        <div className="hidden w-64 shrink-0 flex-col bg-slate-900 md:flex">
+          <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
+        </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 md:hidden">
-          <h1 className="text-lg font-bold">DocShare</h1>
-          <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-6 w-6" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-r-slate-800">
-              <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
-            </SheetContent>
-          </Sheet>
-        </header>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 md:hidden">
+            <h1 className="text-lg font-bold">DocShare</h1>
+            <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-r-slate-800">
+                <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
+              </SheetContent>
+            </Sheet>
+          </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          {children}
-        </main>
+          <main className="flex-1 overflow-y-auto p-4 md:p-8">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </ActivityProvider>
   );
 }

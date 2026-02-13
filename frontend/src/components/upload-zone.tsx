@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { apiMethods } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useActivityToast } from '@/hooks/use-activity-toast';
 
 interface UploadZoneProps {
   parentID?: string;
@@ -22,6 +23,7 @@ interface UploadingFile {
 
 export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const { successWithRefresh } = useActivityToast();
 
   const uploadFileToServer = useCallback(async (uploadFile: UploadingFile) => {
     setUploadingFiles(prev => prev.map(f => 
@@ -47,7 +49,7 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
       setUploadingFiles(prev => prev.map(f => 
         f.file === uploadFile.file ? { ...f, progress: 100, status: 'completed' } : f
       ));
-      toast.success(`Uploaded ${uploadFile.file.name}`);
+      successWithRefresh(`Uploaded ${uploadFile.file.name}`);
     } catch (error) {
       console.error(error);
       setUploadingFiles(prev => prev.map(f => 
@@ -55,7 +57,7 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
       ));
       toast.error(`Failed to upload ${uploadFile.file.name}`);
     }
-  }, [parentID]);
+  }, [parentID, successWithRefresh]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => ({
