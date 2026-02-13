@@ -1356,9 +1356,9 @@ SELECT * FROM pg_stat_user_indexes;
 
 ## Additional Resources
 
-- [README.md](./README.md) - Project overview
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Architecture details
-- [API.md](./API.md) - API documentation
+- [README.md](../README.md) - Project overview
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture details
+- [API.md](API.md) - API documentation
 - Docker Documentation: https://docs.docker.com/
 - PostgreSQL Documentation: https://www.postgresql.org/docs/
 - MinIO Documentation: https://min.io/docs/

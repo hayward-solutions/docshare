@@ -344,21 +344,48 @@ docshare --server https://other-server.com ls
 
 ## Shell Completion
 
-Generate shell completions for tab-completion of commands and flags:
+Generate shell completions for tab-completion of commands, subcommands, and flags.
+
+### Zsh
 
 ```bash
-# Bash
-docshare completion bash > /etc/bash_completion.d/docshare
+# If using Oh My Zsh:
+docshare completion zsh > ~/.oh-my-zsh/completions/_docshare
 
-# Zsh
-docshare completion zsh > "${fpath[1]}/_docshare"
-
-# Fish
-docshare completion fish > ~/.config/fish/completions/docshare.fish
-
-# PowerShell
-docshare completion powershell > docshare.ps1
+# Otherwise, use a directory in your fpath:
+docshare completion zsh > /usr/local/share/zsh/site-functions/_docshare
 ```
+
+Then restart your shell or run `source ~/.zshrc`.
+
+### Bash
+
+```bash
+# macOS (Homebrew bash-completion):
+docshare completion bash > /usr/local/etc/bash_completion.d/docshare
+
+# Linux:
+docshare completion bash > /etc/bash_completion.d/docshare
+```
+
+Then restart your shell or run `source ~/.bashrc`.
+
+### Fish
+
+```bash
+docshare completion fish > ~/.config/fish/completions/docshare.fish
+```
+
+Completions are picked up automatically on the next shell session.
+
+### PowerShell
+
+```powershell
+docshare completion powershell > docshare.ps1
+. ./docshare.ps1
+```
+
+To load completions on every session, add the output to your PowerShell profile (`$PROFILE`).
 
 ---
 

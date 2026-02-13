@@ -1918,6 +1918,6 @@ Current API is unversioned. Future versions could be prefixed:
 
 ## Additional Resources
 
-- [README.md](./README.md) - Project overview and setup
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Architecture details
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
+- [README.md](../README.md) - Project overview and setup
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture details
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
