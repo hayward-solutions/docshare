@@ -36,7 +36,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push backend image
+    - name: Build and push image
       uses: docker/build-push-action@v6
       with:
         context: ./${{ matrix.container }}
@@ -45,3 +45,25 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
+
+  build-cli:
+    name: Build CLI
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache-dependency-path: cli/go.sum
+
+    - name: Build
+      working-directory: cli
+      run: CGO_ENABLED=0 go build -ldflags="-s -w" ./...
+
+    - name: Vet
+      working-directory: cli
+      run: go vet ./...

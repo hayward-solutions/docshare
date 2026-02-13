@@ -3,9 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
-
 # Distribution / packaging
 .Python
 build/
@@ -66,9 +63,6 @@ instance/
 
 # Scrapy stuff:
 .scrapy
-
-# Sphinx documentation
-docs/_build/
 
 # PyBuilder
 .pybuilder/
@@ -173,7 +167,6 @@ cython_debug/
 *.exe
 *.exe~
 *.dll
-*.so
 *.dylib
 
 # Test binary, built with `go test -c`
@@ -394,6 +387,7 @@ postgres_data/
 /server
 /backend/server
 /backend/bin/
+/cli/docshare
 
 # Test coverage
 coverage.out
@@ -401,7 +395,6 @@ coverage.html
 
 # Air live reload
 .air.toml
-tmp/
 
 # Frontend specific
 # Next.js

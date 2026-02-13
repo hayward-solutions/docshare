@@ -16,10 +16,28 @@ DocShare was created to solve a simple problem: I need a private server to host 
 - **Audit logging** — Complete trail of all actions for compliance and security
 - **API tokens** — Generate long-lived personal access tokens for CLI and programmatic use
 - **Device flow** — Authenticate CLI tools and apps via browser approval (OAuth2 RFC 8628)
+- **CLI tool** — Upload, download, share, and manage files from the terminal
 
 ## Goals
 
 See [ROADMAP.md](./ROADMAP.md) for feature priorities and future plans.
+
+## CLI
+
+Install the CLI to manage files from your terminal:
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/hayward-solutions/docshare/main/cli/install.sh | sh
+```
+
+```bash
+docshare login                           # Authenticate via browser
+docshare upload report.pdf /Documents    # Upload a file
+docshare download /Documents/report.pdf  # Download a file
+docshare ls /Documents                   # List files
+```
+
+See the [CLI documentation](./CLI.md) for the full command reference.
 
 ## Quick Start
 
@@ -31,6 +49,7 @@ Then open http://localhost:3001 and create your first account.
 
 ## Documentation
 
+- [CLI](./CLI.md) — CLI installation and command reference
 - [Architecture](./ARCHITECTURE.md) — System design and technical details
 - [API Reference](./API.md) — REST API documentation
 - [Deployment](./DEPLOYMENT.md) — Production setup guide
