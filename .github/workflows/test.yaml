@@ -26,11 +26,14 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       cli: ${{ steps.filter.outputs.cli }}
+      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
+            workflow:
+              - '.github/workflows/test.yaml'
             backend:
               - 'backend/**'
             frontend:
@@ -41,7 +44,7 @@ jobs:
   test-backend:
     name: Test Backend
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -69,7 +72,7 @@ jobs:
   test-cli:
     name: Test CLI
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -97,7 +100,7 @@ jobs:
   test-frontend:
     name: Test Frontend
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
 
     steps:

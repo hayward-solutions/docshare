@@ -25,11 +25,14 @@ jobs:
       docker: ${{ steps.filter.outputs.docker }}
       cli: ${{ steps.filter.outputs.cli }}
       helm: ${{ steps.filter.outputs.helm }}
+      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
+            workflow:
+              - '.github/workflows/pull-request.yaml'
             docker:
               - 'frontend/**'
               - 'backend/**'
@@ -41,7 +44,7 @@ jobs:
   build:
     name: Build Docker Images
     needs: changes
-    if: needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
@@ -78,7 +81,7 @@ jobs:
   build-cli:
     name: Build CLI
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -110,7 +113,7 @@ jobs:
   lint-helm:
     name: Lint Helm Chart
     needs: changes
-    if: needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.helm == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
 
     steps:
