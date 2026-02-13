@@ -50,7 +50,7 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
     const fetchUnreadCount = async () => {
       try {
         const res = await activityAPI.unreadCount();
-        if (res.success) {
+        if (res.success && res.data) {
           setUnreadCount(res.data.count);
         }
       } catch (error) {

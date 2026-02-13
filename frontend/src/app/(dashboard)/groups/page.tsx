@@ -32,7 +32,7 @@ export default function GroupsPage() {
   const fetchGroups = useCallback(async () => {
     try {
       const res = await apiMethods.get<Group[]>('/api/groups');
-      if (res.success) {
+      if (res.success && res.data) {
         setGroups(res.data);
       }
     } catch {

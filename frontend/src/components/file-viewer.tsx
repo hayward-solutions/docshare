@@ -16,7 +16,7 @@ interface FileViewerProps {
 
 async function fetchPreviewBlob(fileId: string): Promise<{ blobUrl: string; contentType: string }> {
   const res = await apiMethods.get<{ path: string; token: string }>(`/api/files/${fileId}/preview`);
-  if (!res.success) throw new Error('Failed to get preview token');
+  if (!res.success || !res.data) throw new Error('Failed to get preview token');
 
   const proxyUrl = `${API_URL}${res.data.path}?token=${res.data.token}`;
   const response = await fetch(proxyUrl);
@@ -55,7 +55,7 @@ export function FileViewer({ file }: FileViewerProps) {
         if (isOfficeDoc(file.mimeType)) {
           const res = await apiMethods.get<{ url: string }>(`/api/files/${file.id}/convert-preview`);
           if (cancelled) return;
-          if (res.success) {
+          if (res.success && res.data) {
             setBlobUrl(res.data.url);
           } else {
             setError('Failed to generate preview');

@@ -30,7 +30,7 @@ export default function DeviceVerificationPage() {
     
     try {
       const res = await deviceAPI.verify(codeToVerify);
-      if (res.success) {
+      if (res.success && res.data) {
         setVerification(res.data);
       } else {
         toast.error(res.error || 'Invalid device code');

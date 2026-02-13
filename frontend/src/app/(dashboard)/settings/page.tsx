@@ -68,7 +68,7 @@ export default function AccountSettingsPage() {
       setIsLoadingGroups(true);
       try {
         const res = await userAPI.getGroups();
-        if (res.success) {
+        if (res.success && res.data) {
           setGroups(res.data);
         }
       } catch (error) {
@@ -82,7 +82,7 @@ export default function AccountSettingsPage() {
       setIsLoadingTokens(true);
       try {
         const res = await tokenAPI.list();
-        if (res.success) {
+        if (res.success && res.data) {
           setTokens(res.data);
         }
       } catch (error) {
@@ -109,7 +109,7 @@ export default function AccountSettingsPage() {
       const res = await userAPI.updateProfile({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        avatarURL: avatarUrl.trim() || null,
+        avatarURL: avatarUrl.trim() || undefined,
       });
 
       if (res.success) {
@@ -140,10 +140,7 @@ export default function AccountSettingsPage() {
     setIsLoading(true);
 
     try {
-      const res = await userAPI.changePassword({
-        oldPassword: currentPassword,
-        newPassword: newPassword,
-      });
+      const res = await userAPI.changePassword(currentPassword, newPassword);
 
       if (res.success) {
         toast.success('Password changed successfully');
@@ -176,8 +173,8 @@ export default function AccountSettingsPage() {
     setIsLoading(true);
     try {
       const res = await userAPI.uploadAvatar(file);
-      if (res.success && res.url) {
-        setAvatarUrl(res.url);
+      if (res.success && res.data && res.data.avatarURL) {
+        setAvatarUrl(res.data.avatarURL);
         toast.success('Avatar uploaded successfully');
       } else {
         toast.error('Failed to get upload URL');
@@ -234,7 +231,7 @@ export default function AccountSettingsPage() {
         expiresIn: newTokenExpiry,
       });
 
-      if (res.success) {
+      if (res.success && res.data) {
         setCreatedToken(res.data.token);
         setTokens([res.data.apiToken, ...tokens]);
         setNewTokenName('');

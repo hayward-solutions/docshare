@@ -50,7 +50,7 @@ interface MoveDialogProps {
 
 async function fetchDirectoryTree(dir: File): Promise<DirectoryNode> {
   const childrenRes = await apiMethods.get<File[]>(`/api/files/${dir.id}/children`);
-  const childDirectories = childrenRes.success
+  const childDirectories = (childrenRes.success && childrenRes.data)
     ? childrenRes.data.filter((child: File) => child.isDirectory)
     : [];
 
@@ -119,7 +119,7 @@ export function MoveDialog({
     setIsLoadingTree(true);
     try {
       const rootRes = await apiMethods.get<File[]>('/api/files');
-      if (!rootRes.success) {
+      if (!rootRes.success || !rootRes.data) {
         throw new Error('Failed to load folders');
       }
 

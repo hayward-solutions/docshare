@@ -87,7 +87,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
     if (!id) return;
     try {
       const res = await apiMethods.get<Share[]>(`/api/files/${id}/shares`);
-      if (res.success) {
+      if (res.success && res.data) {
         setShares(res.data);
       }
     } catch (error) {
@@ -98,7 +98,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
   const fetchGroups = useCallback(async () => {
     try {
       const res = await apiMethods.get<Group[]>('/api/groups');
-      if (res.success) {
+      if (res.success && res.data) {
         setGroups(res.data);
       }
     } catch (error) {

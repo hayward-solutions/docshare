@@ -92,17 +92,17 @@ export default function FileDetailPage() {
     setIsLoading(true);
     try {
       const fileRes = await apiMethods.get<File>(`/api/files/${id}`);
-      if (!fileRes.success) throw new Error('Failed to load file');
+      if (!fileRes.success || !fileRes.data) throw new Error('Failed to load file');
       setFile(fileRes.data);
 
       const pathRes = await apiMethods.get<BreadcrumbItem[]>(`/api/files/${id}/path`);
-      if (pathRes.success) {
+      if (pathRes.success && pathRes.data) {
         setBreadcrumbs(pathRes.data);
       }
 
       if (fileRes.data.isDirectory) {
         const childrenRes = await apiMethods.get<File[]>(`/api/files/${id}/children`);
-        if (childrenRes.success) {
+        if (childrenRes.success && childrenRes.data) {
           setChildren(childrenRes.data);
         }
       }
@@ -133,7 +133,7 @@ export default function FileDetailPage() {
           params.directoryID = id;
         }
         const res = await apiMethods.get<File[]>('/api/files/search', params);
-        if (res.success) {
+        if (res.success && res.data) {
           setSearchResults(res.data);
         }
       } catch {

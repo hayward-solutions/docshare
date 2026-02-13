@@ -84,7 +84,7 @@ export default function FilesPage() {
     setIsLoading(true);
     try {
       const res = await apiMethods.get<File[]>('/api/files');
-      if (res.success) {
+      if (res.success && res.data) {
         setFiles(res.data);
       }
     } catch {
@@ -111,7 +111,7 @@ export default function FilesPage() {
         const params: Record<string, string> = { q: searchQuery };
         // At root, "here" and "everywhere" are equivalent (no directoryID)
         const res = await apiMethods.get<File[]>('/api/files/search', params);
-        if (res.success) {
+        if (res.success && res.data) {
           setSearchResults(res.data);
         }
       } catch {

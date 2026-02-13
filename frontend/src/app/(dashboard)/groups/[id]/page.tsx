@@ -47,7 +47,7 @@ export default function GroupDetailPage() {
   const fetchGroup = useCallback(async () => {
     try {
       const res = await apiMethods.get<Group>(`/api/groups/${id}`);
-      if (res.success) {
+      if (res.success && res.data) {
         setGroup(res.data);
       }
     } catch {
