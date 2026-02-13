@@ -535,7 +535,7 @@ export default function AccountSettingsPage() {
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle className="text-green-800">Token Created Successfully</AlertTitle>
                   <AlertDescription className="text-green-700">
-                    <p className="mb-2">Make sure to copy your personal access token now. You won't be able to see it again!</p>
+                    <p className="mb-2">Make sure to copy your personal access token now. You won&apos;t be able to see it again!</p>
                     <div className="flex items-center gap-2 mt-2">
                       <code className="bg-white px-2 py-1 rounded border border-green-200 font-mono text-sm flex-1 break-all">
                         {createdToken}
@@ -603,7 +603,7 @@ export default function AccountSettingsPage() {
                 <div className="text-center py-8">Loading tokens...</div>
               ) : tokens.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  You don't have any API tokens yet.
+                  You don&apos;t have any API tokens yet.
                 </div>
               ) : (
                 <div className="border rounded-md">
