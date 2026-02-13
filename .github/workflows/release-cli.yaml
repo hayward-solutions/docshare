@@ -161,6 +161,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: docshare_*
           merge-multiple: true
 
       - name: Generate checksums
