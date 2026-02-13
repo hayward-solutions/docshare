@@ -66,7 +66,7 @@ That's it! The application is now running with:
 
 **Optional (for local development without Docker):**
 - Go 1.24+
-- Node.js 20+
+- Node.js 22+
 - PostgreSQL 16+
 - MinIO server
 
@@ -977,6 +977,36 @@ docker-compose up -d
 # Remove old images
 docker image prune -a
 ```
+
+### 8. Distroless Container Images
+
+DocShare uses Google's distroless container images for production deployments, providing:
+
+- **Reduced attack surface** — No shell, package manager, or unnecessary utilities
+- **Smaller image sizes** — ~50-70% smaller than Alpine-based images
+- **Fewer CVEs** — Minimal packages mean fewer vulnerabilities to patch
+
+**Runtime images used:**
+
+| Service | Distroless Image |
+|---------|-----------------|
+| Backend (Go) | `gcr.io/distroless/static-debian12` |
+| Frontend (Node.js) | `gcr.io/distroless/nodejs22-debian12` |
+
+**Debugging distroless containers:**
+
+For debugging, use the `:debug` variants:
+```bash
+# Development docker-compose.yml
+services:
+  backend:
+    image: gcr.io/distroless/static-debian12:debug
+
+# Then you can exec into the container
+docker exec -it docshare-backend sh
+```
+
+**Note:** Distroless images run as non-root by default. If you need root access for debugging, use the debug variants.
 
 ---
 
