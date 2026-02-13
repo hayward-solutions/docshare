@@ -165,19 +165,22 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 			return "", err
 		}
 
-		if header.Typeflag == tar.TypeReg && (header.Name == binaryName || header.Name == binaryName+".exe") {
-			target := filepath.Join(destDir, filepath.Base(header.Name))
-			outFile, err := os.Create(target)
-			if err != nil {
-				return "", err
-			}
-			if _, err := io.Copy(outFile, tr); err != nil {
+		if header.Typeflag == tar.TypeReg {
+			name := filepath.Base(header.Name)
+			if name == binaryName || name == binaryName+".exe" {
+				target := filepath.Join(destDir, name)
+				outFile, err := os.Create(target)
+				if err != nil {
+					return "", err
+				}
+				if _, err := io.Copy(outFile, tr); err != nil {
+					outFile.Close()
+					return "", err
+				}
 				outFile.Close()
-				return "", err
+				binaryPath = target
+				break
 			}
-			outFile.Close()
-			binaryPath = target
-			break
 		}
 	}
 
@@ -197,13 +200,19 @@ func extractZip(archivePath, destDir string) (string, error) {
 
 	var binaryPath string
 	for _, f := range r.File {
-		if f.Name == binaryName || f.Name == binaryName+".exe" {
+		// Skip entries with potentially unsafe paths.
+		if strings.Contains(f.Name, "..") || filepath.IsAbs(f.Name) {
+			continue
+		}
+
+		name := filepath.Base(f.Name)
+		if name == binaryName || name == binaryName+".exe" {
 			rc, err := f.Open()
 			if err != nil {
 				return "", err
 			}
 
-			target := filepath.Join(destDir, filepath.Base(f.Name))
+			target := filepath.Join(destDir, name)
 			outFile, err := os.Create(target)
 			if err != nil {
 				rc.Close()
