@@ -221,6 +221,15 @@ func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed fetching updated user")
 	}
 
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "user.profile_update",
+		ResourceType: "user",
+		ResourceID:   &currentUser.ID,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
+
 	return utils.Success(c, fiber.StatusOK, updated)
 }
 

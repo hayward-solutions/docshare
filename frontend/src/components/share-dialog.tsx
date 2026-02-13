@@ -31,6 +31,7 @@ import { Share2, User as UserIcon, Users, Loader2, Trash2, Globe, LogIn, Check, 
 import { apiMethods } from '@/lib/api';
 import { toast } from 'sonner';
 import { User, Group, Share, ShareType } from '@/lib/types';
+import { useActivityToast } from '@/hooks/use-activity-toast';
 
 function getPublicLink(fileId: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -80,6 +81,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
   const [shareType, setShareType] = useState<ShareType>('private');
   const [permission, setPermission] = useState<'view' | 'download' | 'edit'>('view');
   const [isLoading, setIsLoading] = useState(false);
+  const { successWithRefresh } = useActivityToast();
 
   const fetchShares = useCallback(async () => {
     if (isBulk) return;
@@ -163,7 +165,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
         : shareType === 'public_logged_in'
         ? 'Public (logged in) link created'
         : isBulk ? `${resolvedIds.length} items shared` : 'File shared successfully';
-      toast.success(label);
+      successWithRefresh(label);
       setSearchQuery('');
       setSelectedUser('');
       setSelectedGroup('');

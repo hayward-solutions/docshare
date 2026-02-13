@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { useActivity } from '@/contexts/activity-context';
 import { 
   Bell, 
   Upload, 
@@ -76,6 +77,7 @@ function getActivityIcon(action: string) {
 
 export default function ActivityPage() {
   const { user } = useAuth();
+  const { refreshActivityCount } = useActivity();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -130,6 +132,7 @@ export default function ActivityPage() {
 
     try {
       await activityAPI.markRead(id);
+      refreshActivityCount();
     } catch (error) {
       console.error('Failed to mark activity as read:', error);
       setActivities(prev => prev.map(a => 
@@ -148,6 +151,7 @@ export default function ActivityPage() {
     try {
       await activityAPI.markAllRead();
       toast.success('All activities marked as read');
+      refreshActivityCount();
     } catch (error) {
       console.error('Failed to mark all as read:', error);
       setActivities(previousActivities);

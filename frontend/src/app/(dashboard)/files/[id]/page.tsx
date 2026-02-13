@@ -9,6 +9,7 @@ import { downloadFile } from '@/lib/download';
 import { useAuth } from '@/lib/auth';
 import { usePreferences } from '@/lib/preferences';
 import { useFileSelection } from '@/lib/use-file-selection';
+import { useActivityToast } from '@/hooks/use-activity-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -86,6 +87,7 @@ export default function FileDetailPage() {
   const displayedFiles = isSearchActive ? searchResults : children;
 
   const selection = useFileSelection(displayedFiles);
+  const { successWithRefresh } = useActivityToast();
   const canShareAll = selection.selectedFiles.every((f) => user?.id === f.ownerID);
 
   const fetchData = useCallback(async () => {
@@ -150,7 +152,7 @@ export default function FileDetailPage() {
     if (!confirm('Are you sure you want to delete this file?')) return;
     try {
       await apiMethods.delete(`/api/files/${fileId}`);
-      toast.success('File deleted');
+      successWithRefresh('File deleted');
       if (fileId === id) {
         router.push(file?.parentID ? `/files/${file.parentID}` : '/files');
       } else {
@@ -177,7 +179,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
       await Promise.all(
         Array.from(selection.selectedIds).map((delId) => apiMethods.delete(`/api/files/${delId}`)),
       );
-      toast.success(`${count} item${count > 1 ? 's' : ''} deleted`);
+      successWithRefresh(`${count} item${count > 1 ? 's' : ''} deleted`);
       selection.deselectAll();
       fetchData();
     } catch {
