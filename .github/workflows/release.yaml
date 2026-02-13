@@ -151,10 +151,49 @@ jobs:
             docker buildx imagetools create -t "${repo}:latest" "${repo}:latest-amd64" "${repo}:latest-arm64"
           done
 
+  release-helm:
+    name: Package and Publish Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+
+      - name: Update chart dependencies
+        run: helm dependency update charts/docshare
+
+      - name: Package chart
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p .helm-packages
+          sed -i "s/^version:.*/version: ${VERSION}/" charts/docshare/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" charts/docshare/Chart.yaml
+          helm package charts/docshare --destination .helm-packages
+
+      - name: Push chart to GHCR
+        run: |
+          for pkg in .helm-packages/*.tgz; do
+            helm push "$pkg" oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docshare_helm_chart
+          path: .helm-packages/*.tgz
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-cli, build-docker, publish-manifests]
+    needs: [build-cli, build-docker, publish-manifests, release-helm]
 
     steps:
       - name: Download all artifacts
