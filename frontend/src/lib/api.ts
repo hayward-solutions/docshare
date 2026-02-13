@@ -1,0 +1,136 @@
+import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, User } from './types';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+interface FetchOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | undefined>;
+}
+
+export async function api<T>(endpoint: string, options: FetchOptions = {}): Promise<ApiResponse<T>> {
+  const { params, ...init } = options;
+  
+  let url = `${API_URL}${endpoint}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        searchParams.append(key, String(value));
+      }
+    });
+    url += `?${searchParams.toString()}`;
+  }
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...init.headers,
+  };
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      headers,
+    });
+
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+      throw new Error('Unauthorized');
+    }
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'An error occurred');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+}
+
+export const apiMethods = {
+  get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) => api<T>(endpoint, { method: 'GET', params }),
+  post: <T>(endpoint: string, body: Record<string, unknown>) => api<T>(endpoint, { method: 'POST', body: JSON.stringify(body) }),
+  put: <T>(endpoint: string, body: Record<string, unknown>) => api<T>(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(endpoint: string) => api<T>(endpoint, { method: 'DELETE' }),
+  upload: <T>(endpoint: string, formData: FormData) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    // Don't set Content-Type for FormData, let browser set it with boundary
+    return fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    }).then(res => res.json() as Promise<ApiResponse<T>>);
+  }
+};
+
+export const activityAPI = {
+  list: async (page = 1, limit = 20) =>
+    apiMethods.get<Activity[]>('/api/activities', { page, limit }),
+  unreadCount: async () =>
+    apiMethods.get<{ count: number }>('/api/activities/unread-count'),
+  markRead: async (id: string) =>
+    apiMethods.put('/api/activities/' + id + '/read', {}),
+  markAllRead: async () =>
+    apiMethods.put('/api/activities/read-all', {}),
+};
+
+export const auditAPI = {
+  download: async (format: 'csv' | 'json' = 'csv') => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_URL}/api/audit-log/export?format=${format}`, { headers });
+    if (!response.ok) throw new Error('Failed to download audit log');
+    return response.blob();
+  },
+};
+
+export const tokenAPI = {
+  list: async () => apiMethods.get<APIToken[]>('/api/auth/tokens'),
+  create: async (data: { name: string; expiresIn?: string }) =>
+    apiMethods.post<APITokenCreateResponse>('/api/auth/tokens', data),
+  revoke: async (id: string) => apiMethods.delete('/api/auth/tokens/' + id),
+};
+
+export const deviceAPI = {
+  verify: async (code: string) =>
+    apiMethods.get<DeviceCodeVerification>('/api/auth/device/verify', { code }),
+  approve: async (userCode: string) =>
+    apiMethods.post<{ message: string }>('/api/auth/device/approve', { userCode }),
+};
+
+export const userAPI = {
+  updateProfile: async (data: { firstName?: string; lastName?: string; avatarURL?: string | null }) =>
+    apiMethods.put<User>('/api/auth/me', data),
+  changePassword: async (data: { oldPassword: string; newPassword: string }) =>
+    apiMethods.put('/api/auth/password', data),
+  getCurrentUser: async () => apiMethods.get<User>('/api/auth/me'),
+  getGroups: async () => apiMethods.get<Group[]>('/api/groups'),
+  uploadAvatar: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('parentID', '');
+    
+    const res = await apiMethods.upload<{ id: string; storagePath?: string }>('/api/files/upload', formData);
+    if (res.success) {
+      return { success: true, url: res.data.storagePath ? `${API_URL}/api/files/${res.data.id}/download-url` : null };
+    }
+    return { success: false, error: 'Upload failed' };
+  }
+};
