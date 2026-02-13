@@ -166,6 +166,8 @@ cmd/
 internal/
   handlers/               # HTTP request handlers (Presentation Layer)
     ├── auth.go          # Authentication endpoints
+    ├── api_tokens.go    # API token management
+    ├── device_auth.go   # Device flow endpoints
     ├── files.go         # File management endpoints
     ├── shares.go        # Sharing endpoints
     ├── groups.go        # Group management endpoints
@@ -337,44 +339,45 @@ export const apiMethods = {
 ### Entity Relationship Diagram
 
 ```
-┌─────────────────┐
-│      User       │
-│─────────────────│
-│ ID (PK)         │◄──────┐
-│ Email (unique)  │       │
-│ PasswordHash    │       │
-│ FirstName       │       │OwnerID
-│ LastName        │       │
-│ Role            │       │
-│ AvatarURL       │       │
-└─────────────────┘       │
-         │                │
-         │                │
-         │CreatedByID     │
-         │                │
-         ▼                │
 ┌─────────────────┐       │
-│     Group       │       │
+│      User       │       │
 │─────────────────│       │
-│ ID (PK)         │       │
-│ Name            │       │
-│ Description     │       │
-│ CreatedByID (FK)│       │
-└─────────────────┘       │
+│ ID (PK)         │◄──────┼──────────┐
+│ Email (unique)  │       │          │
+│ PasswordHash    │       │          │
+│ FirstName       │       │OwnerID   │
+│ LastName        │       │          │
+│ Role            │       │          │
+│ AvatarURL       │       │          │
+└─────────────────┘       │          │
+         │                │          │
+         │                │          │
+         │CreatedByID     │          │UserID
+         │                │          │
+         ▼                │          │
+┌─────────────────┐       │   ┌──────┴──────────┐
+│     Group       │       │   │    APIToken     │
+│─────────────────│       │   │─────────────────│
+│ ID (PK)         │       │   │ ID (PK)         │
+│ Name            │       │   │ UserID (FK)     │
+│ Description     │       │   │ Name            │
+│ CreatedByID (FK)│       │   │ TokenHash       │
+└─────────────────┘       │   │ Prefix          │
+         │                │   │ ExpiresAt       │
+         │                │   │ LastUsedAt      │
+         │GroupID         │   └─────────────────┘
          │                │
-         │                │
-         │GroupID         │
-         │                │
-         ▼                │
-┌─────────────────┐       │
-│GroupMembership  │       │
-│─────────────────│       │
-│ ID (PK)         │       │
-│ GroupID (FK)    │       │
-│ UserID (FK)     │───────┤
-│ Role            │       │
-└─────────────────┘       │
-                          │
+         ▼                │   ┌─────────────────┐
+┌─────────────────┐       │   │   DeviceCode    │
+│GroupMembership  │       │   │─────────────────│
+│─────────────────│       │   │ ID (PK)         │
+│ ID (PK)         │       │   │ DeviceCodeHash  │
+│ GroupID (FK)    │       │   │ UserCode        │
+│ UserID (FK)     │───────┤   │ ExpiresAt       │
+│ Role            │       │   │ Interval        │
+└─────────────────┘       │   │ Status          │
+                          │   │ UserID (FK)     │
+                          │   └─────────────────┘
                           │
 ┌─────────────────┐       │
 │      File       │       │
@@ -414,6 +417,23 @@ export const apiMethods = {
                      │    User     │
                      └─────────────┘
 ```
+
+### Authentication Models
+
+#### 1. APIToken
+Stores long-lived personal access tokens.
+- **UserID**: The owner of the token.
+- **TokenHash**: SHA-256 hash of the raw token.
+- **Prefix**: The first few characters of the token (e.g., `dsh_7f8e9d`) for display.
+- **ExpiresAt**: Optional expiration timestamp.
+- **LastUsedAt**: Updated on every authenticated request using this token.
+
+#### 2. DeviceCode
+Temporary storage for OAuth2 Device Authorization Flow (RFC 8628).
+- **DeviceCodeHash**: SHA-256 hash of the device code used for polling.
+- **UserCode**: Consonant-only code (e.g., `BCDF-GHJK`) shown to the user.
+- **Status**: `pending`, `approved`, or `denied`.
+- **UserID**: The user who approved the code (NULL until approved).
 
 ### Audit & Activity Models
 
@@ -503,38 +523,41 @@ A singleton table used to track the timestamp of the last successful S3 audit lo
 
 ### Authentication Flow
 
+DocShare supports three authentication paths:
+
+#### 1. JWT Flow (Web)
+Standard login/register flow returning a 24h JWT.
+
+#### 2. API Token Flow (CLI/Programmatic)
+1. User generates a token in Settings (`dsh_` prefix + 48 random hex chars).
+2. Client sends `Authorization: Bearer dsh_...`.
+3. Middleware detects the `dsh_` prefix.
+4. Server hashes the token and looks it up in the `api_tokens` table.
+5. If valid, `last_used_at` is updated and user is attached to context.
+
+#### 3. Device Flow (OAuth2 RFC 8628)
+For CLI tools that cannot open a browser.
+
 ```
-┌─────────┐                               ┌─────────┐
-│ Client  │                               │ Server  │
-└────┬────┘                               └────┬────┘
-     │                                         │
-     │  POST /api/auth/register                │
-     │  { email, password, firstName, ... }    │
-     │────────────────────────────────────────>│
-     │                                         │
-     │                                         │ 1. Hash password (bcrypt)
-     │                                         │ 2. Create user record
-     │                                         │ 3. Generate JWT token
-     │                                         │
-     │  { token: "jwt...", user: {...} }       │
-     │<────────────────────────────────────────│
-     │                                         │
-     │  Store token in localStorage            │
-     │                                         │
-     │                                         │
-     │  GET /api/files                         │
-     │  Header: Authorization: Bearer jwt...   │
-     │────────────────────────────────────────>│
-     │                                         │
-     │                                         │ 1. Extract token
-     │                                         │ 2. Validate signature
-     │                                         │ 3. Check expiration
-     │                                         │ 4. Load user from DB
-     │                                         │ 5. Attach to context
-     │                                         │
-     │  { data: [...] }                        │
-     │<────────────────────────────────────────│
-     │                                         │
+┌─────────┐          ┌─────────┐          ┌─────────┐
+│   CLI   │          │ Backend │          │ Browser │
+└────┬────┘          └────┬────┘          └────┬────┘
+     │                    │                    │
+     │ 1. POST /device/code                    │
+     │───────────────────>│                    │
+     │                    │                    │
+     │ 2. Return codes    │                    │
+     │<───────────────────│                    │
+     │                    │                    │
+     │ 3. Poll /token     │ 4. User visits /device   │
+     │───────────────────>│<───────────────────│
+     │                    │                    │
+     │                    │ 5. Approve code    │
+     │                    │<───────────────────│
+     │                    │                    │
+     │ 6. Return JWT      │                    │
+     │<───────────────────│                    │
+     │                    │                    │
 ```
 
 ### JWT Token Structure
@@ -558,11 +581,13 @@ A singleton table used to track the timestamp of the last successful S3 audit lo
 ### Authorization Middleware
 
 **RequireAuth Middleware**:
-1. Extract `Authorization: Bearer <token>` header
-2. Validate JWT signature and expiration
-3. Load user from database
-4. Attach user to request context
-5. Proceed to handler
+1. Extract `Authorization: Bearer <token>` header.
+2. Determine token type:
+   - If prefix is `dsh_`: Route to API token lookup (hash and check DB).
+   - Otherwise: Validate as JWT signature and expiration.
+3. Load user from database and update `last_used_at` (for API tokens).
+4. Attach user to request context.
+5. Proceed to handler.
 
 **AdminOnly Middleware**:
 1. Check if user exists in context
@@ -783,6 +808,20 @@ Users can view and download their own audit logs via the **Account Settings > Au
 - **Expiration support**: Shares can have expiration dates
 - **Permission levels**: Granular control (view, download, edit)
 - **Owner bypass**: Owners always have full access
+
+### API Token Security
+
+- **Hashed Storage**: Tokens are stored as SHA-256 hashes; raw tokens are never saved.
+- **Prefix Display**: Only the `dsh_` prefix and first few characters are stored in plaintext for user identification.
+- **Token Limits**: Users are limited to 25 active tokens to prevent bloat and reduce attack surface.
+- **Expiration**: Support for fixed-term tokens (30d, 90d, 365d) or permanent tokens.
+
+### Device Flow Security
+
+- **Hashed Codes**: Device codes are SHA-256 hashed in the database.
+- **Short Expiry**: Codes expire after 15 minutes.
+- **Single Use**: Device codes are hard-deleted immediately after a JWT is issued.
+- **User Code Entropy**: Uses a consonant-only alphabet to avoid ambiguous characters (e.g., 0/O, 1/I) and prevent accidental word formation.
 
 ### CORS Configuration
 

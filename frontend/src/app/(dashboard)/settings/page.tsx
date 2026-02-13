@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { userAPI, auditAPI } from '@/lib/api';
-import { Group, GroupMembership } from '@/lib/types';
+import { userAPI, auditAPI, tokenAPI } from '@/lib/api';
+import { Group, GroupMembership, APIToken } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,33 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download } from 'lucide-react';
+import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function AccountSettingsPage() {
   const { user, loadUser } = useAuth();
@@ -30,26 +56,48 @@ export default function AccountSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [tokens, setTokens] = useState<APIToken[]>([]);
+  const [isLoadingTokens, setIsLoadingTokens] = useState(false);
+  const [isCreateTokenOpen, setIsCreateTokenOpen] = useState(false);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [newTokenExpiry, setNewTokenExpiry] = useState('30d');
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+
   useEffect(() => {
-  const fetchGroups = async () => {
-    setIsLoadingGroups(true);
-    try {
-      const res = await userAPI.getGroups();
-      if (res.success) {
-        setGroups(res.data);
+    const fetchGroups = async () => {
+      setIsLoadingGroups(true);
+      try {
+        const res = await userAPI.getGroups();
+        if (res.success) {
+          setGroups(res.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch groups:', error);
+      } finally {
+        setIsLoadingGroups(false);
       }
-    } catch (error) {
-      console.error('Failed to fetch groups:', error);
-    } finally {
-      setIsLoadingGroups(false);
-    }
-  };
+    };
+
+    const fetchTokens = async () => {
+      setIsLoadingTokens(true);
+      try {
+        const res = await tokenAPI.list();
+        if (res.success) {
+          setTokens(res.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tokens:', error);
+      } finally {
+        setIsLoadingTokens(false);
+      }
+    };
 
     if (user) {
       setFirstName(user.firstName);
       setLastName(user.lastName);
       setAvatarUrl(user.avatarURL || '');
       fetchGroups();
+      fetchTokens();
     }
   }, [user]);
 
@@ -173,6 +221,55 @@ export default function AccountSettingsPage() {
     }
   };
 
+  const handleCreateToken = async () => {
+    if (!newTokenName.trim()) {
+      toast.error('Token name is required');
+      return;
+    }
+
+    setIsLoadingTokens(true);
+    try {
+      const res = await tokenAPI.create({
+        name: newTokenName,
+        expiresIn: newTokenExpiry,
+      });
+
+      if (res.success) {
+        setCreatedToken(res.data.token);
+        setTokens([res.data.apiToken, ...tokens]);
+        setNewTokenName('');
+        setNewTokenExpiry('30d');
+        setIsCreateTokenOpen(false);
+        toast.success('API token created successfully');
+      }
+    } catch (error) {
+      toast.error('Failed to create API token');
+      console.error('Create token error:', error);
+    } finally {
+      setIsLoadingTokens(false);
+    }
+  };
+
+  const handleRevokeToken = async (id: string) => {
+    try {
+      const res = await tokenAPI.revoke(id);
+      if (res.success) {
+        setTokens(tokens.filter((t) => t.id !== id));
+        toast.success('API token revoked successfully');
+      }
+    } catch (error) {
+      toast.error('Failed to revoke API token');
+      console.error('Revoke token error:', error);
+    }
+  };
+
+  const handleCopyToken = () => {
+    if (createdToken) {
+      navigator.clipboard.writeText(createdToken);
+      toast.success('Token copied to clipboard');
+    }
+  };
+
   if (!user) {
     return <div>Loading...</div>;
   }
@@ -187,7 +284,7 @@ export default function AccountSettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserIcon className="h-4 w-4" />
             Profile
@@ -199,6 +296,10 @@ export default function AccountSettingsPage() {
           <TabsTrigger value="groups" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Groups
+          </TabsTrigger>
+          <TabsTrigger value="api-tokens" className="flex items-center gap-2">
+            <Key className="h-4 w-4" />
+            API Tokens
           </TabsTrigger>
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -401,6 +502,144 @@ export default function AccountSettingsPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="api-tokens">
+          <Card>
+            <CardHeader>
+              <CardTitle>API Tokens</CardTitle>
+              <CardDescription>
+                Manage your personal access tokens for CLI and API access
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {createdToken && (
+                <Alert className="bg-green-50 border-green-200 text-green-900 [&>svg]:text-green-600">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle className="text-green-800">Token Created Successfully</AlertTitle>
+                  <AlertDescription className="text-green-700">
+                    <p className="mb-2">Make sure to copy your personal access token now. You won't be able to see it again!</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <code className="bg-white px-2 py-1 rounded border border-green-200 font-mono text-sm flex-1 break-all">
+                        {createdToken}
+                      </code>
+                      <Button size="sm" variant="outline" onClick={handleCopyToken} className="h-8 shrink-0 bg-white hover:bg-green-50 border-green-200 text-green-700">
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="flex justify-end">
+                <Dialog open={isCreateTokenOpen} onOpenChange={setIsCreateTokenOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Token
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create API Token</DialogTitle>
+                      <DialogDescription>
+                        Generate a new personal access token.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="token-name">Name</Label>
+                        <Input
+                          id="token-name"
+                          placeholder="e.g. CLI Access"
+                          value={newTokenName}
+                          onChange={(e) => setNewTokenName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="token-expiry">Expiration</Label>
+                        <Select value={newTokenExpiry} onValueChange={setNewTokenExpiry}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select expiration" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="30d">30 days</SelectItem>
+                            <SelectItem value="90d">90 days</SelectItem>
+                            <SelectItem value="365d">1 year</SelectItem>
+                            <SelectItem value="never">Never</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsCreateTokenOpen(false)}>Cancel</Button>
+                      <Button onClick={handleCreateToken} disabled={isLoadingTokens}>
+                        {isLoadingTokens ? 'Creating...' : 'Create'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {isLoadingTokens && tokens.length === 0 ? (
+                <div className="text-center py-8">Loading tokens...</div>
+              ) : tokens.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  You don't have any API tokens yet.
+                </div>
+              ) : (
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Prefix</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Last Used</TableHead>
+                        <TableHead>Expires</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tokens.map((token) => (
+                        <TableRow key={token.id}>
+                          <TableCell className="font-medium">{token.name}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {token.prefix}****
+                          </TableCell>
+                          <TableCell>
+                            {formatDistanceToNow(new Date(token.createdAt), { addSuffix: true })}
+                          </TableCell>
+                          <TableCell>
+                            {token.lastUsedAt
+                              ? formatDistanceToNow(new Date(token.lastUsedAt), { addSuffix: true })
+                              : 'Never used'}
+                          </TableCell>
+                          <TableCell>
+                            {token.expiresAt
+                              ? formatDistanceToNow(new Date(token.expiresAt), { addSuffix: true })
+                              : 'Never'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleRevokeToken(token.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Revoke</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>

@@ -47,6 +47,8 @@ func migrate(db *gorm.DB) error {
 		&models.AuditLog{},
 		&models.AuditExportCursor{},
 		&models.Activity{},
+		&models.APIToken{},
+		&models.DeviceCode{},
 	); err != nil {
 		return err
 	}

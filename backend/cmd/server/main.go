@@ -35,6 +35,14 @@ func main() {
 		log.Fatalf("database connection failed: %v", err)
 	}
 
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			handlers.CleanupExpiredDeviceCodes(db)
+		}
+	}()
+
 	storageClient, err := storage.NewMinIOClient(cfg.MinIO)
 	if err != nil {
 		log.Fatalf("minio initialization failed: %v", err)
@@ -55,6 +63,8 @@ func main() {
 	sharesHandler := handlers.NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := handlers.NewActivitiesHandler(db)
 	auditHandler := handlers.NewAuditHandler(db)
+	apiTokenHandler := handlers.NewAPITokenHandler(db, auditService)
+	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -130,6 +140,17 @@ func main() {
 	activityRoutes.Get("/unread-count", activitiesHandler.UnreadCount)
 	activityRoutes.Put("/read-all", activitiesHandler.MarkAllRead)
 	activityRoutes.Put("/:id/read", activitiesHandler.MarkRead)
+
+	tokenRoutes := api.Group("/auth/tokens", authMiddleware.RequireAuth)
+	tokenRoutes.Post("/", apiTokenHandler.Create)
+	tokenRoutes.Get("/", apiTokenHandler.List)
+	tokenRoutes.Delete("/:id", apiTokenHandler.Revoke)
+
+	deviceRoutes := api.Group("/auth/device")
+	deviceRoutes.Post("/code", deviceAuthHandler.RequestCode)
+	deviceRoutes.Post("/token", deviceAuthHandler.PollToken)
+	deviceRoutes.Get("/verify", authMiddleware.RequireAuth, deviceAuthHandler.Verify)
+	deviceRoutes.Post("/approve", authMiddleware.RequireAuth, deviceAuthHandler.Approve)
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)
