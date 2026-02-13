@@ -10,8 +10,33 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+      cli: ${{ steps.filter.outputs.cli }}
+      helm: ${{ steps.filter.outputs.helm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'frontend/**'
+              - 'backend/**'
+            cli:
+              - 'cli/**'
+            helm:
+              - 'charts/**'
+
   build:
     name: Publish Docker Images
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
@@ -89,6 +114,8 @@ jobs:
 
   build-cli:
     name: Build CLI
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,6 +140,8 @@ jobs:
 
   publish-helm:
     name: Publish Helm Chart
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
