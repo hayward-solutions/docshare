@@ -82,7 +82,7 @@ resolve_version() {
     if [ "$VERSION" = "latest" ]; then
         VERSION=$(curl -sSfL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
             | grep '"tag_name"' \
-            | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/' ) || true
+            | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' ) || true
     fi
 
     if [ -z "$VERSION" ]; then
