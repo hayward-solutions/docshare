@@ -17,11 +17,7 @@ DocShare was created to solve a simple problem: I need a private server to host 
 
 ## Goals
 
-<!-- TODO: Add project goals and roadmap -->
-
-- Keep it simple to set up and use
-- Stay lean but feature-complete
-- Prioritise security without sacrificing usability
+See [ROADMAP.md](./ROADMAP.md) for feature priorities and future plans.
 
 ## Quick Start
 
@@ -38,3 +34,4 @@ Then open http://localhost:3001 and create your first account.
 - [Deployment](./DEPLOYMENT.md) — Production setup guide
 - [Contributing](./CONTRIBUTING.md) — Development setup and guidelines
 - [Security](./SECURITY.md) — Security policy and best practices
+- [Roadmap](./ROADMAP.md) — Feature priorities and future plans
