@@ -510,6 +510,7 @@ Thumbs.db
 
 # Helm
 charts/*.tgz
+charts/docshare/charts/*.tgz
 
 # Backup files
 *.bak

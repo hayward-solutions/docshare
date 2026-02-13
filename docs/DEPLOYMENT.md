@@ -340,19 +340,27 @@ Follow the same environment variable setup as Option 2, then run backend and fro
    docker-compose -f docker-compose.prod.yml up -d
    ```
 
-#### Option 2: Kubernetes (Large Scale)
+#### Option 2: Kubernetes with Helm (Large Scale)
 
 **Best for:** Multi-server deployments, high availability, > 10,000 users
 
-See [kubernetes/README.md](./kubernetes/README.md) for detailed Kubernetes deployment guide.
+DocShare provides an official Helm chart for Kubernetes deployments. Install from the OCI registry:
 
-**Key components:**
-- Deployment manifests for each service
-- StatefulSet for PostgreSQL (or use managed database)
-- PersistentVolumeClaims for storage
-- Ingress for external access
-- Secrets management
-- Horizontal Pod Autoscaler
+```bash
+helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+  --namespace docshare \
+  --create-namespace \
+  -f production-values.yaml
+```
+
+The chart includes:
+- Deployments for backend, frontend, and Gotenberg
+- Bundled PostgreSQL and MinIO via Bitnami subcharts (or bring your own)
+- Ingress with TLS support
+- Configurable replicas, resources, and environment
+- Secret management (auto-generated or existing secrets)
+
+See the [Helm Chart documentation](HELM.md) for the full configuration reference, production examples, and external database/storage setup.
 
 #### Option 3: Managed Services (Hybrid Cloud)
 

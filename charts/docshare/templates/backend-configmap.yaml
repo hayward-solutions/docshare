@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docshare.fullname" . }}-backend
+  labels:
+    {{- include "docshare.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+data:
+  DB_HOST: {{ include "docshare.postgresHost" . | quote }}
+  DB_PORT: {{ include "docshare.postgresPort" . | quote }}
+  DB_USER: {{ ternary .Values.postgresql.auth.username .Values.externalDatabase.user .Values.postgresql.enabled | quote }}
+  DB_NAME: {{ ternary .Values.postgresql.auth.database .Values.externalDatabase.database .Values.postgresql.enabled | quote }}
+  DB_SSLMODE: {{ ternary .Values.backend.env.dbSslmode .Values.externalDatabase.sslmode .Values.postgresql.enabled | quote }}
+  MINIO_ENDPOINT: {{ include "docshare.minioEndpoint" . | quote }}
+  MINIO_PUBLIC_ENDPOINT: {{ ternary (include "docshare.minioEndpoint" .) (default .Values.externalMinio.endpoint .Values.externalMinio.publicEndpoint) .Values.minio.enabled | quote }}
+  MINIO_BUCKET: {{ ternary .Values.backend.env.minioBucket .Values.externalMinio.bucket .Values.minio.enabled | quote }}
+  MINIO_USE_SSL: {{ ternary .Values.backend.env.minioUseSsl .Values.externalMinio.useSsl .Values.minio.enabled | quote }}
+  GOTENBERG_URL: {{ default (include "docshare.gotenbergUrl" .) .Values.backend.env.gotenbergUrl | quote }}
+  SERVER_PORT: {{ .Values.backend.env.serverPort | quote }}
+  JWT_EXPIRATION_HOURS: {{ .Values.backend.env.jwtExpirationHours | quote }}

@@ -1,0 +1,21 @@
+Thank you for installing DocShare.
+
+{{- if .Values.ingress.enabled }}
+DocShare is exposed via ingress.
+
+{{- range .Values.ingress.hosts }}
+- http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+DocShare services are ClusterIP. Use port-forward to access them locally:
+
+Backend API:
+  kubectl port-forward svc/{{ include "docshare.fullname" . }}-backend 8080:{{ .Values.backend.service.port }}
+
+Frontend:
+  kubectl port-forward svc/{{ include "docshare.fullname" . }}-frontend 3000:{{ .Values.frontend.service.port }}
+
+Then open:
+  Frontend: http://127.0.0.1:3000
+  API:      http://127.0.0.1:8080
+{{- end }}
