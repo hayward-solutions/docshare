@@ -7,7 +7,7 @@ Thank you for your interest in contributing to DocShare! This document provides 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Go 1.24+ (for backend development)
+- Go 1.24+ (for backend and CLI development)
 - Node.js 20+ (for frontend development)
 - Git
 
@@ -178,6 +178,30 @@ npm test
 npm run build
 ```
 
+### CLI Development
+
+```bash
+cd cli
+
+# Build
+go build -o docshare .
+
+# Run
+./docshare --help
+
+# Static analysis
+go vet ./...
+```
+
+The CLI is a standalone Go module in `cli/` with its own `go.mod`. It has no shared code with the backend — it communicates with the server purely via the REST API.
+
+**Key directories:**
+- `cmd/` — Cobra command definitions (one file per command)
+- `internal/api/` — HTTP client and API response types
+- `internal/config/` — Config file persistence (`~/.config/docshare/`)
+- `internal/output/` — Table formatting and JSON output
+- `internal/pathutil/` — Path-to-UUID resolution
+
 ## Architecture Guidelines
 
 ### Backend (Go)
@@ -186,6 +210,12 @@ npm run build
 - Add new handlers to `internal/handlers/`
 - Add new services to `internal/services/`
 - Add new models to `internal/models/`
+
+### CLI (Go)
+- Add new commands to `cli/cmd/` (one file per command, register in `init()`)
+- All commands should support `--json` output via the global `flagJSON` flag
+- Use `pathutil.Resolve()` when accepting remote file paths from the user
+- Use `requireAuth()` at the start of any command that needs authentication
 
 ### Frontend (Next.js)
 - Use the App Router

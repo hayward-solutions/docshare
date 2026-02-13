@@ -133,6 +133,17 @@ docshare/
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── go.sum
+├── cli/
+│   ├── cmd/                 # CLI command definitions (Cobra)
+│   ├── internal/
+│   │   ├── api/             # HTTP client & API response types
+│   │   ├── config/          # Config file persistence (~/.config/docshare/)
+│   │   ├── output/          # Table formatting, JSON output
+│   │   └── pathutil/        # Path-to-UUID resolution
+│   ├── install.sh           # Curl-able install script
+│   ├── main.go
+│   ├── go.mod
+│   └── go.sum
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # Next.js app router pages
@@ -149,6 +160,7 @@ docshare/
 ├── README.md                # Project overview
 ├── ARCHITECTURE.md          # This file
 ├── API.md                   # API reference documentation
+├── CLI.md                   # CLI installation & command reference
 ├── DEPLOYMENT.md            # Deployment guide
 └── CONTRIBUTING.md           # Development guidelines
 ```
