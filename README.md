@@ -41,8 +41,43 @@ See the [CLI documentation](./docs/CLI.md) for the full command reference.
 
 ## Quick Start
 
+DocShare provides two Docker Compose configurations:
+
+| File | Use Case | Builds From |
+|------|----------|-------------|
+| `docker-compose.yml` | **Production** | Pre-built GHCR images |
+| `docker-compose.dev.yml` | **Development** | Local source code |
+
+### Development (Recommended for contributors)
+
 ```bash
+# Clone repository
+git clone https://github.com/hayward-solutions/docshare.git
+cd docshare
+
+# Start all services (builds from local source)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Access the application
+# Frontend: http://localhost:3001
+# Backend: http://localhost:8080
+# MinIO Console: http://localhost:9001
+```
+
+### Production
+
+```bash
+# Clone repository
+git clone https://github.com/hayward-solutions/docshare.git
+cd docshare
+
+# Start all services (uses pre-built images)
 docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3001
+# Backend: http://localhost:8080
+# MinIO Console: http://localhost:9001
 ```
 
 Then open http://localhost:3001 and create your first account.
