@@ -462,8 +462,7 @@ pids
 # Go build cache
 # Note: go.sum should be committed for reproducible builds
 
-# Test files
-*_test.go
+# Test file backups
 *_test.go~
 
 # Go mod download cache

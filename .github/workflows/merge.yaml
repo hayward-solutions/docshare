@@ -1,4 +1,5 @@
 name: Merge
+run-name: Merge ${{ github.ref_name }} - ${{ github.event.head_commit.message }}
 
 on:
   push:
@@ -19,12 +20,15 @@ jobs:
       docker: ${{ steps.filter.outputs.docker }}
       cli: ${{ steps.filter.outputs.cli }}
       helm: ${{ steps.filter.outputs.helm }}
+      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
+            workflow:
+              - '.github/workflows/merge.yaml'
             docker:
               - 'frontend/**'
               - 'backend/**'
@@ -36,7 +40,7 @@ jobs:
   build:
     name: Publish Docker Images
     needs: changes
-    if: needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
@@ -115,7 +119,7 @@ jobs:
   build-cli:
     name: Build CLI
     needs: changes
-    if: needs.changes.outputs.cli == 'true'
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -141,7 +145,7 @@ jobs:
   publish-helm:
     name: Publish Helm Chart
     needs: changes
-    if: needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.helm == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
