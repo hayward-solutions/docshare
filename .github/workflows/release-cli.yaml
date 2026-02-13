@@ -81,8 +81,8 @@ jobs:
           path: cli/${{ env.ARCHIVE }}
 
   build-docker:
-    name: Build and Publish Docker Images
-    runs-on: ubuntu-latest
+    name: Publish Docker Images
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
         container:

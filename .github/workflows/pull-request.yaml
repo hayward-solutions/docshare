@@ -11,7 +11,7 @@ env:
 jobs:
   build:
     name: Build Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
         container:
