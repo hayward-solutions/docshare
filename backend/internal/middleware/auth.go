@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
+	"time"
 
 	"github.com/docshare/backend/internal/models"
 	"github.com/docshare/backend/pkg/logger"
@@ -12,6 +15,7 @@ import (
 )
 
 const currentUserKey = "currentUser"
+const apiTokenPrefix = "dsh_"
 
 type AuthMiddleware struct {
 	DB *gorm.DB
@@ -32,7 +36,7 @@ func CORS() fiber.Handler {
 func (a *AuthMiddleware) RequireAuth(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
-		logger.Warn("jwt_missing_header", map[string]interface{}{
+		logger.Warn("auth_missing_header", map[string]interface{}{
 			"ip":   c.IP(),
 			"path": c.Path(),
 		})
@@ -41,7 +45,7 @@ func (a *AuthMiddleware) RequireAuth(c *fiber.Ctx) error {
 
 	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
 	if tokenString == authHeader || tokenString == "" {
-		logger.Warn("jwt_invalid_format", map[string]interface{}{
+		logger.Warn("auth_invalid_format", map[string]interface{}{
 			"ip":          c.IP(),
 			"path":        c.Path(),
 			"auth_header": authHeader[:min(len(authHeader), 20)] + "...",
@@ -49,6 +53,14 @@ func (a *AuthMiddleware) RequireAuth(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "invalid authorization format")
 	}
 
+	if strings.HasPrefix(tokenString, apiTokenPrefix) {
+		return a.authenticateAPIToken(c, tokenString)
+	}
+
+	return a.authenticateJWT(c, tokenString)
+}
+
+func (a *AuthMiddleware) authenticateJWT(c *fiber.Ctx, tokenString string) error {
 	claims, err := utils.ValidateToken(tokenString)
 	if err != nil {
 		logger.Warn("jwt_validation_failed", map[string]interface{}{
@@ -73,6 +85,40 @@ func (a *AuthMiddleware) RequireAuth(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func (a *AuthMiddleware) authenticateAPIToken(c *fiber.Ctx, rawToken string) error {
+	hash := sha256.Sum256([]byte(rawToken))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	var apiToken models.APIToken
+	if err := a.DB.First(&apiToken, "token_hash = ?", tokenHash).Error; err != nil {
+		logger.Warn("api_token_not_found", map[string]interface{}{
+			"ip":   c.IP(),
+			"path": c.Path(),
+		})
+		return utils.Error(c, fiber.StatusUnauthorized, "invalid API token")
+	}
+
+	if apiToken.ExpiresAt != nil && apiToken.ExpiresAt.Before(time.Now()) {
+		logger.Warn("api_token_expired", map[string]interface{}{
+			"ip":       c.IP(),
+			"path":     c.Path(),
+			"token_id": apiToken.ID.String(),
+		})
+		return utils.Error(c, fiber.StatusUnauthorized, "API token has expired")
+	}
+
+	var user models.User
+	if err := a.DB.First(&user, "id = ?", apiToken.UserID).Error; err != nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "user not found")
+	}
+
+	now := time.Now()
+	a.DB.Model(&apiToken).Update("last_used_at", now)
+
+	c.Locals(currentUserKey, &user)
+	return c.Next()
+}
+
 func (a *AuthMiddleware) OptionalAuth(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
@@ -81,6 +127,29 @@ func (a *AuthMiddleware) OptionalAuth(c *fiber.Ctx) error {
 
 	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
 	if tokenString == authHeader || tokenString == "" {
+		return c.Next()
+	}
+
+	if strings.HasPrefix(tokenString, apiTokenPrefix) {
+		hash := sha256.Sum256([]byte(tokenString))
+		tokenHash := hex.EncodeToString(hash[:])
+
+		var apiToken models.APIToken
+		if err := a.DB.First(&apiToken, "token_hash = ?", tokenHash).Error; err != nil {
+			return c.Next()
+		}
+		if apiToken.ExpiresAt != nil && apiToken.ExpiresAt.Before(time.Now()) {
+			return c.Next()
+		}
+
+		var user models.User
+		if err := a.DB.First(&user, "id = ?", apiToken.UserID).Error; err != nil {
+			return c.Next()
+		}
+
+		now := time.Now()
+		a.DB.Model(&apiToken).Update("last_used_at", now)
+		c.Locals(currentUserKey, &user)
 		return c.Next()
 	}
 

@@ -55,6 +55,7 @@ func main() {
 	sharesHandler := handlers.NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := handlers.NewActivitiesHandler(db)
 	auditHandler := handlers.NewAuditHandler(db)
+	apiTokenHandler := handlers.NewAPITokenHandler(db, auditService)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -130,6 +131,11 @@ func main() {
 	activityRoutes.Get("/unread-count", activitiesHandler.UnreadCount)
 	activityRoutes.Put("/read-all", activitiesHandler.MarkAllRead)
 	activityRoutes.Put("/:id/read", activitiesHandler.MarkRead)
+
+	tokenRoutes := api.Group("/auth/tokens", authMiddleware.RequireAuth)
+	tokenRoutes.Post("/", apiTokenHandler.Create)
+	tokenRoutes.Get("/", apiTokenHandler.List)
+	tokenRoutes.Delete("/:id", apiTokenHandler.Revoke)
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)
