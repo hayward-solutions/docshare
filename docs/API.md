@@ -8,6 +8,7 @@ Complete REST API reference for DocShare.
 2. [Authentication](#authentication)
 3. [Error Handling](#error-handling)
 4. [Endpoints](#endpoints)
+   - [Version](#version-endpoint)
    - [Authentication](#authentication-endpoints)
    - [API Tokens](#api-token-endpoints)
    - [Device Flow](#device-flow-endpoints)
@@ -137,6 +138,32 @@ Tokens expire after 24 hours (configurable). The frontend should handle 401 resp
   "error": "you don't have permission to access this file"
 }
 ```
+
+---
+
+## Version Endpoint
+
+### Get Version
+
+Returns version information for the server and API. **No authentication required.**
+
+**Endpoint:** `GET /api/version`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "version": "v0.1.0",
+    "apiVersion": "v1"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `version` | Server binary version (matches Docker tag / git ref) |
+| `apiVersion` | API contract version (incremented on breaking changes) |
 
 ---
 
