@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { userAPI, auditAPI, tokenAPI } from '@/lib/api';
+import { userAPI, auditAPI, tokenAPI, versionAPI, APP_VERSION } from '@/lib/api';
 import { Group, GroupMembership, APIToken } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle } from 'lucide-react';
+import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
@@ -45,6 +45,7 @@ export default function AccountSettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [serverVersion, setServerVersion] = useState<{ version: string; apiVersion: string } | null>(null);
 
   // Profile form state
   const [firstName, setFirstName] = useState('');
@@ -62,6 +63,12 @@ export default function AccountSettingsPage() {
   const [newTokenName, setNewTokenName] = useState('');
   const [newTokenExpiry, setNewTokenExpiry] = useState('30d');
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    versionAPI.get().then((res) => {
+      if (res.success) setServerVersion(res.data);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchGroups = async () => {
@@ -284,7 +291,7 @@ export default function AccountSettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserIcon className="h-4 w-4" />
             Profile
@@ -304,6 +311,10 @@ export default function AccountSettingsPage() {
           <TabsTrigger value="audit" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Audit Log
+          </TabsTrigger>
+          <TabsTrigger value="about" className="flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            About
           </TabsTrigger>
         </TabsList>
 
@@ -665,6 +676,33 @@ export default function AccountSettingsPage() {
                   Download JSON
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="about">
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+              <CardDescription>
+                Version information for this DocShare installation
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Frontend</dt>
+                  <dd className="font-mono">{APP_VERSION}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">Server</dt>
+                  <dd className="font-mono">{serverVersion ? serverVersion.version : '—'}</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">API</dt>
+                  <dd className="font-mono">{serverVersion ? serverVersion.apiVersion : '—'}</dd>
+                </div>
+              </dl>
             </CardContent>
           </Card>
         </TabsContent>

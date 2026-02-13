@@ -141,7 +141,10 @@ install_from_source() {
     git clone --depth 1 "https://github.com/${REPO}.git" "${TMPDIR}/docshare" 2>/dev/null
 
     info "Building from source..."
-    (cd "${TMPDIR}/docshare/cli" && CGO_ENABLED=0 go build -ldflags="-s -w" -o "${TMPDIR}/${BINARY}" .)
+    SRC_VERSION=$(git -C "${TMPDIR}/docshare" describe --tags --always 2>/dev/null || echo "dev")
+    (cd "${TMPDIR}/docshare/cli" && CGO_ENABLED=0 go build \
+        -ldflags="-s -w -X github.com/docshare/cli/cmd.Version=${SRC_VERSION}" \
+        -o "${TMPDIR}/${BINARY}" .)
 
     install_binary "${TMPDIR}/${BINARY}"
 }

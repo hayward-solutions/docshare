@@ -51,7 +51,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          go build -ldflags="-s -w" -o "docshare${EXT}" .
+          go build -ldflags="-s -w -X github.com/docshare/cli/cmd.Version=${GITHUB_REF_NAME}" -o "docshare${EXT}" .
 
       - name: Package
         working-directory: cli
@@ -114,6 +114,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:${{ github.ref_name }}-${{ matrix.arch }}
             ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:latest-${{ matrix.arch }}
+          build-args: VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.arch }}
           platforms: linux/${{ matrix.arch }}

@@ -132,7 +132,64 @@ This removes the stored token from your machine.
 
 ---
 
+## Version & Updates
+
+### Check version
+
+```bash
+docshare version
+```
+
+Shows the CLI version, server version, and API version. The server endpoint is unauthenticated — works before login.
+
+**Example output:**
+```
+CLI version:    v0.1.0
+Server version: v0.1.0
+API version:    v1
+```
+
+### Upgrade to latest release
+
+```bash
+docshare upgrade
+```
+
+Downloads and installs the latest release from GitHub automatically. This command:
+- Checks your current version against the latest GitHub release
+- Downloads the appropriate binary for your OS/architecture
+- Replaces the current binary in-place with atomic backup/restore
+- Preserves your configuration
+
+**Notes:**
+- Only works with release versions (not `dev` builds)
+- Requires write access to the CLI binary location
+- If installed via package manager, use that to upgrade instead
+
+---
+
+---
+
 ## Commands
+
+### General
+
+#### `version` — Show version information
+
+```bash
+docshare version
+docshare version --json
+```
+
+Displays CLI version, server version, and API version. Works without authentication.
+
+#### `upgrade` — Upgrade to latest release
+
+```bash
+docshare upgrade
+```
+
+Automatically downloads and installs the latest release. Only works with release builds.
 
 ### Files
 

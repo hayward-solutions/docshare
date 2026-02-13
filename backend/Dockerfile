@@ -8,7 +8,10 @@ RUN go mod download
 COPY . .
 
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /app/bin/server ./cmd/server
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
+    -ldflags="-s -w -X github.com/docshare/backend/internal/handlers.Version=${VERSION}" \
+    -o /app/bin/server ./cmd/server
 
 FROM gcr.io/distroless/static-debian12
 

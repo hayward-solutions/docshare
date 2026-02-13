@@ -26,6 +26,10 @@ jobs:
       packages: write
 
     steps:
+      - name: Compute version
+        id: vars
+        run: echo "version=main-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -45,6 +49,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:main-${{ matrix.arch }}
             ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:${{ github.sha }}-${{ matrix.arch }}
+          build-args: VERSION=${{ steps.vars.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.container }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.container }}-${{ matrix.arch }}
           platforms: linux/${{ matrix.arch }}
@@ -98,7 +103,7 @@ jobs:
 
     - name: Build
       working-directory: cli
-      run: CGO_ENABLED=0 go build -ldflags="-s -w" ./...
+      run: CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/docshare/cli/cmd.Version=main-${GITHUB_SHA::8}" ./...
 
     - name: Vet
       working-directory: cli
