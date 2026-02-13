@@ -14,6 +14,8 @@ DocShare was created to solve a simple problem: I need a private server to host 
 - **Document previews** — Preview Office documents, PDFs, and images directly in the browser
 - **Activity tracking** — Know what's happening with file uploads, shares, and group changes
 - **Audit logging** — Complete trail of all actions for compliance and security
+- **API tokens** — Generate long-lived personal access tokens for CLI and programmatic use
+- **Device flow** — Authenticate CLI tools and apps via browser approval (OAuth2 RFC 8628)
 
 ## Goals
 

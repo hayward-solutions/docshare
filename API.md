@@ -9,6 +9,8 @@ Complete REST API reference for DocShare.
 3. [Error Handling](#error-handling)
 4. [Endpoints](#endpoints)
    - [Authentication](#authentication-endpoints)
+   - [API Tokens](#api-token-endpoints)
+   - [Device Flow](#device-flow-endpoints)
    - [Users](#user-endpoints)
    - [Files](#file-endpoints)
    - [Shares](#share-endpoints)
@@ -70,15 +72,27 @@ Paginated responses include pagination metadata:
 
 ## Authentication
 
-Most endpoints require a valid JWT token in the Authorization header:
+Most endpoints require a valid token in the Authorization header. DocShare supports three types of authentication:
 
+1. **JWT Tokens** — Used by the web frontend. Obtained via login/register.
+2. **API Tokens** — Long-lived tokens for CLI and programmatic use.
+3. **Device Flow** — For CLI tools that cannot open a browser directly.
+
+For JWT and Device Flow tokens:
 ```
 Authorization: Bearer <jwt_token>
 ```
 
+For API tokens (prefixed with `dsh_`):
+```
+Authorization: Bearer dsh_<token_value>
+```
+
 ### Obtaining a Token
 
-Use the `/auth/register` or `/auth/login` endpoints to obtain a token.
+- **Web Login**: Use the `/auth/register` or `/auth/login` endpoints.
+- **API Tokens**: Generate tokens in Settings → API Tokens or via the `/auth/tokens` endpoints.
+- **Device Flow**: Use the `/auth/device/code` and `/auth/device/token` flow.
 
 ### Token Expiration
 
@@ -325,6 +339,218 @@ Change authenticated user's password.
 {
   "success": false,
   "error": "current password is incorrect"
+}
+```
+
+---
+
+## API Token Endpoints
+
+### Create API Token
+
+Generate a new long-lived personal access token.
+
+**Endpoint:** `POST /auth/tokens`
+
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "name": "My CLI Token",
+  "expiresInDays": 90
+}
+```
+
+**Validation:**
+- `name`: Required, 1-100 characters
+- `expiresInDays`: Optional, one of: 30, 90, 365 (null or omitted for "never")
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "ff0e8400-e29b-41d4-a716-446655440011",
+    "name": "My CLI Token",
+    "token": "dsh_7f8e9d0c1b2a3948576d5e4f3c2b1a09z8y7x6w5v4u3t2s1",
+    "prefix": "dsh_7f8e9d",
+    "expiresAt": "2024-05-11T10:30:00Z",
+    "createdAt": "2024-02-11T10:30:00Z"
+  }
+}
+```
+
+**Notes:**
+- The full `token` is only shown once upon creation.
+- Users can have a maximum of 25 active tokens.
+
+---
+
+### List API Tokens
+
+List all API tokens for the authenticated user.
+
+**Endpoint:** `GET /auth/tokens`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "ff0e8400-e29b-41d4-a716-446655440011",
+      "name": "My CLI Token",
+      "prefix": "dsh_7f8e9d",
+      "lastUsedAt": "2024-02-12T15:45:00Z",
+      "expiresAt": "2024-05-11T10:30:00Z",
+      "createdAt": "2024-02-11T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Revoke API Token
+
+Permanently revoke an API token.
+
+**Endpoint:** `DELETE /auth/tokens/:id`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "token revoked successfully"
+  }
+}
+```
+
+---
+
+## Device Flow Endpoints
+
+### Request Device Code
+
+Start the device authorization flow. Used by CLI tools.
+
+**Endpoint:** `POST /auth/device/code`
+
+**Authentication:** Not required
+
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Request Parameters:**
+- `client_id` (required): The client identifier
+- `scope` (optional): Requested scopes
+
+**Success Response (200):**
+```json
+{
+  "device_code": "7f8e9d0c1b2a3948576d5e4f3c2b1a09z8y7x6w5v4u3t2s1",
+  "user_code": "BCDF-GHJK",
+  "verification_uri": "http://localhost:3001/device",
+  "verification_uri_complete": "http://localhost:3001/device?code=BCDF-GHJK",
+  "expires_in": 900,
+  "interval": 5
+}
+```
+
+**Notes:**
+- This endpoint returns standard RFC 8628 JSON (no `success`/`data` wrapper).
+
+---
+
+### Poll for Token
+
+Exchange a device code for an access token. Used by CLI tools.
+
+**Endpoint:** `POST /auth/device/token`
+
+**Authentication:** Not required
+
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Request Parameters:**
+- `grant_type` (required): Must be `urn:ietf:params:oauth:grant-type:device_code`
+- `device_code` (required): The device code from the previous step
+- `client_id` (required): The client identifier
+
+**Success Response (200):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400
+}
+```
+
+**Error Responses (400):**
+```json
+{ "error": "authorization_pending", "error_description": "The user has not yet approved the request" }
+{ "error": "slow_down", "error_description": "Polling too frequently" }
+{ "error": "expired_token", "error_description": "The device code has expired" }
+{ "error": "access_denied", "error_description": "The user denied the request" }
+```
+
+**Notes:**
+- This endpoint returns standard RFC 6749 error formats (no `success`/`data` wrapper).
+
+---
+
+### Verify User Code
+
+Look up the status of a user code. Used by the browser during approval.
+
+**Endpoint:** `GET /auth/device/verify`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `code` (required): The `user_code` (e.g., `BCDF-GHJK`)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "userCode": "BCDF-GHJK",
+    "expiresAt": "2024-02-11T10:45:00Z",
+    "status": "pending"
+  }
+}
+```
+
+---
+
+### Approve Device Code
+
+Approve a pending device authorization request. Used by the browser.
+
+**Endpoint:** `POST /auth/device/approve`
+
+**Authentication:** Required
+
+**Request Body:**
+```json
+{
+  "userCode": "BCDF-GHJK"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "device approved successfully"
+  }
 }
 ```
 

@@ -82,6 +82,8 @@ DocShare includes several security features:
 - **CORS Protection**: Configurable CORS settings
 - **File Upload Limits**: Configurable file size restrictions
 - **Audit Logging**: Comprehensive audit trail tracking all user actions (uploads, downloads, shares, logins, admin operations) with IP address and request correlation, automatically exported to S3/MinIO
+- **API Tokens**: SHA-256 hashed at rest, raw token shown once, prefix stored for display
+- **Device Flow**: Codes SHA-256 hashed, 15-minute expiry, single-use (hard deleted after token issuance)
 
 ## Known Security Considerations
 
