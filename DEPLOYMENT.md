@@ -204,22 +204,22 @@ Follow the same environment variable setup as Option 2, then run backend and fro
 │  - TLS Termination                                      │
 │  - Rate Limiting                                        │
 │  - Static Asset Caching                                 │
-└────────┬─────────────────────────┬──────────────────────┘
-         │                         │
-         │ HTTP (3001)             │ HTTP (8080)
-         │                         │
-┌────────▼────────┐      ┌────────▼─────────┐
-│   Frontend      │      │     Backend      │
-│   Container     │      │    Container     │
-│   (Next.js)     │      │      (Go)        │
-└─────────────────┘      └────────┬─────────┘
-                                  │
-                  ┌───────────────┼───────────────┐
-                  │               │               │
-         ┌────────▼────────┐ ┌───▼───────┐ ┌─────▼──────┐
-         │   PostgreSQL    │ │   MinIO   │ │ Gotenberg  │
-         │   (Primary DB)  │ │ (Storage) │ │ (Convert)  │
-         └─────────────────┘ └───────────┘ └────────────┘
+└────────┬──────────────────────────┬─────────────────────┘
+         │                          │
+         │ HTTP (3001)              │ HTTP (8080)
+         │                          │
+┌────────▼────────┐       ┌─────────▼────────┐
+│   Frontend      │       │     Backend      │
+│   Container     │       │    Container     │
+│   (Next.js)     │       │      (Go)        │
+└─────────────────┘       └─────────┬────────┘
+                                    │
+                   ┌────────────────┼──────────────┐
+                   │                │              │
+           ┌───────▼────────┐ ┌─────▼─────┐ ┌──────▼──────┐
+           │   PostgreSQL   │ │   MinIO   │ │  Gotenberg  │
+           │  (Primary DB)  │ │ (Storage) │ │  (Convert)  │
+           └────────────────┘ └───────────┘ └─────────────┘
 ```
 
 ### Deployment Options
@@ -371,33 +371,33 @@ See [kubernetes/README.md](./kubernetes/README.md) for detailed Kubernetes deplo
 
 ### Backend Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DB_HOST` | Yes | `localhost` | PostgreSQL host |
-| `DB_PORT` | Yes | `5432` | PostgreSQL port |
-| `DB_USER` | Yes | `docshare` | PostgreSQL username |
-| `DB_PASSWORD` | Yes | `docshare_secret` | PostgreSQL password |
-| `DB_NAME` | Yes | `docshare` | PostgreSQL database name |
-| `DB_SSLMODE` | Yes | `disable` | PostgreSQL SSL mode (`disable`, `require`, `verify-full`) |
-| `MINIO_ENDPOINT` | Yes | `localhost:9000` | MinIO endpoint (internal) |
-| `MINIO_PUBLIC_ENDPOINT` | No | Same as MINIO_ENDPOINT | MinIO endpoint (public, for presigned URLs) |
-| `MINIO_ACCESS_KEY` | Yes | `docshare` | MinIO access key |
-| `MINIO_SECRET_KEY` | Yes | `docshare_secret` | MinIO secret key |
-| `MINIO_BUCKET` | Yes | `docshare` | MinIO bucket name |
-| `MINIO_USE_SSL` | Yes | `false` | Use SSL for MinIO connection |
-| `JWT_SECRET` | Yes | `change-me-in-production` | JWT signing secret (32+ characters) |
-| `JWT_EXPIRATION_HOURS` | No | `24` | JWT token lifetime in hours |
-| `GOTENBERG_URL` | Yes | `http://localhost:3000` | Gotenberg service URL |
-| `SERVER_PORT` | No | `8080` | Backend server port |
-| `AUDIT_EXPORT_INTERVAL` | No | `1h` | Interval for exporting audit logs to S3/MinIO (Go duration format, e.g. `30m`, `2h`) |
+| Variable                | Required | Default                   | Description                                                                          |
+|-------------------------|----------|---------------------------|--------------------------------------------------------------------------------------|
+| `DB_HOST`               | Yes      | `localhost`               | PostgreSQL host                                                                      |
+| `DB_PORT`               | Yes      | `5432`                    | PostgreSQL port                                                                      |
+| `DB_USER`               | Yes      | `docshare`                | PostgreSQL username                                                                  |
+| `DB_PASSWORD`           | Yes      | `docshare_secret`         | PostgreSQL password                                                                  |
+| `DB_NAME`               | Yes      | `docshare`                | PostgreSQL database name                                                             |
+| `DB_SSLMODE`            | Yes      | `disable`                 | PostgreSQL SSL mode (`disable`, `require`, `verify-full`)                            |
+| `MINIO_ENDPOINT`        | Yes      | `localhost:9000`          | MinIO endpoint (internal)                                                            |
+| `MINIO_PUBLIC_ENDPOINT` | No       | Same as MINIO_ENDPOINT    | MinIO endpoint (public, for presigned URLs)                                          |
+| `MINIO_ACCESS_KEY`      | Yes      | `docshare`                | MinIO access key                                                                     |
+| `MINIO_SECRET_KEY`      | Yes      | `docshare_secret`         | MinIO secret key                                                                     |
+| `MINIO_BUCKET`          | Yes      | `docshare`                | MinIO bucket name                                                                    |
+| `MINIO_USE_SSL`         | Yes      | `false`                   | Use SSL for MinIO connection                                                         |
+| `JWT_SECRET`            | Yes      | `change-me-in-production` | JWT signing secret (32+ characters)                                                  |
+| `JWT_EXPIRATION_HOURS`  | No       | `24`                      | JWT token lifetime in hours                                                          |
+| `GOTENBERG_URL`         | Yes      | `http://localhost:3000`   | Gotenberg service URL                                                                |
+| `SERVER_PORT`           | No       | `8080`                    | Backend server port                                                                  |
+| `AUDIT_EXPORT_INTERVAL` | No       | `1h`                      | Interval for exporting audit logs to S3/MinIO (Go duration format, e.g. `30m`, `2h`) |
 
 ### Frontend Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | Yes | `http://localhost:8080` | Backend API URL (public, used by browser) |
-| `API_URL` | No | Same as NEXT_PUBLIC_API_URL | Backend API URL (server-side) |
-| `NODE_ENV` | No | `development` | Node environment (`development`, `production`) |
+| Variable              | Required | Default                     | Description                                    |
+|-----------------------|----------|-----------------------------|------------------------------------------------|
+| `NEXT_PUBLIC_API_URL` | Yes      | `http://localhost:8080`     | Backend API URL (public, used by browser)      |
+| `API_URL`             | No       | Same as NEXT_PUBLIC_API_URL | Backend API URL (server-side)                  |
+| `NODE_ENV`            | No       | `development`               | Node environment (`development`, `production`) |
 
 ### Production Environment Variable Recommendations
 
