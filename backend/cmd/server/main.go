@@ -40,6 +40,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			handlers.CleanupExpiredDeviceCodes(db)
+			handlers.CleanupExpiredTransfers(db)
 		}
 	}()
 
@@ -65,6 +66,7 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(db)
 	apiTokenHandler := handlers.NewAPITokenHandler(db, auditService)
 	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService)
+	transfersHandler := handlers.NewTransfersHandler(db, 300)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -155,6 +157,16 @@ func main() {
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)
+
+	transferRoutes := api.Group("/transfers", authMiddleware.RequireAuth)
+	transferRoutes.Post("/", transfersHandler.Create)
+	transferRoutes.Get("/", transfersHandler.List)
+	transferRoutes.Get("/:code", transfersHandler.Get)
+	transferRoutes.Post("/:code/connect", transfersHandler.Connect)
+	transferRoutes.Post("/:code/upload", transfersHandler.Upload)
+	transferRoutes.Get("/:code/download", transfersHandler.Download)
+	transferRoutes.Post("/:code/complete", transfersHandler.Complete)
+	transferRoutes.Delete("/:code", transfersHandler.Cancel)
 
 	listenAddr := fmt.Sprintf(":%s", cfg.Server.Port)
 

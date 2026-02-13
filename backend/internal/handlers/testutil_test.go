@@ -68,6 +68,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		&models.DeviceCode{},
 		&models.AuditLog{},
 		&models.AuditExportCursor{},
+		&models.Transfer{},
 	)
 	if err != nil {
 		t.Fatalf("failed automigrating models: %v", err)
@@ -86,6 +87,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	auditHandler := NewAuditHandler(db)
 	apiTokenHandler := NewAPITokenHandler(db, auditService)
 	deviceAuthHandler := NewDeviceAuthHandler(db, auditService)
+	transfersHandler := NewTransfersHandler(db, 300)
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
 	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
@@ -175,6 +177,16 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)
+
+	transferRoutes := api.Group("/transfers", authMiddleware.RequireAuth)
+	transferRoutes.Post("/", transfersHandler.Create)
+	transferRoutes.Get("/", transfersHandler.List)
+	transferRoutes.Get("/:code", transfersHandler.Get)
+	transferRoutes.Post("/:code/connect", transfersHandler.Connect)
+	transferRoutes.Post("/:code/upload", transfersHandler.Upload)
+	transferRoutes.Get("/:code/download", transfersHandler.Download)
+	transferRoutes.Post("/:code/complete", transfersHandler.Complete)
+	transferRoutes.Delete("/:code", transfersHandler.Cancel)
 
 	return &testEnv{app: app, db: db}
 }

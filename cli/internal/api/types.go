@@ -86,3 +86,33 @@ type VersionInfo struct {
 	Version    string `json:"version"`
 	APIVersion string `json:"apiVersion"`
 }
+
+type Transfer struct {
+	Code      string `json:"code"`
+	FileName  string `json:"fileName"`
+	FileSize  int64  `json:"fileSize"`
+	Status    string `json:"status"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type TransferCreateRequest struct {
+	FileName string `json:"fileName"`
+	FileSize int64  `json:"fileSize"`
+	Timeout  *int   `json:"timeout,omitempty"`
+}
+
+type TransferCreateResponse struct {
+	Code      string `json:"code"`
+	FileName  string `json:"fileName"`
+	FileSize  int64  `json:"fileSize"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type TransferStatusResponse struct {
+	Status      string `json:"status"`
+	Code        string `json:"code"`
+	FileName    string `json:"fileName"`
+	FileSize    int64  `json:"fileSize"`
+	ExpiresAt   string `json:"expiresAt"`
+	RecipientID string `json:"recipientID,omitempty"`
+}
