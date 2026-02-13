@@ -87,10 +87,11 @@ export default function ActivityPage() {
     try {
       const res = await activityAPI.list(pageNum, 20);
       if (res.success && res.data) {
+        const activities = res.data;
         if (append) {
-          setActivities(prev => [...prev, ...res.data!]);
+          setActivities(prev => [...prev, ...activities]);
         } else {
-          setActivities(res.data);
+          setActivities(activities);
         }
         
         if (res.pagination) {
