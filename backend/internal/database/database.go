@@ -44,6 +44,9 @@ func migrate(db *gorm.DB) error {
 		&models.GroupMembership{},
 		&models.File{},
 		&models.Share{},
+		&models.AuditLog{},
+		&models.AuditExportCursor{},
+		&models.Activity{},
 	); err != nil {
 		return err
 	}

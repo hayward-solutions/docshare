@@ -24,10 +24,11 @@ type FilesHandler struct {
 	Storage        *storage.MinIOClient
 	Access         *services.AccessService
 	PreviewService *services.PreviewService
+	Audit          *services.AuditService
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.MinIOClient, access *services.AccessService, preview *services.PreviewService) *FilesHandler {
-	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview}
+func NewFilesHandler(db *gorm.DB, storageClient *storage.MinIOClient, access *services.AccessService, preview *services.PreviewService, audit *services.AuditService) *FilesHandler {
+	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, Audit: audit}
 }
 
 func (h *FilesHandler) Upload(c *fiber.Ctx) error {
@@ -118,6 +119,24 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 		"parent_id":    parentID,
 	})
 
+	auditDetails := map[string]interface{}{
+		"file_name": filename,
+		"file_size": fileHeader.Size,
+		"mime_type": contentType,
+	}
+	if parentID != nil {
+		auditDetails["parent_id"] = parentID.String()
+	}
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.upload",
+		ResourceType: "file",
+		ResourceID:   &entry.ID,
+		Details:      auditDetails,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
+
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
 
@@ -178,6 +197,18 @@ func (h *FilesHandler) CreateDirectory(c *fiber.Ctx) error {
 	if err := h.DB.Create(&dir).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed creating directory")
 	}
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "folder.create",
+		ResourceType: "file",
+		ResourceID:   &dir.ID,
+		Details: map[string]interface{}{
+			"folder_name": name,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusCreated, dir)
 }
@@ -391,6 +422,19 @@ func (h *FilesHandler) Download(c *fiber.Ctx) error {
 		"file_name": file.Name,
 		"file_size": file.Size,
 		"mime_type": file.MimeType,
+	})
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.download",
+		ResourceType: "file",
+		ResourceID:   &file.ID,
+		Details: map[string]interface{}{
+			"file_name": file.Name,
+			"file_size": file.Size,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
 	})
 
 	c.Set("Content-Type", contentType)
@@ -754,6 +798,19 @@ func (h *FilesHandler) Update(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading updated file")
 	}
 
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.update",
+		ResourceType: "file",
+		ResourceID:   &file.ID,
+		Details: map[string]interface{}{
+			"file_name": updated.Name,
+			"changes":   updates,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
+
 	return utils.Success(c, fiber.StatusOK, updated)
 }
 
@@ -777,12 +834,45 @@ func (h *FilesHandler) Delete(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	var file models.File
+	if err := h.DB.Select("id", "name", "is_directory").First(&file, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+	}
+
+	var shareRecipientIDs []string
+	var shares []models.Share
+	h.DB.Where("file_id = ?", fileID).Where("expires_at IS NULL OR expires_at > NOW()").Find(&shares)
+	seen := map[uuid.UUID]bool{currentUser.ID: true}
+	for _, share := range shares {
+		if share.SharedWithUserID != nil && !seen[*share.SharedWithUserID] {
+			seen[*share.SharedWithUserID] = true
+			shareRecipientIDs = append(shareRecipientIDs, share.SharedWithUserID.String())
+		}
+	}
+
 	if err := h.deleteRecursive(c.Context(), fileID); err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed deleting file")
 	}
 
 	logger.InfoWithUser(currentUser.ID.String(), "file_deleted", map[string]interface{}{
 		"file_id": fileID.String(),
+	})
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.delete",
+		ResourceType: "file",
+		ResourceID:   &fileID,
+		Details: map[string]interface{}{
+			"file_name":       file.Name,
+			"is_directory":    file.IsDirectory,
+			"notify_user_ids": shareRecipientIDs,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
 	})
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "file deleted"})

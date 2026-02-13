@@ -79,6 +79,7 @@ DocShare follows a traditional client-server architecture with the following com
 | **Database** | Persistent storage of metadata, users, permissions | PostgreSQL 16 |
 | **Object Storage** | Binary file storage, scalability | MinIO (S3-compatible) |
 | **Preview Service** | Document conversion (Office → PDF) | Gotenberg (LibreOffice) |
+| **Audit Service** | Audit logging, activity feed, and S3 log export | Go |
 
 ## Backend Architecture
 
@@ -96,18 +97,23 @@ internal/
     ├── files.go         # File management endpoints
     ├── shares.go        # Sharing endpoints
     ├── groups.go        # Group management endpoints
-    └── users.go         # User management endpoints
+    ├── users.go         # User management endpoints
+    ├── activities.go    # Activity feed endpoints
+    └── audit.go         # Audit log endpoints
 
   services/              # Business logic (Service Layer)
     ├── access.go        # Permission checking service
-    └── preview.go       # Preview generation service
+    ├── preview.go       # Preview generation service
+    └── audit.go         # Audit logging and activity service
 
   models/                # Domain entities (Domain Layer)
     ├── user.go
     ├── file.go
     ├── share.go
     ├── group.go
-    └── group_membership.go
+    ├── group_membership.go
+    ├── audit_log.go
+    └── activity.go
 
   storage/               # Storage abstraction (Infrastructure Layer)
     └── minio.go         # MinIO client wrapper
@@ -120,7 +126,7 @@ internal/
     └── logging.go       # Request logging
 
   config/                # Configuration management
-    └── config.go        # Environment variable loading
+    └── config.go        # Environment variable loading (includes AuditConfig)
 
 pkg/                     # Shared utilities
   ├── logger/            # Structured logging
@@ -152,10 +158,11 @@ storageClient := storage.NewMinIOClient(cfg.MinIO)
 
 // Create services
 accessService := services.NewAccessService(db)
+auditService := services.NewAuditService(db, storageClient, cfg.Audit)
 previewService := services.NewPreviewService(db, storageClient, cfg.Gotenberg)
 
 // Create handlers with injected dependencies
-filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService)
+filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, auditService)
 ```
 
 This approach:
@@ -193,6 +200,10 @@ src/app/
       page.tsx            # Groups list
       [id]/
         page.tsx          # Group details & members
+    activity/
+      page.tsx            # User activity feed & notifications
+    settings/
+      page.tsx            # Account settings & audit log tab
     admin/
       page.tsx            # Admin user management
 ```
@@ -327,10 +338,53 @@ export const apiMethods = {
 └─────────────────┘        │
                            │
                            ▼
-                    ┌─────────────┐
-                    │    User     │
-                    └─────────────┘
+                     ┌─────────────┐
+                     │    User     │
+                     └─────────────┘
 ```
+
+### Audit & Activity Models
+
+```
+┌─────────────────┐       ┌─────────────────┐
+│    AuditLog     │       │    Activity     │
+│─────────────────│       │─────────────────│
+│ ID (PK)         │       │ ID (PK)         │
+│ UserID (FK)     │───────┤ UserID (FK)     │
+│ Action          │       │ ActorID (FK)    │
+│ ResourceType    │       │ Message         │
+│ ResourceID      │       │ IsRead          │
+│ Details (JSONB) │       │ ResourceType    │
+│ IPAddress       │       │ ResourceID      │
+│ RequestID       │       │ CreatedAt       │
+│ CreatedAt       │       └─────────────────┘
+└─────────────────┘
+
+┌───────────────────┐
+│ AuditExportCursor │
+│───────────────────│
+│ ID (PK)           │
+│ LastExportAt      │
+└───────────────────┘
+```
+
+#### 1. AuditLog
+Append-only table (no soft-delete) that tracks all system actions.
+- **UserID**: The user who performed the action.
+- **Action**: The specific action (e.g., `file.upload`, `share.create`).
+- **ResourceType/ID**: The entity affected by the action.
+- **Details**: JSONB field containing action-specific metadata.
+- **IPAddress/RequestID**: Traceability metadata for security auditing.
+
+#### 2. Activity
+User-facing notifications and personal activity feed.
+- **UserID**: The recipient of the activity/notification.
+- **ActorID**: The user who triggered the activity.
+- **IsRead**: Tracks whether the user has seen the notification.
+- **ResourceType/ID**: Links to the relevant entity for frontend navigation.
+
+#### 3. AuditExportCursor
+A singleton table used to track the timestamp of the last successful S3 audit log export.
 
 ### Key Model Decisions
 
@@ -605,6 +659,35 @@ token := GeneratePreviewToken(fileID, userID, expiresAt)
 - Check expiration
 - Verify user has access to file
 
+## Audit Log & Activity System
+
+### Purpose
+The system provides a dual-purpose tracking mechanism:
+1.  **Audit Trail**: A comprehensive, append-only record of all system actions for security and compliance.
+2.  **Activity Feed**: A user-facing notification system that alerts users to relevant events (e.g., new shares, group changes).
+
+### Async Architecture
+To minimize impact on request latency, the audit system uses an asynchronous design:
+-   **Buffered Channel**: Handlers send audit events to a global buffered channel.
+-   **Background Worker**: A dedicated goroutine listens to the channel and persists events to the database.
+-   **Graceful Shutdown**: The system ensures the channel is drained before the application exits.
+
+### Activity Generation
+Not all audit events trigger user-facing activities. The `AuditService` determines activity creation based on the event type:
+-   **Self-Activities**: Users see their own actions (e.g., "You uploaded file.txt") in their personal feed.
+-   **Notifications**: Relevant actions trigger activities for other users (e.g., "User A shared a file with you").
+-   **Group Activities**: Actions within a group (e.g., "User B added you to Group X") notify all relevant members.
+
+### S3 Export
+For long-term retention and external analysis, audit logs are periodically exported to MinIO:
+-   **Format**: NDJSON (Newline Delimited JSON) for easy parsing.
+-   **Path**: `audit-logs/YYYY/MM/DD/HH-mm-ss.ndjson`.
+-   **Interval**: Configurable via `AUDIT_EXPORT_INTERVAL` (default: 1h).
+-   **Cursor-based**: The `AuditExportCursor` ensures no logs are missed or duplicated between export cycles.
+
+### User Access
+Users can view and download their own audit logs via the **Account Settings > Audit Log** tab, providing transparency into how their data is accessed and modified.
+
 ## Security Considerations
 
 ### Password Security
@@ -852,19 +935,15 @@ CREATE UNIQUE INDEX idx_users_email ON users(email);
 1. **Background preview generation**: Move to job queue
 2. **Pagination**: Add to all list endpoints
 3. **Search**: Full-text search for file names
-4. **Audit logs**: Track all file access and modifications
-5. **Rate limiting**: Prevent abuse
+4. **Rate limiting**: Prevent abuse
 
 ### Medium Term
 1. **Virus scanning**: Integrate ClamAV or similar
 2. **File versioning**: Keep history of file changes
 3. **Trash/recovery**: Soft delete with restore
-4. **Notification system**: Alert users of new shares
-5. **Activity feed**: Show recent actions
 
 ### Long Term
 1. **Real-time collaboration**: WebRTC or WebSocket for live editing
 2. **Mobile apps**: React Native or native iOS/Android
-3. **Public sharing**: Share links without authentication
-4. **Advanced permissions**: Custom permission combinations
-5. **Multi-tenant**: Support multiple organizations
+3. **Advanced permissions**: Custom permission combinations
+4. **Multi-tenant**: Support multiple organizations

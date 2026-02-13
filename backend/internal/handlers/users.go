@@ -5,6 +5,7 @@ import (
 
 	"github.com/docshare/backend/internal/middleware"
 	"github.com/docshare/backend/internal/models"
+	"github.com/docshare/backend/internal/services"
 	"github.com/docshare/backend/pkg/logger"
 	"github.com/docshare/backend/pkg/utils"
 	"github.com/gofiber/fiber/v2"
@@ -12,11 +13,12 @@ import (
 )
 
 type UsersHandler struct {
-	DB *gorm.DB
+	DB    *gorm.DB
+	Audit *services.AuditService
 }
 
-func NewUsersHandler(db *gorm.DB) *UsersHandler {
-	return &UsersHandler{DB: db}
+func NewUsersHandler(db *gorm.DB, audit *services.AuditService) *UsersHandler {
+	return &UsersHandler{DB: db, Audit: audit}
 }
 
 func (h *UsersHandler) List(c *fiber.Ctx) error {
@@ -168,6 +170,7 @@ func (h *UsersHandler) Update(c *fiber.Ctx) error {
 }
 
 func (h *UsersHandler) Delete(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
 	userID, err := parseUUID(c.Params("id"))
 	if err != nil {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid user id")
@@ -179,6 +182,20 @@ func (h *UsersHandler) Delete(c *fiber.Ctx) error {
 	}
 	if result.RowsAffected == 0 {
 		return utils.Error(c, fiber.StatusNotFound, "user not found")
+	}
+
+	if currentUser != nil {
+		h.Audit.LogAsync(services.AuditEntry{
+			UserID:       &currentUser.ID,
+			Action:       "admin.user_delete",
+			ResourceType: "user",
+			ResourceID:   &userID,
+			Details: map[string]interface{}{
+				"deleted_user_id": userID.String(),
+			},
+			IPAddress: c.IP(),
+			RequestID: getRequestID(c),
+		})
 	}
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "user deleted"})

@@ -12,6 +12,8 @@ DocShare is a full-stack document management system featuring:
 - 🔗 **Flexible Sharing** - Share files with individual users or groups with customizable permissions (view, download, edit)
 - 📄 **Document Preview** - Automatic preview generation for various document types including Office documents
 - 🗄️ **S3-Compatible Storage** - Uses MinIO for scalable object storage
+- 📋 **Activity Feed** - Real-time activity notifications for file shares, uploads, and group changes
+- 📊 **Audit Log** - Comprehensive audit trail tracking all user actions, exportable to CSV/JSON and periodically archived to S3/MinIO
 - 🚀 **Production Ready** - Dockerized deployment with health checks and graceful shutdown
 
 ## Architecture
@@ -175,7 +177,7 @@ docshare/
 │   ├── src/
 │   │   ├── app/             # Next.js app router pages
 │   │   │   ├── (auth)/      # Authentication pages (login, register)
-│   │   │   └── (dashboard)/ # Protected dashboard pages
+│   │   │   └── (dashboard)/ # Protected dashboard pages (files, shared, activity, settings, admin)
 │   │   ├── components/      # React components
 │   │   │   └── ui/          # shadcn/ui components
 │   │   └── lib/             # Utilities, API client, types
@@ -223,6 +225,14 @@ docshare/
   - **Admin**: Can manage members
   - **Member**: Standard group membership
 - Share files with entire groups
+
+### Activity Feed & Audit Log
+- Real-time activity feed showing file uploads, downloads, shares, group changes, and more
+- Unread notification count with badge indicator in sidebar
+- Mark individual or all activities as read
+- Comprehensive server-side audit log tracking all user actions
+- Users can download their own audit log as CSV or JSON from Account Settings
+- Server-wide audit log automatically exported to S3/MinIO as NDJSON on a configurable interval
 
 ### Document Preview
 - Automatic preview generation for Office documents (DOCX, XLSX, PPTX)

@@ -84,6 +84,7 @@ DocShare includes several security features:
 - **Input Validation**: Server-side validation for all inputs
 - **CORS Protection**: Configurable CORS settings
 - **File Upload Limits**: Configurable file size restrictions
+- **Audit Logging**: Comprehensive audit trail tracking all user actions (uploads, downloads, shares, logins, admin operations) with IP address and request correlation, automatically exported to S3/MinIO
 
 ## Known Security Considerations
 
@@ -91,12 +92,10 @@ DocShare includes several security features:
 
 1. **File Type Validation**: Currently relies on MIME type detection
 2. **Rate Limiting**: Not implemented in current version
-3. **Audit Logging**: Limited audit trail functionality
 
 ### Future Improvements
 
 - Rate limiting for API endpoints
-- Comprehensive audit logging
 - File content scanning for malware
 - Multi-factor authentication support
 

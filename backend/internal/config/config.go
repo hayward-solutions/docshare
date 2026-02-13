@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -11,6 +12,7 @@ type Config struct {
 	JWT       JWTConfig
 	Server    ServerConfig
 	Gotenberg GotenbergConfig
+	Audit     AuditConfig
 }
 
 type DBConfig struct {
@@ -44,6 +46,10 @@ type GotenbergConfig struct {
 	URL string
 }
 
+type AuditConfig struct {
+	ExportInterval time.Duration
+}
+
 func Load() *Config {
 	return &Config{
 		DB: DBConfig{
@@ -72,6 +78,9 @@ func Load() *Config {
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),
 		},
+		Audit: AuditConfig{
+			ExportInterval: getEnvAsDuration("AUDIT_EXPORT_INTERVAL", 1*time.Hour),
+		},
 	}
 }
 
@@ -85,6 +94,16 @@ func getEnv(key, fallback string) string {
 func getEnvAsInt(key string, fallback int) int {
 	if value, ok := os.LookupEnv(key); ok {
 		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func getEnvAsDuration(key string, fallback time.Duration) time.Duration {
+	if value, ok := os.LookupEnv(key); ok {
+		parsed, err := time.ParseDuration(value)
 		if err == nil {
 			return parsed
 		}

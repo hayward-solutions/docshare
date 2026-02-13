@@ -12,7 +12,9 @@ Complete REST API reference for DocShare.
    - [Users](#user-endpoints)
    - [Files](#file-endpoints)
    - [Shares](#share-endpoints)
-   - [Groups](#group-endpoints)
+    - [Groups](#group-endpoints)
+    - [Activities](#activity-endpoints)
+    - [Audit Log](#audit-log-endpoints)
 
 ## Overview
 
@@ -1495,6 +1497,175 @@ Remove a user from a group.
 - Requires `owner` or `admin` role in group
 - Members can remove themselves
 - Cannot remove the last owner
+
+---
+
+---
+
+## Activity Endpoints
+
+### List Activities
+
+Get a paginated list of activities for the authenticated user.
+
+**Endpoint:** `GET /activities`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "ee0e8400-e29b-41d4-a716-446655440010",
+      "userID": "550e8400-e29b-41d4-a716-446655440000",
+      "actorID": "660e8400-e29b-41d4-a716-446655440001",
+      "action": "file.upload",
+      "resourceType": "file",
+      "resourceID": "770e8400-e29b-41d4-a716-446655440003",
+      "resourceName": "document.pdf",
+      "message": "John Doe uploaded document.pdf",
+      "isRead": false,
+      "createdAt": "2024-02-11T16:00:00Z",
+      "actor": {
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "email": "john@example.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "avatarURL": null
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 15,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+### Get Unread Count
+
+Get the number of unread activities for the authenticated user.
+
+**Endpoint:** `GET /activities/unread-count`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "count": 5
+  }
+}
+```
+
+---
+
+### Mark All as Read
+
+Mark all activities as read for the authenticated user.
+
+**Endpoint:** `PUT /activities/read-all`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "all marked as read"
+  }
+}
+```
+
+---
+
+### Mark Activity as Read
+
+Mark a specific activity as read.
+
+**Endpoint:** `PUT /activities/:id/read`
+
+**Authentication:** Required
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "marked as read"
+  }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "error": "activity not found"
+}
+```
+
+**Notes:**
+- Returns 404 if activity not found or doesn't belong to user
+
+---
+
+## Audit Log Endpoints
+
+### Export My Audit Log
+
+Export the authenticated user's audit log entries.
+
+**Endpoint:** `GET /audit-log/export`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `format` (optional): Export format, `csv` or `json` (default: `csv`)
+
+**Success Response (200 - CSV):**
+- **Content-Type**: `text/csv`
+- **Content-Disposition**: `attachment; filename="audit_log.csv"`
+- **Body**:
+```csv
+Timestamp,Action,Resource Type,Resource ID,IP Address,Details
+2024-02-11T10:30:00Z,user.login,user,550e8400-e29b-41d4-a716-446655440000,192.168.1.1,User logged in
+2024-02-11T11:00:00Z,file.upload,file,770e8400-e29b-41d4-a716-446655440003,192.168.1.1,Uploaded document.pdf
+```
+
+**Success Response (200 - JSON):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "timestamp": "2024-02-11T10:30:00Z",
+      "action": "user.login",
+      "resourceType": "user",
+      "resourceID": "550e8400-e29b-41d4-a716-446655440000",
+      "ipAddress": "192.168.1.1",
+      "details": "User logged in"
+    }
+  ]
+}
+```
+
+**Notes:**
+- Limited to 10,000 most recent entries
+- Only returns the authenticated user's own audit log entries
 
 ---
 
