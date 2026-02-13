@@ -20,7 +20,7 @@ DocShare was created to solve a simple problem: I need a private server to host 
 
 ## Goals
 
-See [ROADMAP.md](./ROADMAP.md) for feature priorities and future plans.
+See [ROADMAP.md](./docs/ROADMAP.md) for feature priorities and future plans.
 
 ## CLI
 
@@ -37,7 +37,7 @@ docshare download /Documents/report.pdf  # Download a file
 docshare ls /Documents                   # List files
 ```
 
-See the [CLI documentation](./CLI.md) for the full command reference.
+See the [CLI documentation](./docs/CLI.md) for the full command reference.
 
 ## Quick Start
 
@@ -49,10 +49,10 @@ Then open http://localhost:3001 and create your first account.
 
 ## Documentation
 
-- [CLI](./CLI.md) — CLI installation and command reference
-- [Architecture](./ARCHITECTURE.md) — System design and technical details
-- [API Reference](./API.md) — REST API documentation
-- [Deployment](./DEPLOYMENT.md) — Production setup guide
+- [CLI](./docs/CLI.md) — CLI installation and command reference
+- [Architecture](./docs/ARCHITECTURE.md) — System design and technical details
+- [API Reference](./docs/API.md) — REST API documentation
+- [Deployment](./docs/DEPLOYMENT.md) — Production setup guide
 - [Contributing](./CONTRIBUTING.md) — Development setup and guidelines
-- [Security](./SECURITY.md) — Security policy and best practices
-- [Roadmap](./ROADMAP.md) — Feature priorities and future plans
+- [Security](./docs/SECURITY.md) — Security policy and best practices
+- [Roadmap](./docs/ROADMAP.md) — Feature priorities and future plans
