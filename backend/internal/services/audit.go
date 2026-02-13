@@ -173,6 +173,10 @@ func (s *AuditService) selfActivityForAction(log models.AuditLog) *models.Activi
 		message = "You changed your password"
 		resourceType = "user"
 		resourceName = "Account"
+	case "user.profile_update":
+		message = "You updated your profile"
+		resourceType = "user"
+		resourceName = "Account"
 	case "group.create":
 		message = fmt.Sprintf("You created group \"%s\"", resourceName)
 		resourceType = "group"
@@ -189,6 +193,34 @@ func (s *AuditService) selfActivityForAction(log models.AuditLog) *models.Activi
 		message = "You deleted a user account"
 		resourceType = "user"
 		resourceName = "Admin"
+	case "admin.user_update":
+		message = "You updated a user account"
+		resourceType = "user"
+		resourceName = "Admin"
+	case "api_token.create":
+		tokenName := detailString(log.Details, "name")
+		if tokenName == "" {
+			tokenName = "API token"
+		}
+		message = fmt.Sprintf("You created API token \"%s\"", tokenName)
+		resourceType = "api_token"
+		resourceName = tokenName
+	case "api_token.revoke":
+		tokenName := detailString(log.Details, "name")
+		if tokenName == "" {
+			tokenName = "API token"
+		}
+		message = fmt.Sprintf("You revoked API token \"%s\"", tokenName)
+		resourceType = "api_token"
+		resourceName = tokenName
+	case "auth.device_flow_approve":
+		message = "You approved a device login"
+		resourceType = "user"
+		resourceName = "Account"
+	case "auth.device_flow_login":
+		message = "You signed in via device flow"
+		resourceType = "user"
+		resourceName = "Account"
 	default:
 		return nil
 	}

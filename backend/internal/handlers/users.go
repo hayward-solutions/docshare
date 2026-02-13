@@ -166,6 +166,21 @@ func (h *UsersHandler) Update(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed fetching updated user")
 	}
 
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser != nil {
+		h.Audit.LogAsync(services.AuditEntry{
+			UserID:       &currentUser.ID,
+			Action:       "admin.user_update",
+			ResourceType: "user",
+			ResourceID:   &userID,
+			Details: map[string]interface{}{
+				"target_user_id": userID.String(),
+			},
+			IPAddress: c.IP(),
+			RequestID: getRequestID(c),
+		})
+	}
+
 	return utils.Success(c, fiber.StatusOK, user)
 }
 
