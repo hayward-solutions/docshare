@@ -48,20 +48,42 @@ func migrate(db *gorm.DB) error {
 		return err
 	}
 
+	// Drop the old constraint if it exists, then create the updated one that
+	// also allows public shares (both user and group NULL when share_type is public).
+	dropOld := `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'share_target_check'
+  ) THEN
+    ALTER TABLE shares DROP CONSTRAINT share_target_check;
+  END IF;
+END $$;`
+
+	if err := db.Exec(dropOld).Error; err != nil {
+		return err
+	}
+
 	constraint := `
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
-    WHERE conname = 'share_target_check'
+    WHERE conname = 'share_target_check_v2'
   ) THEN
     ALTER TABLE shares
-    ADD CONSTRAINT share_target_check
+    ADD CONSTRAINT share_target_check_v2
     CHECK (
-      (shared_with_user_id IS NOT NULL AND shared_with_group_id IS NULL)
+      (share_type = 'private' AND (
+        (shared_with_user_id IS NOT NULL AND shared_with_group_id IS NULL)
+        OR
+        (shared_with_user_id IS NULL AND shared_with_group_id IS NOT NULL)
+      ))
       OR
-      (shared_with_user_id IS NULL AND shared_with_group_id IS NOT NULL)
+      (share_type IN ('public_anyone', 'public_logged_in') AND shared_with_user_id IS NULL AND shared_with_group_id IS NULL)
     );
   END IF;
 END $$;`

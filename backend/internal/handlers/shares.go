@@ -26,6 +26,7 @@ func NewSharesHandler(db *gorm.DB, access *services.AccessService) *SharesHandle
 type createShareRequest struct {
 	UserID     *uuid.UUID             `json:"userID"`
 	GroupID    *uuid.UUID             `json:"groupID"`
+	ShareType  *models.ShareType      `json:"shareType"`
 	Permission models.SharePermission `json:"permission"`
 	ExpiresAt  *time.Time             `json:"expiresAt"`
 }
@@ -58,32 +59,56 @@ func (h *SharesHandler) ShareFile(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
 	}
 
-	if (req.UserID == nil && req.GroupID == nil) || (req.UserID != nil && req.GroupID != nil) {
-		return utils.Error(c, fiber.StatusBadRequest, "exactly one of userID or groupID is required")
-	}
 	if !isValidSharePermission(string(req.Permission)) {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid permission")
 	}
 
-	if req.UserID != nil {
-		if *req.UserID == currentUser.ID {
-			return utils.Error(c, fiber.StatusBadRequest, "cannot share with yourself")
+	shareType := models.ShareTypePrivate
+	if req.ShareType != nil {
+		if !isValidShareType(string(*req.ShareType)) {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid share type")
 		}
-		var targetUser models.User
-		if err := h.DB.First(&targetUser, "id = ?", *req.UserID).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return utils.Error(c, fiber.StatusNotFound, "target user not found")
-			}
-			return utils.Error(c, fiber.StatusInternalServerError, "failed loading target user")
-		}
+		shareType = *req.ShareType
 	}
-	if req.GroupID != nil {
-		var group models.Group
-		if err := h.DB.First(&group, "id = ?", *req.GroupID).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return utils.Error(c, fiber.StatusNotFound, "target group not found")
+
+	if shareType == models.ShareTypePrivate {
+		if (req.UserID == nil && req.GroupID == nil) || (req.UserID != nil && req.GroupID != nil) {
+			return utils.Error(c, fiber.StatusBadRequest, "exactly one of userID or groupID is required for private shares")
+		}
+
+		if req.UserID != nil {
+			if *req.UserID == currentUser.ID {
+				return utils.Error(c, fiber.StatusBadRequest, "cannot share with yourself")
 			}
-			return utils.Error(c, fiber.StatusInternalServerError, "failed loading target group")
+			var targetUser models.User
+			if err := h.DB.First(&targetUser, "id = ?", *req.UserID).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return utils.Error(c, fiber.StatusNotFound, "target user not found")
+				}
+				return utils.Error(c, fiber.StatusInternalServerError, "failed loading target user")
+			}
+		}
+		if req.GroupID != nil {
+			var group models.Group
+			if err := h.DB.First(&group, "id = ?", *req.GroupID).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return utils.Error(c, fiber.StatusNotFound, "target group not found")
+				}
+				return utils.Error(c, fiber.StatusInternalServerError, "failed loading target group")
+			}
+		}
+	} else {
+		if req.UserID != nil || req.GroupID != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "userID and groupID must not be set for public shares")
+		}
+
+		var existingCount int64
+		h.DB.Model(&models.Share{}).
+			Where("file_id = ? AND share_type = ?", file.ID, shareType).
+			Where("expires_at IS NULL OR expires_at > NOW()").
+			Count(&existingCount)
+		if existingCount > 0 {
+			return utils.Error(c, fiber.StatusConflict, "a public share of this type already exists for this file")
 		}
 	}
 
@@ -92,6 +117,7 @@ func (h *SharesHandler) ShareFile(c *fiber.Ctx) error {
 		SharedByID:        currentUser.ID,
 		SharedWithUserID:  req.UserID,
 		SharedWithGroupID: req.GroupID,
+		ShareType:         shareType,
 		Permission:        req.Permission,
 		ExpiresAt:         req.ExpiresAt,
 	}
@@ -104,6 +130,7 @@ func (h *SharesHandler) ShareFile(c *fiber.Ctx) error {
 		"file_id":    file.ID.String(),
 		"file_name":  file.Name,
 		"permission": string(req.Permission),
+		"share_type": string(shareType),
 		"share_id":   share.ID.String(),
 	}
 	if req.UserID != nil {
