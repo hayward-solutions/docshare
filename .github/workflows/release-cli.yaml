@@ -88,6 +88,9 @@ jobs:
         container:
           - frontend
           - backend
+        arch:
+          - amd64
+          - arm64
 
     steps:
       - name: Checkout
@@ -109,11 +112,11 @@ jobs:
           context: ./${{ matrix.container }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:${{ github.ref_name }}-${{ matrix.arch }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.container }}:latest-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.arch }}
 
   release:
     name: Create GitHub Release
