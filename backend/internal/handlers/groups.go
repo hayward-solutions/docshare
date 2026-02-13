@@ -5,6 +5,7 @@ import (
 
 	"github.com/docshare/backend/internal/middleware"
 	"github.com/docshare/backend/internal/models"
+	"github.com/docshare/backend/internal/services"
 	"github.com/docshare/backend/pkg/logger"
 	"github.com/docshare/backend/pkg/utils"
 	"github.com/gofiber/fiber/v2"
@@ -13,11 +14,12 @@ import (
 )
 
 type GroupsHandler struct {
-	DB *gorm.DB
+	DB    *gorm.DB
+	Audit *services.AuditService
 }
 
-func NewGroupsHandler(db *gorm.DB) *GroupsHandler {
-	return &GroupsHandler{DB: db}
+func NewGroupsHandler(db *gorm.DB, audit *services.AuditService) *GroupsHandler {
+	return &GroupsHandler{DB: db, Audit: audit}
 }
 
 type createGroupRequest struct {
@@ -66,6 +68,18 @@ func (h *GroupsHandler) Create(c *fiber.Ctx) error {
 	logger.InfoWithUser(currentUser.ID.String(), "group_created", map[string]interface{}{
 		"group_id":   group.ID.String(),
 		"group_name": group.Name,
+	})
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "group.create",
+		ResourceType: "group",
+		ResourceID:   &group.ID,
+		Details: map[string]interface{}{
+			"group_name": group.Name,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
 	})
 
 	return utils.Success(c, fiber.StatusCreated, group)
@@ -211,6 +225,9 @@ func (h *GroupsHandler) Delete(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "only group owner can delete the group")
 	}
 
+	var group models.Group
+	h.DB.Select("id", "name").First(&group, "id = ?", groupID)
+
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("group_id = ?", groupID).Delete(&models.GroupMembership{}).Error; err != nil {
 			return err
@@ -223,6 +240,18 @@ func (h *GroupsHandler) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed deleting group")
 	}
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "group.delete",
+		ResourceType: "group",
+		ResourceID:   &groupID,
+		Details: map[string]interface{}{
+			"group_name": group.Name,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "group deleted"})
 }
@@ -287,6 +316,23 @@ func (h *GroupsHandler) AddMember(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusConflict, "user is already a member")
 	}
 
+	var grp models.Group
+	h.DB.Select("name").First(&grp, "id = ?", groupID)
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "group.member_add",
+		ResourceType: "group",
+		ResourceID:   &groupID,
+		Details: map[string]interface{}{
+			"target_user_id": req.UserID.String(),
+			"role":           string(req.Role),
+			"group_name":     grp.Name,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
+
 	return utils.Success(c, fiber.StatusCreated, membership)
 }
 
@@ -334,6 +380,22 @@ func (h *GroupsHandler) RemoveMember(c *fiber.Ctx) error {
 	if err := h.DB.Delete(&models.GroupMembership{}, "id = ?", targetMembership.ID).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed removing member")
 	}
+
+	var grp models.Group
+	h.DB.Select("name").First(&grp, "id = ?", groupID)
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "group.member_remove",
+		ResourceType: "group",
+		ResourceID:   &groupID,
+		Details: map[string]interface{}{
+			"target_user_id": userID.String(),
+			"group_name":     grp.Name,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "member removed"})
 }

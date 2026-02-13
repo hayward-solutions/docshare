@@ -389,6 +389,7 @@ See [kubernetes/README.md](./kubernetes/README.md) for detailed Kubernetes deplo
 | `JWT_EXPIRATION_HOURS` | No | `24` | JWT token lifetime in hours |
 | `GOTENBERG_URL` | Yes | `http://localhost:3000` | Gotenberg service URL |
 | `SERVER_PORT` | No | `8080` | Backend server port |
+| `AUDIT_EXPORT_INTERVAL` | No | `1h` | Interval for exporting audit logs to S3/MinIO (Go duration format, e.g. `30m`, `2h`) |
 
 ### Frontend Environment Variables
 
@@ -421,6 +422,7 @@ JWT_EXPIRATION_HOURS=24
 
 GOTENBERG_URL=http://gotenberg:3000
 SERVER_PORT=8080
+AUDIT_EXPORT_INTERVAL=1h
 ```
 
 ```bash
@@ -456,6 +458,9 @@ DocShare uses GORM's AutoMigrate feature. Database schema is automatically creat
 - Groups
 - GroupMemberships
 - Shares
+- AuditLogs
+- AuditExportCursors
+- Activities
 
 ### Manual Migration (If needed)
 

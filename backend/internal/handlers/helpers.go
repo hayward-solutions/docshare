@@ -3,6 +3,7 @@ package handlers
 import (
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
@@ -26,4 +27,11 @@ func isValidShareType(value string) bool {
 	default:
 		return false
 	}
+}
+
+func getRequestID(c *fiber.Ctx) string {
+	if rid, ok := c.Locals("requestID").(string); ok {
+		return rid
+	}
+	return ""
 }

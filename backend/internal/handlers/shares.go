@@ -17,10 +17,11 @@ import (
 type SharesHandler struct {
 	DB     *gorm.DB
 	Access *services.AccessService
+	Audit  *services.AuditService
 }
 
-func NewSharesHandler(db *gorm.DB, access *services.AccessService) *SharesHandler {
-	return &SharesHandler{DB: db, Access: access}
+func NewSharesHandler(db *gorm.DB, access *services.AccessService, audit *services.AuditService) *SharesHandler {
+	return &SharesHandler{DB: db, Access: access, Audit: audit}
 }
 
 type createShareRequest struct {
@@ -145,6 +146,32 @@ func (h *SharesHandler) ShareFile(c *fiber.Ctx) error {
 
 	logger.InfoWithUser(currentUser.ID.String(), "file_shared", details)
 
+	auditDetails := map[string]interface{}{
+		"file_name":  file.Name,
+		"permission": string(req.Permission),
+		"share_type": string(shareType),
+		"share_id":   share.ID.String(),
+	}
+	if req.UserID != nil {
+		auditDetails["shared_with_user_id"] = req.UserID.String()
+	}
+	if req.GroupID != nil {
+		auditDetails["shared_with_group_id"] = req.GroupID.String()
+		var grp models.Group
+		if err := h.DB.Select("name").First(&grp, "id = ?", *req.GroupID).Error; err == nil {
+			auditDetails["group_name"] = grp.Name
+		}
+	}
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "share.create",
+		ResourceType: "share",
+		ResourceID:   &file.ID,
+		Details:      auditDetails,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
+
 	return utils.Success(c, fiber.StatusCreated, share)
 }
 
@@ -194,9 +221,32 @@ func (h *SharesHandler) DeleteShare(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "insufficient permissions")
 	}
 
+	var file models.File
+	h.DB.Select("id", "name").First(&file, "id = ?", share.FileID)
+
 	if err := h.DB.Delete(&models.Share{}, "id = ?", share.ID).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed deleting share")
 	}
+
+	deleteDetails := map[string]interface{}{
+		"file_name": file.Name,
+		"share_id":  share.ID.String(),
+	}
+	if share.SharedWithUserID != nil {
+		deleteDetails["shared_with_user_id"] = share.SharedWithUserID.String()
+	}
+	if share.SharedWithGroupID != nil {
+		deleteDetails["shared_with_group_id"] = share.SharedWithGroupID.String()
+	}
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "share.delete",
+		ResourceType: "share",
+		ResourceID:   &share.FileID,
+		Details:      deleteDetails,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "share revoked"})
 }
@@ -252,6 +302,19 @@ func (h *SharesHandler) UpdateShare(c *fiber.Ctx) error {
 	if err := h.DB.First(&share, "id = ?", share.ID).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reloading share")
 	}
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "share.update",
+		ResourceType: "share",
+		ResourceID:   &share.FileID,
+		Details: map[string]interface{}{
+			"share_id":       share.ID.String(),
+			"new_permission": string(req.Permission),
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusOK, share)
 }

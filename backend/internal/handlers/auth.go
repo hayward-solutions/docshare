@@ -6,6 +6,7 @@ import (
 
 	"github.com/docshare/backend/internal/middleware"
 	"github.com/docshare/backend/internal/models"
+	"github.com/docshare/backend/internal/services"
 	"github.com/docshare/backend/pkg/logger"
 	"github.com/docshare/backend/pkg/utils"
 	"github.com/gofiber/fiber/v2"
@@ -13,11 +14,12 @@ import (
 )
 
 type AuthHandler struct {
-	DB *gorm.DB
+	DB    *gorm.DB
+	Audit *services.AuditService
 }
 
-func NewAuthHandler(db *gorm.DB) *AuthHandler {
-	return &AuthHandler{DB: db}
+func NewAuthHandler(db *gorm.DB, audit *services.AuditService) *AuthHandler {
+	return &AuthHandler{DB: db, Audit: audit}
 }
 
 type registerRequest struct {
@@ -77,6 +79,18 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		"role":    string(user.Role),
 	})
 
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &user.ID,
+		Action:       "user.register",
+		ResourceType: "user",
+		ResourceID:   &user.ID,
+		Details: map[string]interface{}{
+			"email": user.Email,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
+	})
+
 	token, err := utils.GenerateToken(&user)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed generating token")
@@ -123,6 +137,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		"user_id": user.ID.String(),
 		"email":   user.Email,
 		"ip":      c.IP(),
+	})
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &user.ID,
+		Action:       "user.login",
+		ResourceType: "user",
+		ResourceID:   &user.ID,
+		Details: map[string]interface{}{
+			"email": user.Email,
+		},
+		IPAddress: c.IP(),
+		RequestID: getRequestID(c),
 	})
 
 	token, err := utils.GenerateToken(&user)
@@ -235,6 +261,15 @@ func (h *AuthHandler) ChangePassword(c *fiber.Ctx) error {
 	if err := h.DB.Model(&models.User{}).Where("id = ?", user.ID).Update("password_hash", hash).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed updating password")
 	}
+
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "user.password_change",
+		ResourceType: "user",
+		ResourceID:   &currentUser.ID,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{"message": "password updated"})
 }

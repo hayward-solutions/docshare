@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { activityAPI } from '@/lib/api';
 import { 
   Files, 
   Users, 
@@ -11,7 +12,8 @@ import {
   Settings, 
   LogOut, 
   Menu, 
-  Shield
+  Shield,
+  Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -42,9 +44,26 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
   setIsMobileOpen: (open: boolean) => void;
   logout: () => void;
 }) => {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await activityAPI.unreadCount();
+        if (res.success) {
+          setUnreadCount(res.data.count);
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+    fetchUnreadCount();
+  }, []);
+
   const navigation = [
     { name: 'My Files', href: '/files', icon: Files },
     { name: 'Shared With Me', href: '/shared', icon: Share2 },
+    { name: 'Activity', href: '/activity', icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
     { name: 'Groups', href: '/groups', icon: Users },
     { name: 'Account Settings', href: '/settings', icon: Settings },
   ];
@@ -75,7 +94,12 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
                 )}
               >
                 <item.icon className="h-5 w-5" />
-                {item.name}
+                <span className="flex-1">{item.name}</span>
+                {item.badge && (
+                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

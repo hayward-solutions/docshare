@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { userAPI } from '@/lib/api';
+import { userAPI, auditAPI } from '@/lib/api';
 import { Group, GroupMembership } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { User as UserIcon, Lock, Users, Upload, Shield } from 'lucide-react';
+import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download } from 'lucide-react';
 
 export default function AccountSettingsPage() {
   const { user, loadUser } = useAuth();
@@ -142,6 +142,24 @@ export default function AccountSettingsPage() {
     }
   };
 
+  const handleDownloadAuditLog = async (format: 'csv' | 'json') => {
+    try {
+      const blob = await auditAPI.download(format);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-log.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(`Audit log downloaded as ${format.toUpperCase()}`);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download audit log');
+    }
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case 'owner':
@@ -169,7 +187,7 @@ export default function AccountSettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserIcon className="h-4 w-4" />
             Profile
@@ -181,6 +199,10 @@ export default function AccountSettingsPage() {
           <TabsTrigger value="groups" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Groups
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Audit Log
           </TabsTrigger>
         </TabsList>
 
@@ -381,6 +403,29 @@ export default function AccountSettingsPage() {
                   })}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit Log</CardTitle>
+              <CardDescription>
+                Download a log of your account activity
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-4">
+                <Button onClick={() => handleDownloadAuditLog('csv')} className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Download CSV
+                </Button>
+                <Button onClick={() => handleDownloadAuditLog('json')} variant="outline" className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Download JSON
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

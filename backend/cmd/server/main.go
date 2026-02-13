@@ -45,12 +45,16 @@ func main() {
 
 	accessService := services.NewAccessService(db)
 	previewService := services.NewPreviewService(db, storageClient, cfg.Gotenberg)
+	auditService := services.NewAuditService(db, storageClient)
+	auditService.StartExporter(cfg.Audit.ExportInterval)
 
-	authHandler := handlers.NewAuthHandler(db)
-	usersHandler := handlers.NewUsersHandler(db)
-	groupsHandler := handlers.NewGroupsHandler(db)
-	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService)
-	sharesHandler := handlers.NewSharesHandler(db, accessService)
+	authHandler := handlers.NewAuthHandler(db, auditService)
+	usersHandler := handlers.NewUsersHandler(db, auditService)
+	groupsHandler := handlers.NewGroupsHandler(db, auditService)
+	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, auditService)
+	sharesHandler := handlers.NewSharesHandler(db, accessService, auditService)
+	activitiesHandler := handlers.NewActivitiesHandler(db)
+	auditHandler := handlers.NewAuditHandler(db)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -120,6 +124,15 @@ func main() {
 	shareRoutes.Put("/:id", sharesHandler.UpdateShare)
 
 	api.Get("/shared", authMiddleware.RequireAuth, sharesHandler.ListSharedWithMe)
+
+	activityRoutes := api.Group("/activities", authMiddleware.RequireAuth)
+	activityRoutes.Get("/", activitiesHandler.List)
+	activityRoutes.Get("/unread-count", activitiesHandler.UnreadCount)
+	activityRoutes.Put("/read-all", activitiesHandler.MarkAllRead)
+	activityRoutes.Put("/:id/read", activitiesHandler.MarkRead)
+
+	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
+	auditRoutes.Get("/export", auditHandler.ExportMyLog)
 
 	listenAddr := fmt.Sprintf(":%s", cfg.Server.Port)
 
