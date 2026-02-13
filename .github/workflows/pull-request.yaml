@@ -12,30 +12,25 @@ jobs:
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    
+    strategy:
+      matrix:
+        container:
+          - frontend
+          - backend
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
-    - name: Build backend image
+
+    - name: Build
       uses: docker/build-push-action@v6
       with:
-        context: ./backend
+        context: ./${{ matrix.container }}
         push: false
-        tags: docshare/backend:test
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64,linux/arm64
-        
-    - name: Build frontend image
-      uses: docker/build-push-action@v6
-      with:
-        context: ./frontend
-        push: false
-        tags: docshare/frontend:test
+        tags: docshare/${{ matrix.container }}:test
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
