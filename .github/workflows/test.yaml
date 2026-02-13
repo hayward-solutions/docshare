@@ -1,5 +1,5 @@
 name: Unit Test
-run-name: Unit Test ${{ github.ref_name }} - ${{ github.event.head_commit.message }}
+run-name: Unit Test ${{ github.head_ref }}
 
 on:
   pull_request:

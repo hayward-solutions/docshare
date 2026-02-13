@@ -1,5 +1,5 @@
 name: Test Builds
-run-name: Test Builds ${{ github.ref_name }} - ${{ github.event.head_commit.message }}
+run-name: Test Builds ${{ github.head_ref }}
 
 on:
   pull_request:
