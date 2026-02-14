@@ -228,6 +228,8 @@ func (h *FilesHandler) ListRoot(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 
+	p := utils.ParsePagination(c)
+
 	var owned []models.File
 	if err := h.DB.Preload("Owner").Where("owner_id = ? AND parent_id IS NULL", currentUser.ID).Order("created_at DESC").Find(&owned).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed listing owned files")
@@ -263,6 +265,19 @@ func (h *FilesHandler) ListRoot(c *fiber.Ctx) error {
 		}
 	}
 
+	total := int64(len(combined))
+
+	start := p.Offset
+	end := start + p.Limit
+	if start > len(combined) {
+		combined = []models.File{}
+	} else {
+		if end > len(combined) {
+			end = len(combined)
+		}
+		combined = combined[start:end]
+	}
+
 	if len(combined) > 0 {
 		fileIDs := make([]uuid.UUID, len(combined))
 		for i, f := range combined {
@@ -289,7 +304,7 @@ func (h *FilesHandler) ListRoot(c *fiber.Ctx) error {
 		}
 	}
 
-	return utils.Success(c, fiber.StatusOK, combined)
+	return utils.Paginated(c, combined, p.Page, p.Limit, total)
 }
 
 func (h *FilesHandler) Get(c *fiber.Ctx) error {
@@ -344,8 +359,16 @@ func (h *FilesHandler) ListChildren(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	p := utils.ParsePagination(c)
+
+	var total int64
+	if err := h.DB.Model(&models.File{}).Where("parent_id = ?", parent.ID).Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed counting children")
+	}
+
 	var children []models.File
-	if err := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC").Find(&children).Error; err != nil {
+	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC")
+	if err := utils.ApplyPagination(query, p).Find(&children).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading children")
 	}
 
@@ -375,7 +398,7 @@ func (h *FilesHandler) ListChildren(c *fiber.Ctx) error {
 		}
 	}
 
-	return utils.Success(c, fiber.StatusOK, children)
+	return utils.Paginated(c, children, p.Page, p.Limit, total)
 }
 
 func (h *FilesHandler) Download(c *fiber.Ctx) error {
@@ -717,10 +740,12 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "search query must be at least 2 characters")
 	}
 
+	p := utils.ParsePagination(c)
 	searchValue := "%" + strings.ToLower(q) + "%"
 	directoryIDRaw := strings.TrimSpace(c.Query("directoryID"))
 
 	var files []models.File
+	var total int64
 
 	if directoryIDRaw != "" {
 		dirID, err := parseUUID(directoryIDRaw)
@@ -757,7 +782,7 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 		}
 
 		if len(descendantIDs) == 0 {
-			return utils.Success(c, fiber.StatusOK, []models.File{})
+			return utils.Paginated(c, []models.File{}, p.Page, p.Limit, 0)
 		}
 
 		ids := make([]uuid.UUID, len(descendantIDs))
@@ -765,18 +790,30 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 			ids[i] = d.ID
 		}
 
+		countQuery := h.DB.Model(&models.File{}).Where("id IN ? AND LOWER(name) LIKE ?", ids, searchValue)
+		if err := countQuery.Count(&total).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
+		}
+
 		if err := h.DB.Preload("Owner").
 			Where("id IN ? AND LOWER(name) LIKE ?", ids, searchValue).
 			Order("is_directory DESC, name ASC").
-			Limit(50).
+			Offset(p.Offset).
+			Limit(p.Limit).
 			Find(&files).Error; err != nil {
 			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
 		}
 	} else {
+		countQuery := h.DB.Model(&models.File{}).Where("owner_id = ? AND LOWER(name) LIKE ?", currentUser.ID, searchValue)
+		if err := countQuery.Count(&total).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
+		}
+
 		if err := h.DB.Preload("Owner").
 			Where("owner_id = ? AND LOWER(name) LIKE ?", currentUser.ID, searchValue).
 			Order("is_directory DESC, name ASC").
-			Limit(50).
+			Offset(p.Offset).
+			Limit(p.Limit).
 			Find(&files).Error; err != nil {
 			return utils.Error(c, fiber.StatusInternalServerError, "search failed")
 		}
@@ -784,7 +821,7 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 
 	h.enrichParentNames(files)
 
-	return utils.Success(c, fiber.StatusOK, files)
+	return utils.Paginated(c, files, p.Page, p.Limit, total)
 }
 
 func (h *FilesHandler) enrichParentNames(files []models.File) {
@@ -1164,12 +1201,20 @@ func (h *FilesHandler) PublicChildren(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "file is not a directory")
 	}
 
+	p := utils.ParsePagination(c)
+
+	var total int64
+	if err := h.DB.Model(&models.File{}).Where("parent_id = ?", parent.ID).Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed counting children")
+	}
+
 	var children []models.File
-	if err := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC").Find(&children).Error; err != nil {
+	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC")
+	if err := utils.ApplyPagination(query, p).Find(&children).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading children")
 	}
 
-	return utils.Success(c, fiber.StatusOK, children)
+	return utils.Paginated(c, children, p.Page, p.Limit, total)
 }
 
 func (h *FilesHandler) downloadFile(c *fiber.Ctx, fileID uuid.UUID) error {

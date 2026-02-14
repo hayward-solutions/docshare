@@ -190,12 +190,24 @@ func (h *SharesHandler) ListFileShares(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "insufficient permissions")
 	}
 
+	p := utils.ParsePagination(c)
+
+	baseQuery := h.DB.Model(&models.Share{}).Where("file_id = ?", fileID)
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed counting shares")
+	}
+
 	var shares []models.Share
-	if err := h.DB.Preload("SharedWithUser").Preload("SharedWithGroup").Preload("SharedBy").Where("file_id = ?", fileID).Find(&shares).Error; err != nil {
+	if err := utils.ApplyPagination(
+		baseQuery.Preload("SharedWithUser").Preload("SharedWithGroup").Preload("SharedBy"),
+		p,
+	).Find(&shares).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading shares")
 	}
 
-	return utils.Success(c, fiber.StatusOK, shares)
+	return utils.Paginated(c, shares, p.Page, p.Limit, total)
 }
 
 func (h *SharesHandler) DeleteShare(c *fiber.Ctx) error {
@@ -325,25 +337,35 @@ func (h *SharesHandler) ListSharedWithMe(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 
-	var files []models.File
-	query := h.DB.
-		Table("files").
-		Distinct("files.*").
-		Joins("JOIN shares ON shares.file_id = files.id").
+	p := utils.ParsePagination(c)
+
+	baseQuery := h.DB.Model(&models.File{})
+
+	search := strings.TrimSpace(c.Query("search"))
+	if search != "" {
+		searchValue := "%" + strings.ToLower(search) + "%"
+		baseQuery = baseQuery.Where("LOWER(name) LIKE ?", searchValue)
+	}
+
+	sharedFilesSubquery := h.DB.
+		Table("shares").
+		Select("file_id").
 		Joins("LEFT JOIN group_memberships gm ON gm.group_id = shares.shared_with_group_id").
 		Where("shares.expires_at IS NULL OR shares.expires_at > NOW()").
 		Where("shares.shared_with_user_id = ? OR gm.user_id = ?", currentUser.ID, currentUser.ID).
 		Where("files.owner_id != ?", currentUser.ID)
 
-	search := strings.TrimSpace(c.Query("search"))
-	if search != "" {
-		searchValue := "%" + strings.ToLower(search) + "%"
-		query = query.Where("LOWER(files.name) LIKE ?", searchValue)
+	baseQuery = baseQuery.Where("id IN (?)", sharedFilesSubquery).Where("owner_id != ?", currentUser.ID)
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed counting shared files")
 	}
 
-	if err := query.Order("files.created_at DESC").Find(&files).Error; err != nil {
+	var files []models.File
+	if err := utils.ApplyPagination(baseQuery.Order("created_at DESC"), p).Find(&files).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading shared files")
 	}
 
-	return utils.Success(c, fiber.StatusOK, files)
+	return utils.Paginated(c, files, p.Page, p.Limit, total)
 }

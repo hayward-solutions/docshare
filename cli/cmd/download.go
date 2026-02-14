@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -95,22 +96,33 @@ func downloadDirectory(f api.File, destDir string) error {
 	}
 	fmt.Printf("Created directory: %s\n", localDir)
 
-	// List children and download recursively.
-	var resp api.Response[[]api.File]
-	if err := apiClient.Get("/files/"+f.ID+"/children", nil, &resp); err != nil {
-		return fmt.Errorf("listing children: %w", err)
-	}
+	page := 1
+	for {
+		params := url.Values{}
+		params.Set("page", fmt.Sprintf("%d", page))
+		params.Set("limit", "100")
 
-	for _, child := range resp.Data {
-		if child.IsDirectory {
-			if err := downloadDirectory(child, localDir); err != nil {
-				fmt.Fprintf(os.Stderr, "  Failed: %s — %v\n", child.Name, err)
-			}
-		} else {
-			if err := downloadFile(child, localDir); err != nil {
-				fmt.Fprintf(os.Stderr, "  Failed: %s — %v\n", child.Name, err)
+		var resp api.Response[[]api.File]
+		if err := apiClient.Get("/files/"+f.ID+"/children", params, &resp); err != nil {
+			return fmt.Errorf("listing children: %w", err)
+		}
+
+		for _, child := range resp.Data {
+			if child.IsDirectory {
+				if err := downloadDirectory(child, localDir); err != nil {
+					fmt.Fprintf(os.Stderr, "  Failed: %s — %v\n", child.Name, err)
+				}
+			} else {
+				if err := downloadFile(child, localDir); err != nil {
+					fmt.Fprintf(os.Stderr, "  Failed: %s — %v\n", child.Name, err)
+				}
 			}
 		}
+
+		if resp.Pagination == nil || page >= resp.Pagination.TotalPages {
+			break
+		}
+		page++
 	}
 
 	return nil
