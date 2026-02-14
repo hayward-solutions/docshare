@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 type Config struct {
 	DB        DBConfig
-	MinIO     MinIOConfig
+	S3        S3Config
 	JWT       JWTConfig
 	Server    ServerConfig
 	Gotenberg GotenbergConfig
@@ -32,9 +33,10 @@ type DBConfig struct {
 	SSLMode  string
 }
 
-type MinIOConfig struct {
+type S3Config struct {
 	Endpoint       string
 	PublicEndpoint string
+	Region         string
 	AccessKey      string
 	SecretKey      string
 	Bucket         string
@@ -133,7 +135,7 @@ type LDAPConfig struct {
 }
 
 func Load() *Config {
-	return &Config{
+	cfg := &Config{
 		DB: DBConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
 			Port:     getEnv("DB_PORT", "5432"),
@@ -142,13 +144,14 @@ func Load() *Config {
 			Name:     getEnv("DB_NAME", "docshare"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
-		MinIO: MinIOConfig{
-			Endpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
-			PublicEndpoint: getEnv("MINIO_PUBLIC_ENDPOINT", getEnv("MINIO_ENDPOINT", "localhost:9000")),
-			AccessKey:      getEnv("MINIO_ACCESS_KEY", "docshare"),
-			SecretKey:      getEnv("MINIO_SECRET_KEY", "docshare_secret"),
-			Bucket:         getEnv("MINIO_BUCKET", "docshare"),
-			UseSSL:         getEnvAsBool("MINIO_USE_SSL", false),
+		S3: S3Config{
+			Region:         getEnv("S3_REGION", "us-east-1"),
+			Endpoint:       getEnv("S3_ENDPOINT", ""),
+			PublicEndpoint: getEnv("S3_PUBLIC_ENDPOINT", ""),
+			AccessKey:      getEnv("S3_ACCESS_KEY", ""),
+			SecretKey:      getEnv("S3_SECRET_KEY", ""),
+			Bucket:         getEnv("S3_BUCKET", "docshare"),
+			UseSSL:         getEnvAsBool("S3_USE_SSL", true),
 		},
 		JWT: JWTConfig{
 			Secret:          getEnv("JWT_SECRET", "change-me-in-production"),
@@ -213,6 +216,12 @@ func Load() *Config {
 			NameFields:   getEnv("LDAP_NAME_FIELDS", "givenName,sn"),
 		},
 	}
+
+	if cfg.S3.Endpoint == "" {
+		cfg.S3.Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", cfg.S3.Region)
+	}
+
+	return cfg
 }
 
 func getEnv(key, fallback string) string {

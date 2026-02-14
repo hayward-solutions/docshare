@@ -46,11 +46,11 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 {{- end -}}
 
-{{- define "docshare.minioEndpoint" -}}
-{{- if .Values.minio.enabled -}}
-{{- printf "%s-minio:9000" .Release.Name -}}
+{{- define "docshare.s3Endpoint" -}}
+{{- if .Values.s3.endpoint -}}
+{{- .Values.s3.endpoint -}}
 {{- else -}}
-{{- .Values.externalMinio.endpoint -}}
+{{- printf "s3.%s.amazonaws.com" .Values.s3.region -}}
 {{- end -}}
 {{- end -}}
 

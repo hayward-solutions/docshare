@@ -16,38 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    container_name: docshare-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: docshare
-      MINIO_ROOT_PASSWORD: docshare_secret
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  minio-init:
-    image: minio/mc:latest
-    container_name: docshare-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set docshare http://minio:9000 docshare docshare_secret;
-      mc mb --ignore-existing docshare/docshare;
-      mc anonymous set none docshare/docshare;
-      exit 0;
-      "
-
   # LibreOffice for document conversion (office → PDF)
   gotenberg:
     image: gotenberg/gotenberg:8
@@ -69,12 +37,10 @@ services:
       DB_PASSWORD: docshare_secret
       DB_NAME: docshare
       DB_SSLMODE: disable
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_ENDPOINT: 127.0.0.1:9000
-      MINIO_ACCESS_KEY: docshare
-      MINIO_SECRET_KEY: docshare_secret
-      MINIO_BUCKET: docshare
-      MINIO_USE_SSL: "false"
+      S3_REGION: "${AWS_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
+      S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-docshare}"
       JWT_SECRET: change-me-in-production-use-a-long-random-string
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
@@ -83,10 +49,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
 
   frontend:
     image: ghcr.io/hayward-solutions/docshare/frontend:latest
@@ -101,4 +63,3 @@ services:
 
 volumes:
   postgres_data:
-  minio_data:

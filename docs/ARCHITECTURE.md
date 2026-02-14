@@ -48,7 +48,7 @@ DocShare follows a traditional client-server architecture with the following com
 │   Business Logic        │   │   Storage Layer            │
 │  ┌──────────────────┐   │   │  ┌──────────────────────┐  │
 │  │   Handlers       │   │   │  │  Storage Service     │  │
-│  │  - Auth          │   │   │  │  (MinIO Client)      │  │
+│  │  - Auth          │   │   │  │  (S3 Client)         │  │
 │  │  - Files         │   │   │  └──────────────────────┘  │
 │  │  - Shares        │   │   │                            │
 │  │  - Groups        │   │   │  ┌──────────────────────┐  │
@@ -64,7 +64,7 @@ DocShare follows a traditional client-server architecture with the following com
 ┌──────────▼──────────────────────────────────────────────┐
 │                   Data Layer                            │
 │  ┌─────────────────┐      ┌─────────────────────────┐   │
-│  │  PostgreSQL     │      │  MinIO (S3)             │   │
+│  │  PostgreSQL     │      │  AWS S3                 │   │
 │  │  - User Data    │      │  - File Objects         │   │
 │  │  - Metadata     │      │  - Preview Cache        │   │
 │  │  - Permissions  │      └─────────────────────────┘   │
@@ -79,7 +79,7 @@ DocShare follows a traditional client-server architecture with the following com
 | **Frontend** | User interface, client-side rendering, form validation | Next.js 16, React 19, TypeScript |
 | **API Server** | Request routing, authentication, authorization, business logic | Go, Fiber framework |
 | **Database** | Persistent storage of metadata, users, permissions | PostgreSQL 16 |
-| **Object Storage** | Binary file storage, scalability | MinIO (S3-compatible) |
+| **Object Storage** | Binary file storage, scalability | AWS S3 |
 | **Preview Service** | Document conversion (Office → PDF) | Gotenberg (LibreOffice) |
 | **Audit Service** | Audit logging, activity feed, and S3 log export | Go |
 
@@ -91,7 +91,7 @@ DocShare follows a traditional client-server architecture with the following com
 - **Web Framework**: Fiber v2
 - **ORM**: GORM
 - **Database**: PostgreSQL 16
-- **Storage**: MinIO (S3-compatible)
+- **Storage**: AWS S3
 - **Authentication**: JWT (golang-jwt/jwt/v5)
 - **Password Hashing**: bcrypt (golang.org/x/crypto)
 
@@ -125,7 +125,7 @@ docshare/
 │   │   ├── middleware/      # HTTP middleware (auth, logging, CORS)
 │   │   ├── models/          # Database models & entities
 │   │   ├── services/        # Business logic services
-│   │   └── storage/         # Storage abstraction (MinIO)
+│   │   └── storage/         # Storage abstraction (S3)
 │   ├── pkg/
 │   │   ├── logger/          # Structured logging utilities
 │   │   ├── previewtoken/    # Preview token generation
@@ -202,7 +202,7 @@ internal/
     └── activity.go
 
   storage/               # Storage abstraction (Infrastructure Layer)
-    └── minio.go         # MinIO client wrapper
+    └── s3.go            # S3 client wrapper
 
   database/              # Database management (Infrastructure Layer)
     └── database.go      # Connection, migrations
@@ -240,7 +240,7 @@ Dependencies are injected at application startup in `cmd/server/main.go`:
 ```go
 // Initialize infrastructure
 db := database.Connect(cfg.DB)
-storageClient := storage.NewMinIOClient(cfg.MinIO)
+storageClient := storage.NewS3Client(cfg.S3)
 
 // Create services
 accessService := services.NewAccessService(db)
@@ -639,14 +639,14 @@ func (a *AccessService) HasAccess(
 - Ownership, timestamps
 - Relationships (parent, shares)
 
-**Binary Content** → MinIO (S3)
+**Binary Content** → AWS S3
 - Actual file bytes
 - Scalable, distributed storage
 - Presigned URLs for direct client access
 
 ### Storage Path Strategy
 
-Files are stored in MinIO with the following path structure:
+Files are stored in S3 with the following path structure:
 
 ```
 files/<uuid>/<filename>
@@ -663,7 +663,7 @@ thumbnails/<uuid>.jpg
 
 ```
 ┌────────┐                 ┌─────────┐               ┌─────────┐
-│ Client │                 │  Backend│               │  MinIO  │
+│ Client │                 │  Backend│               │   S3    │
 └───┬────┘                 └────┬────┘               └────┬────┘
     │                           │                         │
     │ 1. POST /api/files/upload │                         │
@@ -671,7 +671,7 @@ thumbnails/<uuid>.jpg
     │──────────────────────────>│                         │
     │                           │                         │
     │                           │ 2. Generate UUID        │
-    │                           │ 3. Stream to MinIO      │
+    │                           │ 3. Stream to S3         │
     │                           │────────────────────────>│
     │                           │                         │
     │                           │ 4. Store metadata in DB │
@@ -689,14 +689,14 @@ thumbnails/<uuid>.jpg
 **Option 1: Presigned URLs** (preferred for large files)
 ```
 Client → Backend: GET /api/files/{id}/download-url
-Backend → Client: { url: "https://minio/..." }
-Client → MinIO: Direct download (no backend involved)
+Backend → Client: { url: "https://s3/..." }
+Client → S3: Direct download (no backend involved)
 ```
 
 **Option 2: Proxied Download** (for small files or access logging)
 ```
 Client → Backend: GET /api/files/{id}/download
-Backend → MinIO: Fetch file
+Backend → S3: Fetch file
 Backend → Client: Stream file bytes
 ```
 
@@ -715,18 +715,18 @@ Backend → Client: Stream file bytes
 
 ```
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│   Backend    │         │  Gotenberg   │         │    MinIO     │
+│   Backend    │         │  Gotenberg   │         │      S3      │
 └──────┬───────┘         └──────┬───────┘         └──────┬───────┘
        │                        │                        │
        │ 1. User uploads DOCX   │                        │
-       │ 2. File stored in MinIO│                        │
+       │ 2. File stored in S3   │                        │
        │────────────────────────┼───────────────────────>│
        │                        │                        │
        │ 3. Trigger preview gen │                        │
        │    (background job)    │                        │
        │                        │                        │
        │ 4. Fetch DOCX from     │                        │
-       │    MinIO               │                        │
+       │    S3                  │                        │
        │<───────────────────────┼────────────────────────│
        │                        │                        │
        │ 5. Send to Gotenberg   │                        │
@@ -740,7 +740,7 @@ Backend → Client: Stream file bytes
        │<───────────────────────│                        │
        │                        │                        │
        │ 8. Store preview in    │                        │
-       │    MinIO (previews/)   │                        │
+       │    S3 (previews/)      │                        │
        │────────────────────────┼───────────────────────>│
        │                        │                        │
        │ 9. Update DB with      │                        │
@@ -788,7 +788,7 @@ Not all audit events trigger user-facing activities. The `AuditService` determin
 -   **Group Activities**: Actions within a group (e.g., "User B added you to Group X") notify all relevant members.
 
 ### S3 Export
-For long-term retention and external analysis, audit logs are periodically exported to MinIO:
+For long-term retention and external analysis, audit logs are periodically exported to S3:
 -   **Format**: NDJSON (Newline Delimited JSON) for easy parsing.
 -   **Path**: `audit-logs/YYYY/MM/DD/HH-mm-ss.ndjson`.
 -   **Interval**: Configurable via `AUDIT_EXPORT_INTERVAL` (default: 1h).
@@ -906,10 +906,10 @@ AllowOrigins: "http://localhost:3001,http://127.0.0.1:3001"
 - Remix: Newer, smaller ecosystem
 - SvelteKit: Different framework, less mature
 
-### Why MinIO over Filesystem?
+### Why AWS S3 over Filesystem?
 
 **Pros**:
-- S3-compatible API (cloud-portable)
+- Managed service (no infrastructure management)
 - Distributed storage (scalability)
 - Built-in redundancy
 - Presigned URLs (offload traffic from backend)
@@ -917,7 +917,7 @@ AllowOrigins: "http://localhost:3001,http://127.0.0.1:3001"
 
 **Alternatives considered**:
 - Local filesystem: Not scalable, single point of failure
-- AWS S3: Requires AWS account, vendor lock-in
+- MinIO: Self-hosted, requires infrastructure management
 - Azure Blob: Similar to S3
 
 ### Why PostgreSQL over MySQL?
@@ -1034,7 +1034,7 @@ CREATE UNIQUE INDEX idx_users_email ON users(email);
 ### Connection Pooling
 
 - **Database**: GORM manages connection pool automatically
-- **MinIO**: HTTP client with keep-alive
+- **S3**: HTTP client with keep-alive
 - **Gotenberg**: HTTP client with connection reuse
 
 ### Caching Opportunities
@@ -1043,7 +1043,7 @@ CREATE UNIQUE INDEX idx_users_email ON users(email);
 
 1. **User data cache** (Redis): Reduce DB lookups on auth
 2. **Permission cache** (Redis): Cache expensive recursive checks
-3. **Preview cache** (MinIO): Already stored, served via presigned URLs
+3. **Preview cache** (S3): Already stored, served via presigned URLs
 4. **Metadata cache** (Redis): Cache frequently accessed file metadata
 
 ### Scalability Strategy
@@ -1052,12 +1052,12 @@ CREATE UNIQUE INDEX idx_users_email ON users(email);
 - Backend: Stateless, can run multiple instances behind load balancer
 - Frontend: Static build, serve from CDN
 - Database: PostgreSQL read replicas for read-heavy workloads
-- Storage: MinIO distributed mode
+- Storage: S3 scales automatically
 
 **Vertical Scaling**:
 - Increase backend server resources for concurrent connections
 - Increase PostgreSQL resources for complex queries
-- Increase MinIO nodes for storage capacity
+- S3 handles storage scaling automatically
 
 ## Future Improvements
 

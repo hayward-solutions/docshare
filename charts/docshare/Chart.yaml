@@ -2,14 +2,10 @@ apiVersion: v2
 name: docshare
 description: "A modern, secure document sharing platform"
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "0.1.0"
 dependencies:
   - name: postgresql
     version: "~16.4"
     repository: https://charts.bitnami.com/bitnami
     condition: postgresql.enabled
-  - name: minio
-    version: "~14.9"
-    repository: https://charts.bitnami.com/bitnami
-    condition: minio.enabled

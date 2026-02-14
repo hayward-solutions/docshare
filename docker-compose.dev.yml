@@ -71,12 +71,13 @@ services:
       DB_PASSWORD: docshare_secret
       DB_NAME: docshare
       DB_SSLMODE: disable
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_ENDPOINT: 127.0.0.1:9000
-      MINIO_ACCESS_KEY: docshare
-      MINIO_SECRET_KEY: docshare_secret
-      MINIO_BUCKET: docshare
-      MINIO_USE_SSL: "false"
+      S3_REGION: "us-east-1"
+      S3_ENDPOINT: "minio:9000"
+      S3_PUBLIC_ENDPOINT: "127.0.0.1:9000"
+      S3_ACCESS_KEY: "docshare"
+      S3_SECRET_KEY: "docshare_secret"
+      S3_BUCKET: "docshare"
+      S3_USE_SSL: "false"
       JWT_SECRET: change-me-in-production-use-a-long-random-string
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080

@@ -85,9 +85,9 @@ postgresql:
   auth:
     password: "generate-a-strong-password"
 
-minio:
-  auth:
-    rootPassword: "generate-a-strong-password"
+s3:
+  region: "us-east-1"
+  bucket: "docshare"
 
 existingSecret:
   name: docshare-sso-secrets

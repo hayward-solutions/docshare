@@ -27,11 +27,11 @@ type AuditEntry struct {
 
 type AuditService struct {
 	DB      *gorm.DB
-	Storage *storage.MinIOClient
+	Storage *storage.S3Client
 	queue   chan models.AuditLog
 }
 
-func NewAuditService(db *gorm.DB, storageClient *storage.MinIOClient) *AuditService {
+func NewAuditService(db *gorm.DB, storageClient *storage.S3Client) *AuditService {
 	s := &AuditService{
 		DB:      db,
 		Storage: storageClient,

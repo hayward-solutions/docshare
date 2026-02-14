@@ -72,7 +72,7 @@ DocShare: document sharing platform with file storage, sharing, groups, previews
 - Go uses Fiber web framework (not Gin/Echo)
 - Frontend uses shadcn/ui + Radix primitives + Tailwind 4
 - CLI uses Cobra + OAuth2 device flow
-- MinIO for object storage, SQLite for dev, PostgreSQL for prod
+- AWS S3 for object storage (MinIO for dev), SQLite for dev, PostgreSQL for prod
 
 ## COMMANDS
 
@@ -94,6 +94,7 @@ cd cli && go build -o docshare .
 
 - Frontend runs on :3001 (not :3000)
 - Backend API at :8080
-- MinIO console at :9001
+- MinIO console at :9001 (dev only)
 - JWT secret must be set in production
+- S3_* env vars for storage (MINIO_* deprecated)
 - Go versions: CI uses 1.24, Dockerfile uses 1.25 (future)

@@ -43,12 +43,12 @@ func main() {
 		}
 	}()
 
-	storageClient, err := storage.NewMinIOClient(cfg.MinIO)
+	storageClient, err := storage.NewS3Client(cfg.S3)
 	if err != nil {
-		log.Fatalf("minio initialization failed: %v", err)
+		log.Fatalf("s3 initialization failed: %v", err)
 	}
 	if err := storageClient.EnsureBucket(context.Background()); err != nil {
-		log.Fatalf("failed ensuring minio bucket: %v", err)
+		log.Fatalf("failed ensuring s3 bucket: %v", err)
 	}
 
 	accessService := services.NewAccessService(db)
