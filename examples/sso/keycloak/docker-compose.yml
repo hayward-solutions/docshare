@@ -1,0 +1,52 @@
+# DocShare with Keycloak SSO
+# 
+# This docker-compose file extends the base configuration to include Keycloak
+# for enterprise SSO via OpenID Connect (OIDC).
+#
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/sso/keycloak/docker-compose.yml up -d
+#
+# After starting, access Keycloak at http://localhost:8180
+# - Admin console: admin / admin
+# - Create a realm called "docshare"
+# - Create an OIDC client with:
+#   - Client ID: docshare
+#   - Valid Redirect URIs: http://localhost:8080/*
+#   - Web Origins: http://localhost:8080
+# - Create users or configure LDAP federation
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: docshare-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: dev-file
+    ports:
+      - "8180:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    environment:
+      # OIDC Configuration
+      OAUTH_OIDC_ENABLED: "true"
+      OAUTH_OIDC_CLIENT_ID: "docshare"
+      OAUTH_OIDC_CLIENT_SECRET: "${KEYCLOAK_CLIENT_SECRET:-docshare-secret}"
+      OAUTH_OIDC_ISSUER_URL: "http://localhost:8180/realms/docshare"
+      OAUTH_OIDC_REDIRECT_URL: "http://localhost:8080/api/auth/sso/oauth/oidc/callback"
+      OAUTH_OIDC_SCOPES: "openid,profile,email"
+
+      # SSO General Settings
+      SSO_AUTO_REGISTER: "true"
+      SSO_DEFAULT_ROLE: "user"
+
+volumes:
+  keycloak_data:

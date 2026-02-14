@@ -69,6 +69,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 		&models.AuditLog{},
 		&models.AuditExportCursor{},
 		&models.Transfer{},
+		&models.SSOProvider{},
+		&models.LinkedAccount{},
 	)
 	if err != nil {
 		t.Fatalf("failed automigrating models: %v", err)
@@ -94,6 +96,14 @@ func setupTestEnv(t *testing.T) *testEnv {
 	deviceAuthHandler := NewDeviceAuthHandler(db, auditService)
 	transfersHandler := NewTransfersHandler(db, 300)
 	authMiddleware := middleware.NewAuthMiddleware(db)
+
+	cfg := &config.Config{
+		SSO: config.SSOConfig{
+			AutoRegister: true,
+			DefaultRole:  "user",
+		},
+	}
+	ssoHandler := NewSSOHandler(db, cfg)
 
 	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
@@ -192,6 +202,16 @@ func setupTestEnv(t *testing.T) *testEnv {
 	transferRoutes.Get("/:code/download", transfersHandler.Download)
 	transferRoutes.Post("/:code/complete", transfersHandler.Complete)
 	transferRoutes.Delete("/:code", transfersHandler.Cancel)
+
+	ssoRoutes := api.Group("/auth/sso")
+	ssoRoutes.Get("/providers", ssoHandler.ListProviders)
+	ssoRoutes.Get("/oauth/:provider", ssoHandler.GetLoginRedirect)
+	ssoRoutes.Get("/oauth/:provider/callback", ssoHandler.HandleOAuthCallback)
+	ssoRoutes.Post("/ldap/login", ssoHandler.HandleLDAPLogin)
+
+	ssoProtectedRoutes := api.Group("/auth/sso", authMiddleware.RequireAuth)
+	ssoProtectedRoutes.Get("/linked-accounts", ssoHandler.GetLinkedAccounts)
+	ssoProtectedRoutes.Delete("/linked-accounts/:id", ssoHandler.UnlinkAccount)
 
 	return &testEnv{app: app, db: db}
 }

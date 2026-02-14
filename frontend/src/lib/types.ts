@@ -151,3 +151,17 @@ export interface PreviewJob {
   updatedAt: string;
   thumbnailPath?: string;
 }
+
+export interface SSOProvider {
+  name: string;
+  displayName: string;
+  type: 'oauth' | 'oidc' | 'saml' | 'ldap';
+}
+
+export interface LinkedAccount {
+  id: string;
+  userID: string;
+  provider: string;
+  providerUserID: string;
+  createdAt: string;
+}

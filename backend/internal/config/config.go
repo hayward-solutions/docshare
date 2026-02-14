@@ -1,9 +1,13 @@
 package config
 
 import (
+	"context"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 type Config struct {
@@ -14,6 +18,9 @@ type Config struct {
 	Gotenberg GotenbergConfig
 	Audit     AuditConfig
 	Preview   PreviewConfig
+	SSO       SSOConfig
+	SAML      SAMLConfig
+	LDAP      LDAPConfig
 }
 
 type DBConfig struct {
@@ -57,6 +64,74 @@ type PreviewConfig struct {
 	RetryDelays     []time.Duration
 }
 
+type SSOConfig struct {
+	AutoRegister bool
+	DefaultRole  string
+	Google       OAuthProviderConfig
+	GitHub       OAuthProviderConfig
+	OIDC         OIDCProviderConfig
+}
+
+type OAuthProviderConfig struct {
+	Enabled      bool
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Scopes       string
+}
+
+func (c OAuthProviderConfig) ClientConfig(ctx context.Context) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		RedirectURL:  c.RedirectURL,
+		Scopes:       strings.Split(c.Scopes, ","),
+	}
+}
+
+type OIDCProviderConfig struct {
+	Enabled      bool
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Scopes       string
+	IssuerURL    string
+}
+
+func (c OIDCProviderConfig) ClientConfig(ctx context.Context) *oauth2.Config {
+	endpoint := oauth2.Endpoint{
+		AuthURL:  c.IssuerURL + "/authorize",
+		TokenURL: c.IssuerURL + "/token",
+	}
+	return &oauth2.Config{
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		RedirectURL:  c.RedirectURL,
+		Scopes:       strings.Split(c.Scopes, ","),
+		Endpoint:     endpoint,
+	}
+}
+
+type SAMLConfig struct {
+	Enabled        bool
+	IDPMetadataURL string
+	SPEntityID     string
+	SPACSURL       string
+	SPKeyPath      string
+	SPCertPath     string
+}
+
+type LDAPConfig struct {
+	Enabled      bool
+	URL          string
+	BindDN       string
+	BindPassword string
+	SearchBase   string
+	UserFilter   string
+	EmailField   string
+	NameFields   string
+}
+
 func Load() *Config {
 	return &Config{
 		DB: DBConfig{
@@ -92,6 +167,50 @@ func Load() *Config {
 			QueueBufferSize: getEnvAsInt("PREVIEW_QUEUE_BUFFER_SIZE", 100),
 			MaxAttempts:     getEnvAsInt("PREVIEW_JOB_MAX_ATTEMPTS", 3),
 			RetryDelays:     []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute},
+		},
+		SSO: SSOConfig{
+			AutoRegister: getEnvAsBool("SSO_AUTO_REGISTER", true),
+			DefaultRole:  getEnv("SSO_DEFAULT_ROLE", "user"),
+			Google: OAuthProviderConfig{
+				Enabled:      getEnvAsBool("OAUTH_GOOGLE_ENABLED", false),
+				ClientID:     getEnv("OAUTH_GOOGLE_CLIENT_ID", ""),
+				ClientSecret: getEnv("OAUTH_GOOGLE_CLIENT_SECRET", ""),
+				RedirectURL:  getEnv("OAUTH_GOOGLE_REDIRECT_URL", ""),
+				Scopes:       getEnv("OAUTH_GOOGLE_SCOPES", "openid,email,profile"),
+			},
+			GitHub: OAuthProviderConfig{
+				Enabled:      getEnvAsBool("OAUTH_GITHUB_ENABLED", false),
+				ClientID:     getEnv("OAUTH_GITHUB_CLIENT_ID", ""),
+				ClientSecret: getEnv("OAUTH_GITHUB_CLIENT_SECRET", ""),
+				RedirectURL:  getEnv("OAUTH_GITHUB_REDIRECT_URL", ""),
+				Scopes:       getEnv("OAUTH_GITHUB_SCOPES", "read:user,user:email"),
+			},
+			OIDC: OIDCProviderConfig{
+				Enabled:      getEnvAsBool("OAUTH_OIDC_ENABLED", false),
+				ClientID:     getEnv("OAUTH_OIDC_CLIENT_ID", ""),
+				ClientSecret: getEnv("OAUTH_OIDC_CLIENT_SECRET", ""),
+				RedirectURL:  getEnv("OAUTH_OIDC_REDIRECT_URL", ""),
+				Scopes:       getEnv("OAUTH_OIDC_SCOPES", "openid,profile,email"),
+				IssuerURL:    getEnv("OAUTH_OIDC_ISSUER_URL", ""),
+			},
+		},
+		SAML: SAMLConfig{
+			Enabled:        getEnvAsBool("SAML_ENABLED", false),
+			IDPMetadataURL: getEnv("SAML_IDP_METADATA_URL", ""),
+			SPEntityID:     getEnv("SAML_SP_ENTITY_ID", ""),
+			SPACSURL:       getEnv("SAML_SP_ACS_URL", ""),
+			SPKeyPath:      getEnv("SAML_SP_KEY_PATH", ""),
+			SPCertPath:     getEnv("SAML_SP_CERT_PATH", ""),
+		},
+		LDAP: LDAPConfig{
+			Enabled:      getEnvAsBool("LDAP_ENABLED", false),
+			URL:          getEnv("LDAP_URL", "ldap://localhost:389"),
+			BindDN:       getEnv("LDAP_BIND_DN", ""),
+			BindPassword: getEnv("LDAP_BIND_PASSWORD", ""),
+			SearchBase:   getEnv("LDAP_SEARCH_BASE", ""),
+			UserFilter:   getEnv("LDAP_USER_FILTER", "(uid=%s)"),
+			EmailField:   getEnv("LDAP_EMAIL_FIELD", "mail"),
+			NameFields:   getEnv("LDAP_NAME_FIELDS", "givenName,sn"),
 		},
 	}
 }

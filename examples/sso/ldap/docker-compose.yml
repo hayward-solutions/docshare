@@ -1,0 +1,55 @@
+# DocShare with LDAP Authentication
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.sso-ldap.yml up -d
+#
+# This adds OpenLDAP for corporate directory authentication.
+# Configure your LDAP settings below.
+
+services:
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: docshare-ldap
+    environment:
+      LDAP_ORGANISATION: "DocShare Inc."
+      LDAP_DOMAIN: "docshare.local"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_CONFIG_PASSWORD: "config"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-D", "cn=admin,dc=docshare,dc=local", "-w", "admin", "-b", "dc=docshare,dc=local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ldap-admin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: docshare-ldap-admin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "ldap"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - "8081:80"
+    depends_on:
+      - ldap
+
+  backend:
+    environment:
+      LDAP_ENABLED: "true"
+      LDAP_URL: "ldap://ldap:389"
+      LDAP_BIND_DN: "cn=admin,dc=docshare,dc=local"
+      LDAP_BIND_PASSWORD: "admin"
+      LDAP_SEARCH_BASE: "dc=docshare,dc=local"
+      LDAP_USER_FILTER: "(uid=%s)"
+      LDAP_EMAIL_FIELD: "mail"
+      LDAP_NAME_FIELDS: "cn"
+      SSO_AUTO_REGISTER: "true"
+
+volumes:
+  ldap_data:
+  ldap_config:

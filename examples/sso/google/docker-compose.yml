@@ -1,0 +1,21 @@
+# DocShare with Google OAuth2
+#
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/sso/google/docker-compose.yml up -d
+#
+# Setup:
+# 1. Go to Google Cloud Console https://console.cloud.google.com
+# 2. Create a project and enable Google+ API / OAuth
+# 3. Create OAuth 2.0 credentials (Web application)
+# 4. Add authorized redirect URI: http://localhost:8080/api/auth/sso/oauth/google/callback
+# 5. Add authorized JavaScript origins: http://localhost:8080
+
+services:
+  backend:
+    environment:
+      OAUTH_GOOGLE_ENABLED: "true"
+      OAUTH_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      OAUTH_GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      OAUTH_GOOGLE_REDIRECT_URL: "http://localhost:8080/api/auth/sso/oauth/google/callback"
+      OAUTH_GOOGLE_SCOPES: "openid,email,profile"
+      SSO_AUTO_REGISTER: "true"
