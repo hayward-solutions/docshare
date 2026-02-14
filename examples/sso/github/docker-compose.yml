@@ -1,7 +1,7 @@
 # DocShare with GitHub OAuth2
 #
-# Usage:
-#   docker-compose -f docker-compose.yml -f docker-compose.sso-github.yml up -d
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/sso/github/docker-compose.yml up -d
 #
 # Setup:
 # 1. Go to GitHub Developer Settings https://github.com/settings/developers

@@ -3,8 +3,8 @@
 # This docker-compose file extends the base configuration to include Keycloak
 # for enterprise SSO via OpenID Connect (OIDC).
 #
-# Usage:
-#   docker-compose -f docker-compose.yml -f docker-compose.sso-keycloak.yml up -d
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/sso/keycloak/docker-compose.yml up -d
 #
 # After starting, access Keycloak at http://localhost:8180
 # - Admin console: admin / admin

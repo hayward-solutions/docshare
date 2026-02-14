@@ -1,4 +1,4 @@
-import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, PreviewJob, User } from './types';
+import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, PreviewJob, SSOProvider, User } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
@@ -147,4 +147,17 @@ export const previewAPI = {
     apiMethods.get<{ job: PreviewJob | null; file: unknown }>('/api/files/' + fileId + '/preview-status'),
   retry: async (fileId: string) =>
     apiMethods.post<{ job: PreviewJob }>('/api/files/' + fileId + '/retry-preview', {}),
+};
+
+export const ssoAPI = {
+  listProviders: async () =>
+    apiMethods.get<SSOProvider[]>('/api/auth/sso/providers'),
+  getOAuthUrl: async (provider: string) =>
+    apiMethods.get<{ url: string }>('/api/auth/sso/oauth/' + provider),
+  ldapLogin: async (data: { username: string; password: string }) =>
+    apiMethods.post<{ token: string; user: User }>('/api/auth/sso/ldap/login', data),
+  listLinkedAccounts: async () =>
+    apiMethods.get<LinkedAccount[]>('/api/auth/linked-accounts'),
+  unlinkAccount: async (id: string) =>
+    apiMethods.delete('/api/auth/linked-accounts/' + id),
 };

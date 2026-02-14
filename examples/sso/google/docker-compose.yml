@@ -1,7 +1,7 @@
 # DocShare with Google OAuth2
 #
-# Usage:
-#   docker-compose -f docker-compose.yml -f docker-compose.sso-google.yml up -d
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/sso/google/docker-compose.yml up -d
 #
 # Setup:
 # 1. Go to Google Cloud Console https://console.cloud.google.com
