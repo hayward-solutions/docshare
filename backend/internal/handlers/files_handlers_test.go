@@ -52,6 +52,40 @@ func TestFilesEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /api/files/ includes pagination metadata", func(t *testing.T) {
+		resp := performRequest(t, env.app, http.MethodGet, "/api/files/", nil, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusOK)
+
+		pagination, ok := body["pagination"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected pagination in response")
+		}
+		if pagination["page"] == nil {
+			t.Fatalf("expected page in pagination")
+		}
+		if pagination["total"] == nil {
+			t.Fatalf("expected total in pagination")
+		}
+	})
+
+	t.Run("GET /api/files/ with pagination params", func(t *testing.T) {
+		resp := performRequest(t, env.app, http.MethodGet, "/api/files/?page=1&limit=1", nil, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusOK)
+
+		pagination, ok := body["pagination"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected pagination in response")
+		}
+		if pagination["page"].(float64) != 1 {
+			t.Fatalf("expected page=1, got %v", pagination["page"])
+		}
+		if pagination["limit"].(float64) != 1 {
+			t.Fatalf("expected limit=1, got %v", pagination["limit"])
+		}
+	})
+
 	t.Run("GET /api/files/:id returns file", func(t *testing.T) {
 		resp := performRequest(t, env.app, http.MethodGet, "/api/files/"+rootDirID, nil, authHeaders(ownerToken))
 		assertStatus(t, resp, http.StatusOK)
@@ -81,6 +115,20 @@ func TestFilesEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /api/files/:id/children includes pagination metadata", func(t *testing.T) {
+		resp := performRequest(t, env.app, http.MethodGet, "/api/files/"+rootDirID+"/children", nil, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusOK)
+
+		pagination, ok := body["pagination"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected pagination in children response")
+		}
+		if pagination["total"] == nil {
+			t.Fatalf("expected total in pagination")
+		}
+	})
+
 	t.Run("GET /api/files/search query too short", func(t *testing.T) {
 		resp := performRequest(t, env.app, http.MethodGet, "/api/files/search?q=a", nil, authHeaders(ownerToken))
 		body := decodeJSONMap(t, resp)
@@ -95,6 +143,20 @@ func TestFilesEndpoints(t *testing.T) {
 		data := body["data"].([]any)
 		if len(data) == 0 {
 			t.Fatalf("expected search results")
+		}
+	})
+
+	t.Run("GET /api/files/search includes pagination metadata", func(t *testing.T) {
+		resp := performRequest(t, env.app, http.MethodGet, "/api/files/search?q=Sub", nil, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusOK)
+
+		pagination, ok := body["pagination"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected pagination in search response")
+		}
+		if pagination["total"] == nil {
+			t.Fatalf("expected total in pagination")
 		}
 	})
 

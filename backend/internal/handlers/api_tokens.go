@@ -132,14 +132,21 @@ func (h *APITokenHandler) List(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 
+	p := utils.ParsePagination(c)
+
+	baseQuery := h.DB.Model(&models.APIToken{}).Where("user_id = ?", currentUser.ID)
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to count API tokens")
+	}
+
 	var tokens []models.APIToken
-	if err := h.DB.Where("user_id = ?", currentUser.ID).
-		Order("created_at DESC").
-		Find(&tokens).Error; err != nil {
+	if err := utils.ApplyPagination(baseQuery.Order("created_at DESC"), p).Find(&tokens).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to list API tokens")
 	}
 
-	return utils.Success(c, fiber.StatusOK, tokens)
+	return utils.Paginated(c, tokens, p.Page, p.Limit, total)
 }
 
 func (h *APITokenHandler) Revoke(c *fiber.Ctx) error {

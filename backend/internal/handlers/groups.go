@@ -91,18 +91,25 @@ func (h *GroupsHandler) List(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
 	}
 
-	var groups []models.Group
-	if err := h.DB.
+	p := utils.ParsePagination(c)
+
+	baseQuery := h.DB.
 		Model(&models.Group{}).
 		Preload("Memberships").
 		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id").
-		Where("group_memberships.user_id = ?", currentUser.ID).
-		Order("groups.created_at DESC").
-		Find(&groups).Error; err != nil {
+		Where("group_memberships.user_id = ?", currentUser.ID)
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed counting groups")
+	}
+
+	var groups []models.Group
+	if err := utils.ApplyPagination(baseQuery.Order("groups.created_at DESC"), p).Find(&groups).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed listing groups")
 	}
 
-	return utils.Success(c, fiber.StatusOK, groups)
+	return utils.Paginated(c, groups, p.Page, p.Limit, total)
 }
 
 func (h *GroupsHandler) Get(c *fiber.Ctx) error {

@@ -423,6 +423,10 @@ List all API tokens for the authenticated user.
 
 **Authentication:** Required
 
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
+
 **Success Response (200):**
 ```json
 {
@@ -436,7 +440,13 @@ List all API tokens for the authenticated user.
       "expiresAt": "2024-05-11T10:30:00Z",
       "createdAt": "2024-02-11T10:30:00Z"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 3,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -862,6 +872,8 @@ List files and folders in the root directory.
 **Query Parameters:**
 - `sort` (optional): Sort field (name, createdAt, size)
 - `order` (optional): Sort order (asc, desc)
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
 
 **Success Response (200):**
 ```json
@@ -892,7 +904,13 @@ List files and folders in the root directory.
       "createdAt": "2024-02-11T11:00:00Z",
       "updatedAt": "2024-02-11T11:00:00Z"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 45,
+    "totalPages": 3
+  }
 }
 ```
 
@@ -913,6 +931,8 @@ List files and folders within a specific folder.
 **Query Parameters:**
 - `sort` (optional): Sort field (name, createdAt, size)
 - `order` (optional): Sort order (asc, desc)
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
 
 **Success Response (200):**
 ```json
@@ -931,7 +951,13 @@ List files and folders within a specific folder.
       "createdAt": "2024-02-11T11:10:00Z",
       "updatedAt": "2024-02-11T11:10:00Z"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 15,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -1383,6 +1409,10 @@ Get all shares for a specific file.
 
 **Authentication:** Required
 
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
+
 **Success Response (200):**
 ```json
 {
@@ -1403,7 +1433,13 @@ Get all shares for a specific file.
         "lastName": "Johnson"
       }
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -1420,6 +1456,11 @@ Get all files shared with the authenticated user.
 **Endpoint:** `GET /shared`
 
 **Authentication:** Required
+
+**Query Parameters:**
+- `search` (optional): Filter by file name
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
 
 **Success Response (200):**
 ```json
@@ -1452,7 +1493,13 @@ Get all files shared with the authenticated user.
         "lastName": "Doe"
       }
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 12,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -1577,6 +1624,10 @@ List all groups the user is a member of.
 
 **Authentication:** Required
 
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 20, max: 100)
+
 **Success Response (200):**
 ```json
 {
@@ -1590,7 +1641,13 @@ List all groups the user is a member of.
       "memberCount": 5,
       "createdAt": "2024-02-11T13:00:00Z"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 8,
+    "totalPages": 1
+  }
 }
 ```
 
