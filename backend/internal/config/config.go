@@ -13,6 +13,7 @@ type Config struct {
 	Server    ServerConfig
 	Gotenberg GotenbergConfig
 	Audit     AuditConfig
+	Preview   PreviewConfig
 }
 
 type DBConfig struct {
@@ -50,6 +51,12 @@ type AuditConfig struct {
 	ExportInterval time.Duration
 }
 
+type PreviewConfig struct {
+	QueueBufferSize int
+	MaxAttempts     int
+	RetryDelays     []time.Duration
+}
+
 func Load() *Config {
 	return &Config{
 		DB: DBConfig{
@@ -80,6 +87,11 @@ func Load() *Config {
 		},
 		Audit: AuditConfig{
 			ExportInterval: getEnvAsDuration("AUDIT_EXPORT_INTERVAL", 1*time.Hour),
+		},
+		Preview: PreviewConfig{
+			QueueBufferSize: getEnvAsInt("PREVIEW_QUEUE_BUFFER_SIZE", 100),
+			MaxAttempts:     getEnvAsInt("PREVIEW_JOB_MAX_ATTEMPTS", 3),
+			RetryDelays:     []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute},
 		},
 	}
 }

@@ -50,6 +50,7 @@ func migrate(db *gorm.DB) error {
 		&models.APIToken{},
 		&models.DeviceCode{},
 		&models.Transfer{},
+		&models.PreviewJob{},
 	); err != nil {
 		return err
 	}

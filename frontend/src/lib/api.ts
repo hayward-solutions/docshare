@@ -1,4 +1,4 @@
-import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, User } from './types';
+import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, PreviewJob, User } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
@@ -138,4 +138,13 @@ export const userAPI = {
 
 export const versionAPI = {
   get: async () => apiMethods.get<{ version: string; apiVersion: string }>('/api/version'),
+};
+
+export const previewAPI = {
+  convert: async (fileId: string) =>
+    apiMethods.post<{ job: PreviewJob }>('/api/files/' + fileId + '/convert-preview', {}),
+  getStatus: async (fileId: string) =>
+    apiMethods.get<{ job: PreviewJob | null; file: unknown }>('/api/files/' + fileId + '/preview-status'),
+  retry: async (fileId: string) =>
+    apiMethods.post<{ job: PreviewJob }>('/api/files/' + fileId + '/retry-preview', {}),
 };

@@ -24,11 +24,12 @@ type FilesHandler struct {
 	Storage        *storage.MinIOClient
 	Access         *services.AccessService
 	PreviewService *services.PreviewService
+	PreviewQueue   *services.PreviewQueueService
 	Audit          *services.AuditService
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.MinIOClient, access *services.AccessService, preview *services.PreviewService, audit *services.AuditService) *FilesHandler {
-	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, Audit: audit}
+func NewFilesHandler(db *gorm.DB, storageClient *storage.MinIOClient, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService) *FilesHandler {
+	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit}
 }
 
 func (h *FilesHandler) Upload(c *fiber.Ctx) error {
@@ -88,6 +89,14 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".md", ".markdown":
+		contentType = "text/markdown"
+	case ".ts":
+		contentType = "text/typescript"
+	case ".tsx":
+		contentType = "text/tsx"
 	}
 
 	objectName := fmt.Sprintf("%s/%s/%s", currentUser.ID.String(), uuid.New().String(), filename)
@@ -475,9 +484,6 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 	previewToken := c.Query("token")
 
 	if previewToken != "" {
-		if previewtoken.IsUsed(previewToken) {
-			return utils.Error(c, fiber.StatusUnauthorized, "token already used")
-		}
 		tokenFileID, tokenUserID, err := previewtoken.GetMetadata(previewToken)
 		if err == nil && tokenFileID == fileID.String() {
 			var user models.User
@@ -507,11 +513,12 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
-	if previewToken != "" {
-		previewtoken.MarkUsed(previewToken)
+	storagePath := file.StoragePath
+	if file.ThumbnailPath != nil && *file.ThumbnailPath != "" {
+		storagePath = *file.ThumbnailPath
 	}
 
-	obj, err := h.Storage.Download(c.Context(), file.StoragePath)
+	obj, err := h.Storage.Download(c.Context(), storagePath)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed downloading file")
 	}
@@ -585,12 +592,118 @@ func (h *FilesHandler) ConvertPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
-	url, err := h.PreviewService.ConvertToPreview(c.Context(), &file)
+	job, err := h.PreviewQueue.Enqueue(file.ID, &currentUser.ID)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "failed converting preview")
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to enqueue preview job")
 	}
 
-	return utils.Success(c, fiber.StatusOK, fiber.Map{"url": url})
+	return utils.Success(c, fiber.StatusAccepted, fiber.Map{
+		"job": h.jobToResponse(job, &file),
+	})
+}
+
+func (h *FilesHandler) PreviewStatus(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	fileID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid file id")
+	}
+
+	var file models.File
+	if err := h.DB.First(&file, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+	}
+
+	if !h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionView) {
+		return utils.Error(c, fiber.StatusForbidden, "access denied")
+	}
+
+	job, err := h.PreviewQueue.GetJobByFileID(fileID)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to get preview status")
+	}
+
+	if job == nil {
+		return utils.Success(c, fiber.StatusOK, fiber.Map{
+			"job":  nil,
+			"file": file,
+		})
+	}
+
+	return utils.Success(c, fiber.StatusOK, fiber.Map{
+		"job":  h.jobToResponse(job, &file),
+		"file": file,
+	})
+}
+
+func (h *FilesHandler) RetryPreview(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	fileID, err := parseUUID(c.Params("id"))
+	if err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid file id")
+	}
+
+	var file models.File
+	if err := h.DB.First(&file, "id = ?", fileID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "file not found")
+		}
+		return utils.Error(c, fiber.StatusInternalServerError, "failed loading file")
+	}
+
+	if !h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionView) {
+		return utils.Error(c, fiber.StatusForbidden, "access denied")
+	}
+
+	job, err := h.PreviewQueue.Retry(fileID, &currentUser.ID)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to retry preview job")
+	}
+
+	return utils.Success(c, fiber.StatusAccepted, fiber.Map{
+		"job": h.jobToResponse(job, &file),
+	})
+}
+
+func (h *FilesHandler) jobToResponse(job *models.PreviewJob, file *models.File) fiber.Map {
+	response := fiber.Map{
+		"id":          job.ID,
+		"fileID":      job.FileID,
+		"status":      job.Status,
+		"attempts":    job.Attempts,
+		"maxAttempts": job.MaxAttempts,
+		"createdAt":   job.CreatedAt,
+		"updatedAt":   job.UpdatedAt,
+	}
+
+	if job.LastError != nil {
+		response["lastError"] = *job.LastError
+	}
+	if job.StartedAt != nil {
+		response["startedAt"] = *job.StartedAt
+	}
+	if job.CompletedAt != nil {
+		response["completedAt"] = *job.CompletedAt
+	}
+	if job.NextRetryAt != nil {
+		response["nextRetryAt"] = *job.NextRetryAt
+	}
+	if file != nil && file.ThumbnailPath != nil {
+		response["thumbnailPath"] = *file.ThumbnailPath
+	}
+
+	return response
 }
 
 func (h *FilesHandler) Search(c *fiber.Ctx) error {

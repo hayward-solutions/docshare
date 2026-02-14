@@ -8,25 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
-
-	"github.com/docshare/backend/pkg/logger"
 )
 
 const defaultTokenExpiry = 15 * time.Minute
 
-var (
-	secret []byte
-	store  = &tokenStore{
-		tokens: make(map[string]time.Time),
-	}
-)
-
-type tokenStore struct {
-	mu     sync.RWMutex
-	tokens map[string]time.Time
-}
+var secret []byte
 
 type PreviewToken struct {
 	FileID    string `json:"fid"`
@@ -39,14 +26,7 @@ func SetSecret(s string) {
 	secret = []byte(s)
 }
 
-func StartCleanup(interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for range ticker.C {
-			cleanup()
-		}
-	}()
+func StartCleanup(_ time.Duration) {
 }
 
 func Generate(fileID, userID string) string {
@@ -104,35 +84,6 @@ func GetMetadata(tokenString string) (fileID, userID string, err error) {
 		return "", "", err
 	}
 	return tok.FileID, tok.UserID, nil
-}
-
-func MarkUsed(tokenString string) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	store.tokens[tokenString] = time.Now()
-}
-
-func IsUsed(tokenString string) bool {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
-	_, exists := store.tokens[tokenString]
-	logger.Info("token_is_used_check", map[string]interface{}{
-		"token_last_20": tokenString[max(0, len(tokenString)-20):],
-		"exists":        exists,
-		"tokens_count":  len(store.tokens),
-	})
-	return exists
-}
-
-func cleanup() {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	threshold := time.Now().Add(-defaultTokenExpiry)
-	for key, usedAt := range store.tokens {
-		if usedAt.Before(threshold) {
-			delete(store.tokens, key)
-		}
-	}
 }
 
 func sign(data []byte) string {
