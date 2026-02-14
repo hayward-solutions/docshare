@@ -67,6 +67,7 @@ func main() {
 	apiTokenHandler := handlers.NewAPITokenHandler(db, auditService)
 	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService)
 	transfersHandler := handlers.NewTransfersHandler(db, 300)
+	ssoHandler := handlers.NewSSOHandler(db, cfg)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -89,6 +90,19 @@ func main() {
 	authRoutes.Get("/me", authMiddleware.RequireAuth, authHandler.Me)
 	authRoutes.Put("/me", authMiddleware.RequireAuth, authHandler.UpdateMe)
 	authRoutes.Put("/password", authMiddleware.RequireAuth, authHandler.ChangePassword)
+
+	ssoRoutes := api.Group("/auth/sso")
+	ssoRoutes.Get("/providers", ssoHandler.ListProviders)
+	ssoRoutes.Get("/oauth/:provider", ssoHandler.GetLoginRedirect)
+	ssoRoutes.Get("/oauth/:provider/callback", ssoHandler.HandleOAuthCallback)
+	ssoRoutes.Post("/ldap/login", ssoHandler.HandleLDAPLogin)
+	ssoRoutes.Get("/saml/metadata", ssoHandler.HandleSAMLMetadata)
+	ssoRoutes.Post("/saml/acs", ssoHandler.HandleSAMLACS)
+
+	linkedAccountsRoutes := api.Group("/auth/linked-accounts", authMiddleware.RequireAuth)
+	linkedAccountsRoutes.Get("/", ssoHandler.GetLinkedAccounts)
+	linkedAccountsRoutes.Delete("/:id", ssoHandler.UnlinkAccount)
+	linkedAccountsRoutes.Post("/link", ssoHandler.LinkAccount)
 
 	api.Get("/users/search", authMiddleware.RequireAuth, usersHandler.Search)
 

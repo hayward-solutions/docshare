@@ -51,6 +51,8 @@ func migrate(db *gorm.DB) error {
 		&models.DeviceCode{},
 		&models.Transfer{},
 		&models.PreviewJob{},
+		&models.SSOProvider{},
+		&models.LinkedAccount{},
 	); err != nil {
 		return err
 	}

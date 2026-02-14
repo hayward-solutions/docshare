@@ -1,0 +1,98 @@
+# SSO-enabled Helm values for DocShare
+#
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare \
+#     -f values-sso.yaml
+#
+# This file configures SSO with Google, GitHub, OIDC (Keycloak/Authentik), SAML, and LDAP
+
+backend:
+  replicaCount: 2
+  env:
+    jwtSecret: "generate-with-openssl-rand-hex-32"
+    nextPublicApiUrl: "https://docshare.example.com"
+    
+    # SSO General Settings
+    ssoAutoRegister: "true"
+    ssoDefaultRole: "user"
+    
+    # Google OAuth2
+    oauthGoogleEnabled: "true"
+    oauthGoogleClientId: "${GOOGLE_CLIENT_ID}"
+    oauthGoogleClientSecret: "${GOOGLE_CLIENT_SECRET}"
+    oauthGoogleRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/google/callback"
+    oauthGoogleScopes: "openid,email,profile"
+    
+    # GitHub OAuth2
+    oauthGithubEnabled: "true"
+    oauthGithubClientId: "${GITHUB_CLIENT_ID}"
+    oauthGithubClientSecret: "${GITHUB_CLIENT_SECRET}"
+    oauthGithubRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/github/callback"
+    oauthGithubScopes: "read:user,user:email"
+    
+    # OIDC (Keycloak/Authentik)
+    oauthOidcEnabled: "true"
+    oauthOidcClientId: "docshare"
+    oauthOidcClientSecret: "${OIDC_CLIENT_SECRET}"
+    oauthOidcIssuerUrl: "https://keycloak.example.com/realms/docshare"
+    oauthOidcRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/oidc/callback"
+    oauthOidcScopes: "openid,profile,email"
+    
+    # SAML (Okta, Azure AD, etc.)
+    samlEnabled: "false"
+    samlIdpMetadataUrl: "https://idp.example.com/metadata.xml"
+    samlSpEntityId: "https://docshare.example.com"
+    samlSpAcsUrl: "https://docshare.example.com/api/auth/sso/saml/acs"
+    
+    # LDAP/Active Directory
+    ldapEnabled: "false"
+    ldapUrl: "ldap://ldap.example.com:389"
+    ldapBindDn: "cn=admin,dc=example,dc=com"
+    ldapBindPassword: "${LDAP_PASSWORD}"
+    ldapSearchBase: "dc=example,dc=com"
+    ldapUserFilter: "(uid=%s)"
+    ldapEmailField: "mail"
+    ldapNameFields: "cn"
+
+frontend:
+  replicaCount: 2
+  env:
+    nextPublicApiUrl: "https://docshare.example.com"
+    apiUrl: "http://docshare-backend:8080"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  hosts:
+    - host: docshare.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: docshare-tls
+      hosts:
+        - docshare.example.com
+
+postgresql:
+  auth:
+    password: "generate-a-strong-password"
+
+minio:
+  auth:
+    rootPassword: "generate-a-strong-password"
+
+existingSecret:
+  name: docshare-sso-secrets
+  data:
+    google-client-secret: "${GOOGLE_CLIENT_SECRET}"
+    github-client-secret: "${GITHUB_CLIENT_SECRET}"
+    oidc-client-secret: "${OIDC_CLIENT_SECRET}"
+    ldap-password: "${LDAP_PASSWORD}"
