@@ -76,12 +76,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	accessService := services.NewAccessService(db)
 	previewService := services.NewPreviewService(db, nil, config.GotenbergConfig{})
+	previewQueueService := services.NewPreviewQueueService(db, previewService, config.PreviewConfig{
+		QueueBufferSize: 10,
+		MaxAttempts:     3,
+		RetryDelays:     []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute},
+	})
 	auditService := services.NewAuditService(db, nil)
 
 	authHandler := NewAuthHandler(db, auditService)
 	usersHandler := NewUsersHandler(db, auditService)
 	groupsHandler := NewGroupsHandler(db, auditService)
-	filesHandler := NewFilesHandler(db, nil, accessService, previewService, auditService)
+	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService)
 	sharesHandler := NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := NewActivitiesHandler(db)
 	auditHandler := NewAuditHandler(db)

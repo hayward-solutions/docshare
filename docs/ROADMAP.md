@@ -14,7 +14,7 @@ This document outlines the planned features and improvements for DocShare.
 
 Near-term priorities for the next few releases:
 
-1. **Background preview generation** — Move document preview generation to a job queue to improve upload response times
+1. ~~**Background preview generation** — Move document preview generation to a job queue to improve upload response times~~ ✅ Completed
 2. **Pagination** — Add to all list endpoints for better performance with large datasets
 3. **Rate limiting** — Prevent API abuse
 

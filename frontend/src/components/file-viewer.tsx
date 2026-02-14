@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { File } from '@/lib/types';
-import { apiMethods } from '@/lib/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { File, PreviewJob } from '@/lib/types';
+import { apiMethods, previewAPI } from '@/lib/api';
 import { downloadFile } from '@/lib/download';
 import { Button } from '@/components/ui/button';
-import { Download, AlertCircle, Loader2 } from 'lucide-react';
+import { Download, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -35,7 +35,85 @@ export function FileViewer({ file }: FileViewerProps) {
   const [content, setContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewJob, setPreviewJob] = useState<PreviewJob | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
   const blobUrlRef = useRef<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  const pollPreviewStatus = useCallback(async () => {
+    if (!isOfficeDoc(file.mimeType)) return;
+
+    try {
+      const res = await previewAPI.getStatus(file.id);
+      if (res.success && res.data.job) {
+        const job = res.data.job as PreviewJob;
+        setPreviewJob(job);
+
+        if (job.status === 'completed' && job.thumbnailPath) {
+          const { blobUrl: url } = await fetchPreviewBlob(file.id);
+          setBlobUrl(url);
+          setIsLoading(false);
+          setIsPolling(false);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        } else if (job.status === 'failed') {
+          setError(job.lastError || 'Preview generation failed');
+          setIsLoading(false);
+          setIsPolling(false);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Preview status error:', err);
+    }
+  }, [file.id, file.mimeType]);
+
+  const startPolling = useCallback(() => {
+    if (pollingRef.current) return;
+    setIsPolling(true);
+    pollingRef.current = setInterval(pollPreviewStatus, 3000);
+  }, [pollPreviewStatus]);
+
+  const handleGeneratePreview = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await previewAPI.convert(file.id);
+      if (res.success && res.data.job) {
+        setPreviewJob(res.data.job as PreviewJob);
+        startPolling();
+      } else {
+        setError('Failed to start preview generation');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      setError('Failed to start preview generation');
+      setIsLoading(false);
+    }
+  };
+
+  const handleRetryPreview = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await previewAPI.retry(file.id);
+      if (res.success && res.data.job) {
+        setPreviewJob(res.data.job as PreviewJob);
+        startPolling();
+      } else {
+        setError('Failed to retry preview generation');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      setError('Failed to retry preview generation');
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -45,20 +123,52 @@ export function FileViewer({ file }: FileViewerProps) {
       setError(null);
       setBlobUrl(null);
       setContent(null);
+      setPreviewJob(null);
 
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
 
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+
       try {
         if (isOfficeDoc(file.mimeType)) {
-          const res = await apiMethods.get<{ url: string }>(`/api/files/${file.id}/convert-preview`);
+          const statusRes = await previewAPI.getStatus(file.id);
           if (cancelled) return;
-          if (res.success) {
-            setBlobUrl(res.data.url);
+
+          if (statusRes.success && statusRes.data.job) {
+            const job = statusRes.data.job as PreviewJob;
+            setPreviewJob(job);
+
+            if (job.status === 'completed' && job.thumbnailPath) {
+              const { blobUrl: url } = await fetchPreviewBlob(file.id);
+              if (cancelled) { URL.revokeObjectURL(url); return; }
+              blobUrlRef.current = url;
+              setBlobUrl(url);
+              setIsLoading(false);
+              return;
+            } else if (job.status === 'processing' || job.status === 'pending') {
+              startPolling();
+              return;
+            } else if (job.status === 'failed') {
+              setError(job.lastError || 'Preview generation failed');
+              setIsLoading(false);
+              return;
+            }
+          }
+
+          const res = await previewAPI.convert(file.id);
+          if (cancelled) return;
+          if (res.success && res.data.job) {
+            setPreviewJob(res.data.job as PreviewJob);
+            startPolling();
           } else {
             setError('Failed to generate preview');
+            setIsLoading(false);
           }
         } else if (isTextOrCode(file.mimeType)) {
           const { blobUrl: url } = await fetchPreviewBlob(file.id);
@@ -92,8 +202,12 @@ export function FileViewer({ file }: FileViewerProps) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     };
-  }, [file.id, file.mimeType]);
+  }, [file.id, file.mimeType, startPolling]);
 
   const handleDownload = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : undefined;
@@ -105,6 +219,21 @@ export function FileViewer({ file }: FileViewerProps) {
   };
 
   if (isLoading) {
+    if (isOfficeDoc(file.mimeType) && (previewJob?.status === 'pending' || previewJob?.status === 'processing')) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-slate-50">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-slate-600">
+            {previewJob?.status === 'pending' ? 'Preview queued...' : 'Generating preview...'}
+          </p>
+          {previewJob && (
+            <p className="text-sm text-slate-400">
+              Attempt {previewJob.attempts} of {previewJob.maxAttempts}
+            </p>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -117,10 +246,24 @@ export function FileViewer({ file }: FileViewerProps) {
       <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-slate-50">
         <AlertCircle className="h-12 w-12 text-slate-400" />
         <p className="text-slate-600">{error}</p>
-        <Button onClick={handleDownload}>
-          <Download className="mr-2 h-4 w-4" />
-          Download File
-        </Button>
+        <div className="flex gap-2">
+          {isOfficeDoc(file.mimeType) && previewJob?.status === 'failed' && (
+            <Button onClick={handleRetryPreview}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          )}
+          {isOfficeDoc(file.mimeType) && !previewJob && (
+            <Button onClick={handleGeneratePreview}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Generate Preview
+            </Button>
+          )}
+          <Button onClick={handleDownload} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            Download File
+          </Button>
+        </div>
       </div>
     );
   }
@@ -206,6 +349,7 @@ function isTextOrCode(mimeType: string) {
     mimeType === 'application/json' ||
     mimeType === 'application/xml' ||
     mimeType === 'application/javascript' ||
-    mimeType === 'application/typescript'
+    mimeType === 'application/typescript' ||
+    mimeType === 'text/markdown'
   );
 }

@@ -28,7 +28,6 @@ func main() {
 	cfg := config.Load()
 	utils.ConfigureJWT(cfg.JWT.Secret, cfg.JWT.ExpirationHours)
 	previewtoken.SetSecret(cfg.JWT.Secret)
-	previewtoken.StartCleanup(5 * time.Minute)
 
 	db, err := database.Connect(cfg.DB)
 	if err != nil {
@@ -54,13 +53,14 @@ func main() {
 
 	accessService := services.NewAccessService(db)
 	previewService := services.NewPreviewService(db, storageClient, cfg.Gotenberg)
+	previewQueueService := services.NewPreviewQueueService(db, previewService, cfg.Preview)
 	auditService := services.NewAuditService(db, storageClient)
 	auditService.StartExporter(cfg.Audit.ExportInterval)
 
 	authHandler := handlers.NewAuthHandler(db, auditService)
 	usersHandler := handlers.NewUsersHandler(db, auditService)
 	groupsHandler := handlers.NewGroupsHandler(db, auditService)
-	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, auditService)
+	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, previewQueueService, auditService)
 	sharesHandler := handlers.NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := handlers.NewActivitiesHandler(db)
 	auditHandler := handlers.NewAuditHandler(db)
@@ -125,6 +125,8 @@ func main() {
 	fileRoutes.Get("/:id/download-url", filesHandler.DownloadURL)
 	fileRoutes.Get("/:id/preview", filesHandler.PreviewURL)
 	fileRoutes.Get("/:id/convert-preview", filesHandler.ConvertPreview)
+	fileRoutes.Get("/:id/preview-status", filesHandler.PreviewStatus)
+	fileRoutes.Post("/:id/retry-preview", filesHandler.RetryPreview)
 	fileRoutes.Get("/:id/path", filesHandler.Path)
 	fileRoutes.Post("/:id/share", sharesHandler.ShareFile)
 	fileRoutes.Get("/:id/shares", sharesHandler.ListFileShares)

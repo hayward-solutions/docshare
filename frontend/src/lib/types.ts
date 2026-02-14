@@ -134,3 +134,20 @@ export interface DeviceCodeVerification {
   expired: boolean;
   expiresAt: string;
 }
+
+export type PreviewJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface PreviewJob {
+  id: string;
+  fileID: string;
+  status: PreviewJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  lastError?: string;
+  nextRetryAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailPath?: string;
+}

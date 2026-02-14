@@ -1105,9 +1105,43 @@ Get a URL for file preview.
 
 ### Convert & Preview Document
 
-Trigger preview generation for Office documents.
+Trigger preview generation for Office documents (async).
 
-**Endpoint:** `GET /files/:id/convert-preview`
+**Endpoint:** `POST /files/:id/convert-preview`
+
+**Authentication:** Required
+
+**Success Response (202 Accepted):**
+```json
+{
+  "success": true,
+  "data": {
+    "job": {
+      "id": "770e8400-e29b-41d4-a716-446655440000",
+      "fileID": "770e8400-e29b-41d4-a716-446655440001",
+      "status": "pending",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T10:30:00Z"
+    }
+  }
+}
+```
+
+**Notes:**
+- Asynchronous operation (processing happens in background)
+- Converts DOCX, XLSX, PPTX to PDF via Gotenberg
+- Use `/files/:id/preview-status` to check job status
+- Use `/files/:id/retry-preview` to retry failed jobs
+
+---
+
+### Get Preview Status
+
+Get the status of a preview generation job.
+
+**Endpoint:** `GET /files/:id/preview-status`
 
 **Authentication:** Required
 
@@ -1116,24 +1150,58 @@ Trigger preview generation for Office documents.
 {
   "success": true,
   "data": {
-    "message": "preview generated successfully",
-    "previewPath": "previews/770e8400-e29b-41d4-a716-446655440003.pdf"
+    "job": {
+      "id": "770e8400-e29b-41d4-a716-446655440000",
+      "fileID": "770e8400-e29b-41d4-a716-446655440001",
+      "status": "completed",
+      "attempts": 1,
+      "maxAttempts": 3,
+      "thumbnailPath": "previews/770e8400-e29b-41d4-a716-446655440003.pdf",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T10:30:05Z",
+      "completedAt": "2024-01-15T10:30:05Z"
+    },
+    "file": { ... }
   }
 }
 ```
 
-**Error Response (400):**
+**Job Status Values:**
+- `pending` - Job queued, waiting for processing
+- `processing` - Currently generating preview
+- `completed` - Preview ready (check `thumbnailPath`)
+- `failed` - Preview generation failed (check `lastError`)
+
+---
+
+### Retry Preview Generation
+
+Retry a failed preview generation job.
+
+**Endpoint:** `POST /files/:id/retry-preview`
+
+**Authentication:** Required
+
+**Success Response (202 Accepted):**
 ```json
 {
-  "success": false,
-  "error": "preview generation not supported for this file type"
+  "success": true,
+  "data": {
+    "job": {
+      "id": "770e8400-e29b-41d4-a716-446655440000",
+      "status": "pending",
+      "attempts": 1,
+      "maxAttempts": 3,
+      ...
+    }
+  }
 }
 ```
 
 **Notes:**
-- Synchronous operation (may take several seconds)
-- Converts DOCX, XLSX, PPTX to PDF via Gotenberg
-- Preview is cached in MinIO
+- Only works when previous job status is `failed`
+- Increments attempt counter
+- Uses exponential backoff for retries
 
 ---
 

@@ -969,18 +969,23 @@ AllowOrigins: "http://localhost:3001,http://127.0.0.1:3001"
 
 ### Preview Generation: Sync or Async?
 
-**Decision**: Synchronous for now (blocking upload response)
+**Decision**: Asynchronous (background job queue) ✅ Implemented
 
-**Pros**:
-- Simpler implementation
-- Preview immediately available
-- Easier error handling
+The preview generation now uses a background job queue with the following characteristics:
 
-**Cons**:
-- Slower upload response
-- Blocks API server thread
+- **Job Queue**: In-memory channel with DB-backed job status tracking
+- **Worker Pattern**: Similar to the audit service - buffered channel + goroutine worker
+- **Retry Logic**: Exponential backoff (30s, 2m, 10m) up to 3 attempts
+- **Startup Recovery**: Pending/failed jobs are re-queued on service restart
 
-**Future**: Move to background job queue (Redis + workers)
+**API Endpoints**:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/files/:id/convert-preview` | POST | Enqueue preview generation (returns 202) |
+| `/api/files/:id/preview-status` | GET | Get job status |
+| `/api/files/:id/retry-preview` | POST | Retry failed job |
+
+**Future**: Could move to Redis/external queue for durability across restarts
 
 ### Token Storage: localStorage or Cookies?
 
@@ -1057,7 +1062,7 @@ CREATE UNIQUE INDEX idx_users_email ON users(email);
 ## Future Improvements
 
 ### Short Term
-1. **Background preview generation**: Move to job queue
+1. ~~**Background preview generation**: Move to job queue~~ ✅ Completed
 2. **Pagination**: Add to all list endpoints
 3. **Search**: Full-text search for file names
 4. **Rate limiting**: Prevent abuse
