@@ -27,6 +27,8 @@ export const useAuth = create<AuthState>((set) => ({
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'Login failed');
       }
     } catch (error) {
       throw error;
@@ -39,6 +41,8 @@ export const useAuth = create<AuthState>((set) => ({
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'LDAP login failed');
       }
     } catch (error) {
       throw error;
@@ -65,6 +69,8 @@ export const useAuth = create<AuthState>((set) => ({
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'Registration failed');
       }
     } catch (error) {
       throw error;
