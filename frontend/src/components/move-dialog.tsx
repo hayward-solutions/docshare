@@ -104,11 +104,11 @@ export function MoveDialog({
   fileId,
   fileIds,
   fileName,
-  isDirectory,
+  isDirectory: _isDirectory,
   currentParentID,
   onMoved,
 }: MoveDialogProps) {
-  const resolvedIds = fileIds ?? (fileId ? [fileId] : []);
+  const resolvedIds = useMemo(() => fileIds ?? (fileId ? [fileId] : []), [fileIds, fileId]);
   const [directories, setDirectories] = useState<DirectoryNode[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedFolderID, setSelectedFolderID] = useState('');
