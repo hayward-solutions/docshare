@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -83,19 +84,19 @@ func TestAccessService_HasAccess(t *testing.T) {
 	}
 
 	t.Run("owner has full access to own files", func(t *testing.T) {
-		if !service.HasAccess(nil, owner.ID, rootFile.ID, models.SharePermissionView) {
+		if !service.HasAccess(context.TODO(), owner.ID, rootFile.ID, models.SharePermissionView) {
 			t.Error("owner should have view access")
 		}
-		if !service.HasAccess(nil, owner.ID, rootFile.ID, models.SharePermissionDownload) {
+		if !service.HasAccess(context.TODO(), owner.ID, rootFile.ID, models.SharePermissionDownload) {
 			t.Error("owner should have download access")
 		}
-		if !service.HasAccess(nil, owner.ID, rootFile.ID, models.SharePermissionEdit) {
+		if !service.HasAccess(context.TODO(), owner.ID, rootFile.ID, models.SharePermissionEdit) {
 			t.Error("owner should have edit access")
 		}
 	})
 
 	t.Run("non-owner without share has no access", func(t *testing.T) {
-		if service.HasAccess(nil, otherUser.ID, rootFile.ID, models.SharePermissionView) {
+		if service.HasAccess(context.TODO(), otherUser.ID, rootFile.ID, models.SharePermissionView) {
 			t.Error("non-owner should not have view access without share")
 		}
 	})

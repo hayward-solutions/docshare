@@ -160,5 +160,7 @@ func (s *SAMLService) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write(metadata)
+	if _, err := w.Write(metadata); err != nil {
+		logger.Error("saml_metadata_write_failed", err, nil)
+	}
 }

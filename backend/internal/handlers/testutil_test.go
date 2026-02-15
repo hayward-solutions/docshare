@@ -303,23 +303,6 @@ func decodeJSONMap(t *testing.T, resp *http.Response) map[string]any {
 	return payload
 }
 
-func decodeJSONArray(t *testing.T, resp *http.Response) []any {
-	t.Helper()
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed reading response body: %v", err)
-	}
-
-	var payload []any
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("failed decoding JSON array response: %v body=%q", err, string(raw))
-	}
-
-	return payload
-}
-
 func assertStatus(t *testing.T, resp *http.Response, expected int) {
 	t.Helper()
 	if resp.StatusCode != expected {

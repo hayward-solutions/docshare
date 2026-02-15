@@ -41,9 +41,15 @@ func TestConfig_Load(t *testing.T) {
 		tempDir := t.TempDir()
 		testConfigPath := filepath.Join(tempDir, dirName, fileName)
 
+		if err := os.MkdirAll(filepath.Dir(testConfigPath), 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
+
 		cfg := &Config{ServerURL: DefaultURL, Token: ""}
 		data, _ := json.MarshalIndent(cfg, "", "  ")
-		os.WriteFile(testConfigPath, data, 0600)
+		if err := os.WriteFile(testConfigPath, data, 0600); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
 		os.Remove(testConfigPath)
 
 		cfg, err := Load()
@@ -63,14 +69,16 @@ func TestConfig_Load(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.MkdirAll(configDir, 0755)
-				os.WriteFile(path, originalData, 0600)
+				_ = os.MkdirAll(configDir, 0755)
+				_ = os.WriteFile(path, originalData, 0600)
 			} else {
-				os.Remove(path)
+				_ = os.Remove(path)
 			}
 		}()
 
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 
 		expectedConfig := &Config{
 			ServerURL: "https://example.com",
@@ -101,14 +109,16 @@ func TestConfig_Load(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.MkdirAll(configDir, 0755)
-				os.WriteFile(path, originalData, 0600)
+				_ = os.MkdirAll(configDir, 0755)
+				_ = os.WriteFile(path, originalData, 0600)
 			} else {
-				os.Remove(path)
+				_ = os.Remove(path)
 			}
 		}()
 
-		os.MkdirAll(configDir, 0755)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Fatalf("failed to create config dir: %v", err)
+		}
 		data := `{"server_url": "", "token": "test-token"}`
 		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 			t.Fatalf("failed to write config: %v", err)
@@ -202,13 +212,15 @@ func TestConfig_Clear(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.MkdirAll(filepath.Dir(path), 0755)
-				os.WriteFile(path, originalData, 0600)
+				_ = os.MkdirAll(filepath.Dir(path), 0755)
+				_ = os.WriteFile(path, originalData, 0600)
 			}
 		}()
 
 		cfg := &Config{ServerURL: DefaultURL, Token: "clear-test"}
-		Save(cfg)
+		if err := Save(cfg); err != nil {
+			t.Fatalf("Save() returned error: %v", err)
+		}
 
 		if err := Clear(); err != nil {
 			t.Fatalf("Clear() returned error: %v", err)
@@ -224,8 +236,8 @@ func TestConfig_Clear(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.MkdirAll(filepath.Dir(path), 0755)
-				os.WriteFile(path, originalData, 0600)
+				_ = os.MkdirAll(filepath.Dir(path), 0755)
+				_ = os.WriteFile(path, originalData, 0600)
 			}
 		}()
 
