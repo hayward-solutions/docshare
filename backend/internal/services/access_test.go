@@ -423,7 +423,7 @@ func TestAccessService_GetPublicShareType(t *testing.T) {
 			t.Fatalf("failed creating private file: %v", err)
 		}
 
-		shareType := service.GetPublicShareType(nil, privateFile.ID)
+		shareType := service.GetPublicShareType(context.TODO(), privateFile.ID)
 		if shareType != nil {
 			t.Errorf("expected nil share type for private file, got %v", shareType)
 		}
@@ -452,7 +452,7 @@ func TestAccessService_GetPublicShareType(t *testing.T) {
 			t.Fatalf("failed creating share: %v", err)
 		}
 
-		shareType := service.GetPublicShareType(nil, publicFile.ID)
+		shareType := service.GetPublicShareType(context.TODO(), publicFile.ID)
 		if shareType == nil {
 			t.Fatal("expected non-nil share type")
 		}
@@ -494,7 +494,7 @@ func TestAccessService_GetPublicShareType(t *testing.T) {
 			t.Fatalf("failed creating anyone share: %v", err)
 		}
 
-		shareType := service.GetPublicShareType(nil, bothFile.ID)
+		shareType := service.GetPublicShareType(context.TODO(), bothFile.ID)
 		if shareType == nil {
 			t.Fatal("expected non-nil share type")
 		}
@@ -505,7 +505,7 @@ func TestAccessService_GetPublicShareType(t *testing.T) {
 
 	t.Run("returns nil for non-existent file", func(t *testing.T) {
 		fakeID := uuid.New()
-		shareType := service.GetPublicShareType(nil, fakeID)
+		shareType := service.GetPublicShareType(context.TODO(), fakeID)
 		if shareType != nil {
 			t.Error("expected nil for non-existent file")
 		}
