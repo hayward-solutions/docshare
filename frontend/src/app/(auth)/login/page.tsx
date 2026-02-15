@@ -22,7 +22,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [providers, setProviders] = useState<SSOProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
-  const { login } = useAuth();
+  const { login, ldapLogin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -54,12 +54,9 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await ssoAPI.ldapLogin({ username: ldapUsername, password: ldapPassword });
-      if (res.success && res.data) {
-        localStorage.setItem('token', res.data.token);
-        toast.success('Logged in successfully');
-        router.push('/files');
-      }
+      await ldapLogin(ldapUsername, ldapPassword);
+      toast.success('Logged in successfully');
+      router.push('/files');
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to login');
     } finally {
@@ -101,14 +98,14 @@ export default function LoginPage() {
   }
 
   const handleSignIn = (e: React.FormEvent) => {
-    if (hasLdap && ldapUsername) {
+    if (hasLdap) {
       handleLdapSubmit(e);
     } else {
       handleSubmit(e);
     }
   };
 
-  const showLdapFields = hasLdap;
+  const showLdap = hasLdap && !hasSaml;
   const showDividerBeforeProviders = !providersLoading && oauthProviders.length > 0;
 
   return (
@@ -117,55 +114,62 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl text-center">Welcome back</CardTitle>
           <CardDescription className="text-center">
-            Sign in to your account
+            {showLdap ? 'Sign in with your corporate account' : 'Sign in to your account'}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <form id="login-form" onSubmit={handleSignIn}>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-
-              {showLdapFields && (
+              {showLdap ? (
                 <>
-                  <Separator />
                   <div className="space-y-2">
-                    <Label htmlFor="ldap-username">Corporate Username</Label>
+                    <Label htmlFor="ldap-username">Username</Label>
                     <Input
                       id="ldap-username"
                       type="text"
                       placeholder="domain\username"
+                      required
                       value={ldapUsername}
                       onChange={(e) => setLdapUsername(e.target.value)}
+                      autoComplete="username"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="ldap-password">Corporate Password</Label>
+                    <Label htmlFor="ldap-password">Password</Label>
                     <Input
                       id="ldap-password"
                       type="password"
+                      required
                       value={ldapPassword}
                       onChange={(e) => setLdapPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="m@example.com"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
                     />
                   </div>
                 </>
@@ -235,12 +239,14 @@ export default function LoginPage() {
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
           </Button>
-          <div className="text-sm text-center text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <Link href="/register" className="text-primary hover:underline">
-              Sign up
-            </Link>
-          </div>
+          {!showLdap && (
+            <div className="text-sm text-center text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link href="/register" className="text-primary hover:underline">
+                Sign up
+              </Link>
+            </div>
+          )}
         </CardFooter>
       </Card>
       <p className="text-center text-xs text-muted-foreground">{APP_VERSION}</p>
