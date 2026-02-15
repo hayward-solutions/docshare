@@ -173,7 +173,9 @@ func runTransferSend(cmd *cobra.Command, args []string) error {
 		time.Sleep(pollInterval)
 	}
 
-	apiClient.Delete("/transfers/"+code, nil)
+	if err := apiClient.Delete("/transfers/"+code, nil); err != nil {
+		return fmt.Errorf("failed to cancel transfer: %w", err)
+	}
 	return fmt.Errorf("transfer timed out after %s", flagTransferTimeout)
 }
 

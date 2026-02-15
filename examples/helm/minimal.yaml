@@ -1,0 +1,30 @@
+# Minimal Helm values for evaluation
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare --create-namespace \
+#     -f minimal.yaml
+
+backend:
+  replicaCount: 1
+  env:
+    jwtSecret: "change-me-in-production"
+    s3Bucket: "docshare"
+
+frontend:
+  replicaCount: 1
+  env:
+    nextPublicApiUrl: "http://localhost:8080"
+
+gotenberg:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    username: docshare
+    password: docshare_secret
+    database: docshare
+
+s3:
+  region: "us-east-1"
+  bucket: "docshare"

@@ -2,18 +2,21 @@
 
 Complete guide for deploying DocShare in development and production environments.
 
+> **Ready-to-use examples**: See [examples/](../examples/) for Docker Compose and Helm configurations for common deployment scenarios.
+
 ## Table of Contents
 
 1. [Quick Start (Development)](#quick-start-development)
 2. [Development Setup](#development-setup)
 3. [Production Deployment](#production-deployment)
-4. [Environment Variables](#environment-variables)
-5. [Database Management](#database-management)
-6. [Backup & Recovery](#backup--recovery)
-7. [Monitoring](#monitoring)
-8. [Security Hardening](#security-hardening)
-9. [Scaling](#scaling)
-10. [Troubleshooting](#troubleshooting)
+4. [AWS S3 Setup](#aws-s3-setup)
+5. [Environment Variables](#environment-variables)
+6. [Database Management](#database-management)
+7. [Backup & Recovery](#backup--recovery)
+8. [Monitoring](#monitoring)
+9. [Security Hardening](#security-hardening)
+10. [Scaling](#scaling)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -43,7 +46,6 @@ docker-compose -f docker-compose.dev.yml up -d
 # Access the application
 # Frontend: http://localhost:3001
 # Backend: http://localhost:8080
-# MinIO Console: http://localhost:9001
 ```
 
 ### Production
@@ -55,15 +57,16 @@ docker-compose up -d
 # Access the application
 # Frontend: http://localhost:3001
 # Backend: http://localhost:8080
-# MinIO Console: http://localhost:9001
 ```
 
 That's it! The application is now running with:
 - PostgreSQL database
-- MinIO object storage
+- AWS S3 object storage
 - Gotenberg document converter
 - Backend API server
 - Frontend web application
+
+**Note:** You must have an AWS S3 bucket configured before starting the application. See the [AWS S3 Setup](#aws-s3-setup) section for details.
 
 ### First-Time Setup
 
@@ -71,11 +74,6 @@ That's it! The application is now running with:
    - Navigate to http://localhost:3001/register
    - Create an account
    - First user is automatically assigned admin role
-
-2. **Access MinIO Console (optional)**
-   - Navigate to http://localhost:9001
-   - Login: `docshare` / `docshare_secret`
-   - Browse uploaded files in the `docshare` bucket
 
 ---
 
@@ -91,7 +89,7 @@ That's it! The application is now running with:
 - Go 1.24+
 - Node.js 22+
 - PostgreSQL 16+
-- MinIO server
+- AWS account with S3 bucket
 
 ### Option 1: Full Docker Development
 
@@ -123,7 +121,7 @@ docker-compose -f docker-compose.dev.yml up -d --build
 
 ```bash
 # Start dependencies only
-docker-compose up -d postgres minio minio-init gotenberg
+docker-compose up -d postgres gotenberg
 
 # Set environment variables
 export DB_HOST=localhost
@@ -132,12 +130,10 @@ export DB_USER=docshare
 export DB_PASSWORD=docshare_secret
 export DB_NAME=docshare
 export DB_SSLMODE=disable
-export MINIO_ENDPOINT=localhost:9000
-export MINIO_PUBLIC_ENDPOINT=localhost:9000
-export MINIO_ACCESS_KEY=docshare
-export MINIO_SECRET_KEY=docshare_secret
-export MINIO_BUCKET=docshare
-export MINIO_USE_SSL=false
+export S3_REGION=us-east-1
+export S3_BUCKET=docshare
+export S3_ACCESS_KEY=<your-aws-access-key>
+export S3_SECRET_KEY=<your-aws-secret-key>
 export JWT_SECRET=dev-secret-change-in-production
 export GOTENBERG_URL=http://localhost:3000
 export SERVER_PORT=8080
@@ -151,7 +147,7 @@ go run cmd/server/main.go
 
 ```bash
 # Start backend services
-docker-compose up -d postgres minio backend gotenberg
+docker-compose up -d postgres backend gotenberg
 
 # Set environment variables
 export NEXT_PUBLIC_API_URL=http://localhost:8080
@@ -186,22 +182,6 @@ sudo systemctl start postgresql
 createdb docshare
 ```
 
-**MinIO:**
-```bash
-# macOS
-brew install minio
-minio server /data --console-address ":9001"
-
-# Linux (binary)
-wget https://dl.min.io/server/minio/release/linux-amd64/minio
-chmod +x minio
-./minio server /data --console-address ":9001"
-
-# Create bucket
-mc alias set local http://localhost:9000 minioadmin minioadmin
-mc mb local/docshare
-```
-
 **Gotenberg:**
 ```bash
 # Use Docker for Gotenberg (recommended)
@@ -222,30 +202,30 @@ Follow the same environment variable setup as Option 2, then run backend and fro
 ┌─────────────────────────────────────────────────────────┐
 │                     Internet                            │
 └──────────────────────┬──────────────────────────────────┘
-                       │
-                       │ HTTPS (443)
-                       │
+                        │
+                        │ HTTPS (443)
+                        │
 ┌──────────────────────▼──────────────────────────────────┐
 │              Reverse Proxy (Nginx/Traefik)              │
 │  - TLS Termination                                      │
 │  - Rate Limiting                                        │
 │  - Static Asset Caching                                 │
 └────────┬──────────────────────────┬─────────────────────┘
-         │                          │
-         │ HTTP (3001)              │ HTTP (8080)
-         │                          │
+          │                          │
+          │ HTTP (3001)              │ HTTP (8080)
+          │                          │
 ┌────────▼────────┐       ┌─────────▼────────┐
 │   Frontend      │       │     Backend      │
 │   Container     │       │    Container     │
 │   (Next.js)     │       │      (Go)        │
 └─────────────────┘       └─────────┬────────┘
                                     │
-                   ┌────────────────┼──────────────┐
-                   │                │              │
-           ┌───────▼────────┐ ┌─────▼─────┐ ┌──────▼──────┐
-           │   PostgreSQL   │ │   MinIO   │ │  Gotenberg  │
-           │  (Primary DB)  │ │ (Storage) │ │  (Convert)  │
-           └────────────────┘ └───────────┘ └─────────────┘
+                    ┌────────────────┼──────────────┐
+                    │                │              │
+            ┌───────▼────────┐ ┌─────▼─────┐ ┌──────▼──────┐
+            │   PostgreSQL   │ │  AWS S3   │ │  Gotenberg  │
+            │  (Primary DB)  │ │ (Storage) │ │  (Convert)  │
+            └────────────────┘ └───────────┘ └─────────────┘
 ```
 
 ### Deployment Options
@@ -280,32 +260,28 @@ Follow the same environment variable setup as Option 2, then run backend and fro
    ```
 
 3. **Update docker-compose.yml for production**
-   ```yaml
-   # docker-compose.prod.yml
-   services:
-     postgres:
-       restart: always
-       environment:
-         POSTGRES_PASSWORD: ${DB_PASSWORD}  # Use strong password
-   
-     minio:
-       restart: always
-       environment:
-         MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}  # Use strong password
-   
-     backend:
-       restart: always
-       environment:
-         JWT_SECRET: ${JWT_SECRET}  # Use long random string (32+ chars)
-         DB_PASSWORD: ${DB_PASSWORD}
-         MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-   
-     frontend:
-       restart: always
-       environment:
-         NEXT_PUBLIC_API_URL: https://your-domain.com
-         API_URL: http://backend:8080
-   ```
+    ```yaml
+    # docker-compose.prod.yml
+    services:
+      postgres:
+        restart: always
+        environment:
+          POSTGRES_PASSWORD: ${DB_PASSWORD}  # Use strong password
+    
+      backend:
+        restart: always
+        environment:
+          JWT_SECRET: ${JWT_SECRET}  # Use long random string (32+ chars)
+          DB_PASSWORD: ${DB_PASSWORD}
+          S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+          S3_SECRET_KEY: ${S3_SECRET_KEY}
+    
+      frontend:
+        restart: always
+        environment:
+          NEXT_PUBLIC_API_URL: https://your-domain.com
+          API_URL: http://backend:8080
+    ```
 
 4. **Setup reverse proxy (Nginx)**
    ```nginx
@@ -386,7 +362,7 @@ helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 
 The chart includes:
 - Deployments for backend, frontend, and Gotenberg
-- Bundled PostgreSQL and MinIO via Bitnami subcharts (or bring your own)
+- Bundled PostgreSQL via Bitnami subchart (or bring your own)
 - Ingress with TLS support
 - Configurable replicas, resources, and environment
 - Secret management (auto-generated or existing secrets)
@@ -406,6 +382,130 @@ See the [Helm Chart documentation](HELM.md) for the full configuration reference
 
 ---
 
+## AWS S3 Setup
+
+DocShare uses AWS S3 for object storage. This section covers the required setup.
+
+### Bucket Creation
+
+1. **Create an S3 bucket:**
+   ```bash
+   aws s3 mb s3://docshare-prod --region us-east-1
+   ```
+
+2. **Configure bucket for security:**
+   ```bash
+   # Block public access (recommended)
+   aws s3api put-public-access-block \
+     --bucket docshare-prod \
+     --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+   
+   # Enable versioning (optional, for recovery)
+   aws s3api put-bucket-versioning \
+     --bucket docshare-prod \
+     --versioning-configuration Status=Enabled
+   
+   # Enable encryption
+   aws s3api put-bucket-encryption \
+     --bucket docshare-prod \
+     --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+   ```
+
+3. **Configure lifecycle policy (optional):**
+   ```json
+   {
+     "Rules": [
+       {
+         "ID": "DeleteOldVersions",
+         "Status": "Enabled",
+         "NoncurrentVersionExpiration": {
+           "NoncurrentDays": 30
+         }
+       }
+     ]
+   }
+   ```
+   ```bash
+   aws s3api put-bucket-lifecycle-configuration \
+     --bucket docshare-prod \
+     --lifecycle-configuration file://lifecycle.json
+   ```
+
+### IAM User Authentication (Development/Standalone)
+
+For non-EKS deployments, use IAM user credentials:
+
+1. **Create IAM user:**
+   ```bash
+   aws iam create-user --user-name docshare-app
+   ```
+
+2. **Create access key:**
+   ```bash
+   aws iam create-access-key --user-name docshare-app
+   ```
+
+3. **Attach policy:**
+   ```bash
+   aws iam attach-user-policy \
+     --user-name docshare-app \
+     --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
+   ```
+
+### IAM Role Authentication (EKS/Production)
+
+For EKS deployments, use IAM roles for service accounts (IRSA):
+
+1. **Create IAM OIDC provider (if not exists):**
+   ```bash
+   eksctl utils associate-iam-oidc-provider --cluster your-cluster --approve
+   ```
+
+2. **Create IAM policy:**
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "DocShareS3Access",
+         "Effect": "Allow",
+         "Action": [
+           "s3:PutObject",
+           "s3:GetObject",
+           "s3:DeleteObject",
+           "s3:ListBucket",
+           "s3:GetBucketLocation"
+         ],
+         "Resource": [
+           "arn:aws:s3:::docshare-prod",
+           "arn:aws:s3:::docshare-prod/*"
+         ]
+       }
+     ]
+   }
+   ```
+   ```bash
+   aws iam create-policy \
+     --policy-name DocShareS3Access \
+     --policy-document file://s3-policy.json
+   ```
+
+3. **Create IAM role for service account:**
+   ```bash
+   eksctl create iamserviceaccount \
+     --name docshare-backend \
+     --namespace docshare \
+     --cluster your-cluster \
+     --attach-policy-arn arn:aws:iam::<account-id>:policy/DocShareS3Access \
+     --approve \
+     --override-existing-serviceaccounts
+   ```
+
+4. **Configure environment (no access keys needed):**
+   When using IAM roles, leave `S3_ACCESS_KEY` and `S3_SECRET_KEY` empty or unset. The SDK will automatically use the IAM role.
+
+---
+
 ## Environment Variables
 
 ### Backend Environment Variables
@@ -418,17 +518,18 @@ See the [Helm Chart documentation](HELM.md) for the full configuration reference
 | `DB_PASSWORD`           | Yes      | `docshare_secret`         | PostgreSQL password                                                                  |
 | `DB_NAME`               | Yes      | `docshare`                | PostgreSQL database name                                                             |
 | `DB_SSLMODE`            | Yes      | `disable`                 | PostgreSQL SSL mode (`disable`, `require`, `verify-full`)                            |
-| `MINIO_ENDPOINT`        | Yes      | `localhost:9000`          | MinIO endpoint (internal)                                                            |
-| `MINIO_PUBLIC_ENDPOINT` | No       | Same as MINIO_ENDPOINT    | MinIO endpoint (public, for presigned URLs)                                          |
-| `MINIO_ACCESS_KEY`      | Yes      | `docshare`                | MinIO access key                                                                     |
-| `MINIO_SECRET_KEY`      | Yes      | `docshare_secret`         | MinIO secret key                                                                     |
-| `MINIO_BUCKET`          | Yes      | `docshare`                | MinIO bucket name                                                                    |
-| `MINIO_USE_SSL`         | Yes      | `false`                   | Use SSL for MinIO connection                                                         |
+| `S3_REGION`             | Yes      | `us-east-1`               | AWS region for S3 bucket                                                             |
+| `S3_ENDPOINT`           | No       | Auto-derived from region  | S3 endpoint (internal), defaults to s3.$REGION.amazonaws.com                        |
+| `S3_PUBLIC_ENDPOINT`    | No       | Same as S3_ENDPOINT       | S3 endpoint (public, for presigned URLs)                                             |
+| `S3_ACCESS_KEY`         | No       | (empty)                   | AWS access key (empty = use IAM role)                                                |
+| `S3_SECRET_KEY`         | No       | (empty)                   | AWS secret key (empty = use IAM role)                                                |
+| `S3_BUCKET`             | Yes      | `docshare`                | S3 bucket name                                                                       |
+| `S3_USE_SSL`            | Yes      | `true`                    | Use SSL for S3 connection                                                            |
 | `JWT_SECRET`            | Yes      | `change-me-in-production` | JWT signing secret (32+ characters)                                                  |
 | `JWT_EXPIRATION_HOURS`  | No       | `24`                      | JWT token lifetime in hours                                                          |
 | `GOTENBERG_URL`         | Yes      | `http://localhost:3000`   | Gotenberg service URL                                                                |
 | `SERVER_PORT`           | No       | `8080`                    | Backend server port                                                                  |
-| `AUDIT_EXPORT_INTERVAL` | No       | `1h`                      | Interval for exporting audit logs to S3/MinIO (Go duration format, e.g. `30m`, `2h`) |
+| `AUDIT_EXPORT_INTERVAL` | No       | `1h`                      | Interval for exporting audit logs to S3 (Go duration format, e.g. `30m`, `2h`)       |
 
 ### Frontend Environment Variables
 
@@ -449,12 +550,10 @@ DB_PASSWORD=<generate-strong-password>  # Use password manager
 DB_NAME=docshare_production
 DB_SSLMODE=require
 
-MINIO_ENDPOINT=s3-internal.example.com:9000
-MINIO_PUBLIC_ENDPOINT=s3.example.com  # Public-facing domain
-MINIO_ACCESS_KEY=<generate-access-key>
-MINIO_SECRET_KEY=<generate-secret-key>
-MINIO_BUCKET=docshare-prod
-MINIO_USE_SSL=true
+S3_REGION=us-east-1
+S3_BUCKET=docshare-prod
+S3_ACCESS_KEY=<aws-access-key>  # Or leave empty for IAM role
+S3_SECRET_KEY=<aws-secret-key>  # Or leave empty for IAM role
 
 JWT_SECRET=<generate-random-64-char-string>  # openssl rand -hex 32
 JWT_EXPIRATION_HOURS=24
@@ -479,8 +578,8 @@ openssl rand -hex 32
 # Database Password (32 characters)
 openssl rand -base64 32
 
-# MinIO Access/Secret Keys
-openssl rand -base64 24
+# AWS credentials - use IAM roles in production
+# For development, create access keys in AWS IAM console
 ```
 
 ---
@@ -530,9 +629,6 @@ BACKUP_FILE="$BACKUP_DIR/docshare_$DATE.sql.gz"
 
 # PostgreSQL backup
 docker exec docshare-postgres pg_dump -U docshare docshare | gzip > $BACKUP_FILE
-
-# MinIO backup (sync to S3 or another MinIO instance)
-docker exec docshare-minio mc mirror docshare/docshare s3-backup/docshare-backup
 
 # Retain only last 7 days
 find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
@@ -602,9 +698,11 @@ DELETE FROM shares WHERE expires_at < NOW();
 
 **What to backup:**
 1. PostgreSQL database (metadata)
-2. MinIO data (file content)
+2. S3 bucket versioning (enabled for file recovery)
 3. Environment configuration files
 4. SSL certificates
+
+**Note:** S3 handles file storage backup through versioning and cross-region replication. No manual backup needed for file content.
 
 **Backup script:**
 
@@ -625,17 +723,12 @@ echo "Backing up database..."
 docker exec docshare-postgres pg_dump -U docshare docshare | \
   gzip > $BACKUP_DIR/database.sql.gz
 
-# 2. MinIO data
-echo "Backing up MinIO data..."
-docker exec docshare-minio tar czf - /data | \
-  cat > $BACKUP_DIR/minio-data.tar.gz
-
-# 3. Configuration
+# 2. Configuration
 echo "Backing up configuration..."
 cp .env $BACKUP_DIR/
 cp docker-compose.yml $BACKUP_DIR/
 
-# 4. SSL certificates
+# 3. SSL certificates
 echo "Backing up SSL certificates..."
 if [ -d "/etc/letsencrypt" ]; then
   sudo tar czf $BACKUP_DIR/ssl-certs.tar.gz /etc/letsencrypt
@@ -645,7 +738,6 @@ fi
 cat > $BACKUP_DIR/manifest.txt << EOF
 Backup Date: $DATE
 Database: database.sql.gz
-MinIO Data: minio-data.tar.gz
 Configuration: .env, docker-compose.yml
 SSL Certificates: ssl-certs.tar.gz
 EOF
@@ -687,36 +779,31 @@ echo "Backup completed: docshare_full_$DATE.tar.gz"
    ```
 
 3. **Start infrastructure services**
-   ```bash
-   cd ..
-   docker-compose up -d postgres minio
-   
-   # Wait for services to be ready
-   sleep 10
-   ```
+    ```bash
+    cd ..
+    docker-compose up -d postgres
+    
+    # Wait for services to be ready
+    sleep 10
+    ```
 
 4. **Restore database**
    ```bash
-   gunzip -c 20240211_020000/database.sql.gz | \
-     docker exec -i docshare-postgres psql -U docshare docshare
-   ```
+gunzip -c 20240211_020000/database.sql.gz | \
+      docker exec -i docshare-postgres psql -U docshare docshare
+    ```
 
-5. **Restore MinIO data**
+5. **Restore SSL certificates**
    ```bash
-   docker exec -i docshare-minio tar xzf - -C / < 20240211_020000/minio-data.tar.gz
-   ```
+sudo tar xzf 20240211_020000/ssl-certs.tar.gz -C /
+    ```
 
-6. **Restore SSL certificates**
+6. **Start application**
    ```bash
-   sudo tar xzf 20240211_020000/ssl-certs.tar.gz -C /
-   ```
+docker-compose up -d
+    ```
 
-7. **Start application**
-   ```bash
-   docker-compose up -d
-   ```
-
-8. **Verify**
+7. **Verify**
    ```bash
    # Check all services are running
    docker-compose ps
@@ -879,7 +966,7 @@ receivers:
 **CRITICAL: Before going to production**
 
 - [ ] Change PostgreSQL password
-- [ ] Change MinIO access/secret keys
+- [ ] Configure AWS IAM roles or secure access keys for S3
 - [ ] Generate strong JWT secret (32+ characters)
 - [ ] Update admin user password
 
@@ -895,7 +982,6 @@ sudo ufw enable
 
 # Block direct access to internal services
 sudo ufw deny 5432   # PostgreSQL
-sudo ufw deny 9000   # MinIO
 sudo ufw deny 8080   # Backend (use reverse proxy)
 ```
 
@@ -1143,27 +1229,11 @@ err := dbWrite.Create(&file)
 
 #### 3. Distributed Storage
 
-**MinIO distributed mode:**
-```yaml
-# Run MinIO cluster with 4 nodes
-# Each node has 2 drives
-services:
-  minio1:
-    image: minio/minio
-    command: server http://minio{1...4}/data{1...2}
-  
-  minio2:
-    image: minio/minio
-    command: server http://minio{1...4}/data{1...2}
-  
-  minio3:
-    image: minio/minio
-    command: server http://minio{1...4}/data{1...2}
-  
-  minio4:
-    image: minio/minio
-    command: server http://minio{1...4}/data{1...2}
-```
+**AWS S3 provides built-in durability and availability:**
+- 99.999999999% (11 9s) durability
+- Cross-region replication for disaster recovery
+- S3 Transfer Acceleration for faster uploads
+- No additional infrastructure needed
 
 ### Caching
 
@@ -1233,14 +1303,14 @@ docker-compose exec backend env | grep DB_
 
 **Solution:**
 ```bash
-# Check MinIO is running
-docker-compose ps minio
+# Verify S3 bucket exists
+aws s3 ls s3://docshare-prod
 
-# Check MinIO logs
-docker-compose logs minio
+# Check IAM permissions
+aws sts get-caller-identity
 
-# Verify bucket exists
-docker exec docshare-minio mc ls docshare/docshare
+# Check backend can reach S3
+docker-compose exec backend curl https://s3.amazonaws.com
 
 # Check file size limit (backend)
 # Default: 100MB in cmd/server/main.go
@@ -1400,9 +1470,9 @@ SELECT * FROM pg_stat_user_indexes;
 - [API.md](API.md) - API documentation
 - Docker Documentation: https://docs.docker.com/
 - PostgreSQL Documentation: https://www.postgresql.org/docs/
-- MinIO Documentation: https://min.io/docs/
+- AWS S3 Documentation: https://docs.aws.amazon.com/s3/
 - Nginx Documentation: https://nginx.org/en/docs/
 
 ---
 
-**Last Updated:** February 2024
+**Last Updated:** February 2026

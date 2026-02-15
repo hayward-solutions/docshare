@@ -36,7 +36,6 @@ export function FileViewer({ file }: FileViewerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<PreviewJob | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
   const blobUrlRef = useRef<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -53,7 +52,6 @@ export function FileViewer({ file }: FileViewerProps) {
           const { blobUrl: url } = await fetchPreviewBlob(file.id);
           setBlobUrl(url);
           setIsLoading(false);
-          setIsPolling(false);
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
@@ -61,21 +59,19 @@ export function FileViewer({ file }: FileViewerProps) {
         } else if (job.status === 'failed') {
           setError(job.lastError || 'Preview generation failed');
           setIsLoading(false);
-          setIsPolling(false);
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
           }
         }
       }
-    } catch (err) {
-      console.error('Preview status error:', err);
+    } catch {
+      // Silently ignore polling errors
     }
   }, [file.id, file.mimeType]);
 
   const startPolling = useCallback(() => {
     if (pollingRef.current) return;
-    setIsPolling(true);
     pollingRef.current = setInterval(pollPreviewStatus, 3000);
   }, [pollPreviewStatus]);
 
@@ -91,7 +87,7 @@ export function FileViewer({ file }: FileViewerProps) {
         setError('Failed to start preview generation');
         setIsLoading(false);
       }
-    } catch (err) {
+    } catch {
       setError('Failed to start preview generation');
       setIsLoading(false);
     }
@@ -109,7 +105,7 @@ export function FileViewer({ file }: FileViewerProps) {
         setError('Failed to retry preview generation');
         setIsLoading(false);
       }
-    } catch (err) {
+    } catch {
       setError('Failed to retry preview generation');
       setIsLoading(false);
     }

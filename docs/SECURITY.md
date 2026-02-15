@@ -40,13 +40,21 @@ Report security issues via [GitHub Issues](https://github.com/docshare/docshare/
 
 1. **Change Default Credentials**
    - Update database credentials in production
-   - Change MinIO access keys
+   - Configure S3 credentials or IAM roles with least-privilege access
    - Use a strong JWT secret (minimum 32 characters)
 
 2. **Network Security**
    - Use HTTPS in production
    - Configure firewall rules
    - Limit database access to application servers only
+
+3. **S3 Storage Security**
+   - Enable server-side encryption (SSE-S3 or SSE-KMS) for all buckets
+   - Use bucket policies to restrict access to authorized IAM roles only
+   - Enable S3 Object Lock for compliance requirements
+   - Configure bucket versioning for accidental deletion protection
+   - Block public access at the bucket level
+   - Use VPC endpoints for private connectivity to S3
 
 3. **Environment Variables**
    - Never commit secrets to version control
@@ -81,7 +89,7 @@ DocShare includes several security features:
 - **Input Validation**: Server-side validation for all inputs
 - **CORS Protection**: Configurable CORS settings
 - **File Upload Limits**: Configurable file size restrictions
-- **Audit Logging**: Comprehensive audit trail tracking all user actions (uploads, downloads, shares, logins, admin operations) with IP address and request correlation, automatically exported to S3/MinIO
+- **Audit Logging**: Comprehensive audit trail tracking all user actions (uploads, downloads, shares, logins, admin operations) with IP address and request correlation, automatically exported to S3
 - **API Tokens**: SHA-256 hashed at rest, raw token shown once, prefix stored for display
 - **Device Flow**: Codes SHA-256 hashed, 15-minute expiry, single-use (hard deleted after token issuance)
 

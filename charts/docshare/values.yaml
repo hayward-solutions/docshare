@@ -10,8 +10,8 @@ backend:
   resources: {}
   env:
     dbSslmode: disable
-    minioBucket: docshare
-    minioUseSsl: "false"
+    s3Bucket: docshare
+    s3UseSsl: "true"
     jwtSecret: ""  # auto-generated if empty; set explicitly for production
     jwtExpirationHours: "24"
     serverPort: "8080"
@@ -70,12 +70,17 @@ postgresql:
     password: docshare_secret
     database: docshare
 
-minio:
-  enabled: true
-  auth:
-    rootUser: docshare
-    rootPassword: docshare_secret
-  defaultBuckets: docshare
+s3:
+  region: "us-east-1"
+  endpoint: ""
+  publicEndpoint: ""
+  accessKey: ""
+  secretKey: ""
+  bucket: "docshare"
+  useSsl: "true"
+  existingSecret: ""
+  existingSecretAccessKeyKey: "access-key"
+  existingSecretSecretKeyKey: "secret-key"
 
 externalDatabase:
   host: ""
@@ -86,14 +91,3 @@ externalDatabase:
   sslmode: disable
   existingSecret: ""
   existingSecretPasswordKey: password
-
-externalMinio:
-  endpoint: ""
-  publicEndpoint: ""
-  accessKey: ""
-  secretKey: ""
-  bucket: docshare
-  useSsl: "true"
-  existingSecret: ""
-  existingSecretAccessKeyKey: access-key
-  existingSecretSecretKeyKey: secret-key

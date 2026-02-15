@@ -150,9 +150,6 @@ func (h *TransfersHandler) Get(c *fiber.Ctx) error {
 	})
 }
 
-type connectRequest struct {
-}
-
 func (h *TransfersHandler) Connect(c *fiber.Ctx) error {
 	currentUser := middleware.GetCurrentUser(c)
 	if currentUser == nil {

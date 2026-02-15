@@ -1,27 +1,16 @@
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: docshare-postgres
-    environment:
-      POSTGRES_USER: docshare
-      POSTGRES_PASSWORD: docshare_secret
-      POSTGRES_DB: docshare
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U docshare"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+# Deployment with external PostgreSQL database
+# Usage:
+#   export DB_HOST=your-db-host
+#   export DB_PASSWORD=your-db-password
+#   export AWS_ACCESS_KEY_ID=your-key
+#   export AWS_SECRET_ACCESS_KEY=your-secret
+#   export S3_BUCKET=your-bucket
+#   docker-compose up -d
 
-  # LibreOffice for document conversion (office → PDF)
+services:
   gotenberg:
     image: gotenberg/gotenberg:8
     container_name: docshare-gotenberg
-    ports:
-      - "3000:3000"
     command:
       - "gotenberg"
       - "--api-timeout=120s"
@@ -31,24 +20,23 @@ services:
     image: ghcr.io/hayward-solutions/docshare/backend:latest
     container_name: docshare-backend
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: docshare
-      DB_PASSWORD: docshare_secret
-      DB_NAME: docshare
-      DB_SSLMODE: disable
+      DB_HOST: "${DB_HOST:-localhost}"
+      DB_PORT: "${DB_PORT:-5432}"
+      DB_USER: "${DB_USER:-docshare}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME:-docshare}"
+      DB_SSLMODE: "${DB_SSLMODE:-require}"
       S3_REGION: "${AWS_REGION:-us-east-1}"
       S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
       S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
       S3_BUCKET: "${S3_BUCKET:-docshare}"
-      JWT_SECRET: change-me-in-production-use-a-long-random-string
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     image: ghcr.io/hayward-solutions/docshare/frontend:latest
@@ -60,6 +48,3 @@ services:
       - "3001:3000"
     depends_on:
       - backend
-
-volumes:
-  postgres_data:

@@ -19,12 +19,12 @@ import (
 
 type PreviewService struct {
 	DB         *gorm.DB
-	Storage    *storage.MinIOClient
+	Storage    *storage.S3Client
 	Gotenberg  config.GotenbergConfig
 	HTTPClient *http.Client
 }
 
-func NewPreviewService(db *gorm.DB, storageClient *storage.MinIOClient, gotenberg config.GotenbergConfig) *PreviewService {
+func NewPreviewService(db *gorm.DB, storageClient *storage.S3Client, gotenberg config.GotenbergConfig) *PreviewService {
 	return &PreviewService{
 		DB:        db,
 		Storage:   storageClient,

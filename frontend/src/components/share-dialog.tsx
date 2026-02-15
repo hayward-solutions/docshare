@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -65,7 +65,7 @@ interface ShareDialogProps {
 }
 
 export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: ShareDialogProps) {
-  const resolvedIds = fileIds ?? (fileId ? [fileId] : []);
+  const resolvedIds = useMemo(() => fileIds ?? (fileId ? [fileId] : []), [fileIds, fileId]);
   const isBulk = resolvedIds.length > 1;
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;

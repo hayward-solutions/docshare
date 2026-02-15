@@ -43,10 +43,10 @@ See the [CLI documentation](./docs/CLI.md) for the full command reference.
 
 DocShare provides two Docker Compose configurations:
 
-| File | Use Case | Builds From |
-|------|----------|-------------|
-| `docker-compose.yml` | **Production** | Pre-built GHCR images |
-| `docker-compose.dev.yml` | **Development** | Local source code |
+| File | Use Case | Storage | Builds From |
+|------|----------|---------|-------------|
+| `docker-compose.yml` | **Production** | AWS S3 | Pre-built GHCR images |
+| `docker-compose.dev.yml` | **Development** | MinIO (local) | Local source code |
 
 ### Development (Recommended for contributors)
 
@@ -55,7 +55,7 @@ DocShare provides two Docker Compose configurations:
 git clone https://github.com/hayward-solutions/docshare.git
 cd docshare
 
-# Start all services (builds from local source)
+# Start all services (builds from local source, uses local MinIO storage)
 docker-compose -f docker-compose.dev.yml up -d
 
 # Access the application
@@ -71,24 +71,39 @@ docker-compose -f docker-compose.dev.yml up -d
 git clone https://github.com/hayward-solutions/docshare.git
 cd docshare
 
-# Start all services (uses pre-built images)
+# Set required environment variables
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export S3_BUCKET=your-s3-bucket
+
+# Start all services (uses pre-built images, requires AWS S3)
 docker-compose up -d
 
 # Access the application
 # Frontend: http://localhost:3001
 # Backend: http://localhost:8080
-# MinIO Console: http://localhost:9001
 ```
+
+**Note:** Production deployments require an AWS S3 bucket. See [Deployment Guide](./docs/DEPLOYMENT.md) for full setup instructions.
 
 Then open http://localhost:3001 and create your first account.
 
 ## Documentation
 
-- [CLI](./docs/CLI.md) — CLI installation and command reference
-- [Helm Chart](./docs/HELM.md) — Kubernetes deployment with Helm
+- [Deployment](./docs/DEPLOYMENT.md) — Getting started and production setup
 - [Architecture](./docs/ARCHITECTURE.md) — System design and technical details
 - [API Reference](./docs/API.md) — REST API documentation
-- [Deployment](./docs/DEPLOYMENT.md) — Production setup guide
-- [Contributing](./CONTRIBUTING.md) — Development setup and guidelines
+- [CLI](./docs/CLI.md) — CLI installation and command reference
+- [Helm Chart](./docs/HELM.md) — Kubernetes deployment with Helm
+- [SSO](./docs/SSO.md) — Single sign-on configuration
 - [Security](./docs/SECURITY.md) — Security policy and best practices
+- [Contributing](./CONTRIBUTING.md) — Development setup and guidelines
 - [Roadmap](./docs/ROADMAP.md) — Feature priorities and future plans
+
+## Deployment Examples
+
+See [examples/](./examples/) for ready-to-use configurations:
+
+- **Docker Compose**: Minimal, external database, S3-compatible storage, full with SSO
+- **Helm**: Minimal, production, external database, high availability
+- **SSO**: Google, GitHub, Keycloak, LDAP

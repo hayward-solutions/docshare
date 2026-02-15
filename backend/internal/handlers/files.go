@@ -21,14 +21,14 @@ import (
 
 type FilesHandler struct {
 	DB             *gorm.DB
-	Storage        *storage.MinIOClient
+	Storage        *storage.S3Client
 	Access         *services.AccessService
 	PreviewService *services.PreviewService
 	PreviewQueue   *services.PreviewQueueService
 	Audit          *services.AuditService
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.MinIOClient, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService) *FilesHandler {
+func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService) *FilesHandler {
 	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit}
 }
 

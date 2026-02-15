@@ -6,6 +6,7 @@ Deploy DocShare on Kubernetes using the official Helm chart.
 
 - Kubernetes 1.26+
 - Helm 3.12+
+- AWS S3 bucket (or S3-compatible storage)
 
 ## Installation
 
@@ -31,13 +32,14 @@ helm install docshare charts/docshare \
 
 ## Quick Start
 
-Install with default settings (bundled PostgreSQL, MinIO, and Gotenberg):
+Install with default settings (bundled PostgreSQL and Gotenberg, AWS S3 for storage):
 
 ```bash
 helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
   --namespace docshare \
   --create-namespace \
-  --set backend.env.jwtSecret=my-secret-change-me
+  --set backend.env.jwtSecret=my-secret-change-me \
+  --set s3.bucket=your-s3-bucket-name
 ```
 
 Access the application:
@@ -94,9 +96,9 @@ postgresql:
   auth:
     password: "generate-a-strong-password"
 
-minio:
-  auth:
-    rootPassword: "generate-a-strong-password"
+s3:
+  region: "us-east-1"
+  bucket: "docshare-prod"
 ```
 
 ```bash
@@ -139,17 +141,44 @@ externalDatabase:
   existingSecretPasswordKey: password
 ```
 
-### Using External S3/MinIO
+### S3 Configuration
 
-Disable the bundled MinIO and point to your existing S3-compatible storage:
+#### Using IAM Roles (Recommended for EKS)
+
+For EKS with IRSA (IAM Roles for Service Accounts):
 
 ```yaml
-minio:
-  enabled: false
+backend:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/docshare-s3-role
 
-externalMinio:
-  endpoint: s3.amazonaws.com
-  publicEndpoint: s3.amazonaws.com
+s3:
+  region: "us-east-1"
+  bucket: docshare-prod
+```
+
+No access keys needed - IAM role handles authentication automatically.
+
+#### Using Static Credentials
+
+```yaml
+s3:
+  region: "us-west-2"
+  accessKey: "your-access-key"
+  secretKey: "your-secret-key"
+  bucket: docshare-prod
+```
+
+#### Custom S3-Compatible Storage
+
+For MinIO, Wasabi, or other S3-compatible storage:
+
+```yaml
+s3:
+  endpoint: "minio.example.com:9000"
+  publicEndpoint: "s3.example.com"
+  region: "us-east-1"
   accessKey: "your-access-key"
   secretKey: "your-secret-key"
   bucket: docshare
@@ -179,8 +208,8 @@ gotenberg:
 | `backend.service.port`           | int    | `8080`                                       | Service port                                         |
 | `backend.resources`              | object | `{}`                                         | CPU/memory resource requests/limits                  |
 | `backend.env.dbSslmode`          | string | `disable`                                    | PostgreSQL SSL mode                                  |
-| `backend.env.minioBucket`        | string | `docshare`                                   | MinIO/S3 bucket name                                 |
-| `backend.env.minioUseSsl`        | string | `"false"`                                    | Use SSL for MinIO connection                         |
+| `backend.env.s3Bucket`           | string | `docshare`                                   | S3 bucket name                                       |
+| `backend.env.s3UseSsl`           | string | `"true"`                                     | Use SSL for S3 connection                            |
 | `backend.env.jwtSecret`          | string | `""`                                         | JWT signing secret (auto-generated if empty)         |
 | `backend.env.jwtExpirationHours` | string | `"24"`                                       | JWT token lifetime                                   |
 | `backend.env.serverPort`         | string | `"8080"`                                     | Backend server port                                  |
@@ -233,16 +262,20 @@ Uses the [Bitnami PostgreSQL chart](https://github.com/bitnami/charts/tree/main/
 | `postgresql.auth.password` | string | `docshare_secret` | Database password         |
 | `postgresql.auth.database` | string | `docshare`        | Database name             |
 
-### MinIO (Bundled)
+### S3 Configuration
 
-Uses the [Bitnami MinIO chart](https://github.com/bitnami/charts/tree/main/bitnami/minio). See the upstream chart for all available values.
-
-| Key                       | Type   | Default           | Description                  |
-|---------------------------|--------|-------------------|------------------------------|
-| `minio.enabled`           | bool   | `true`            | Deploy bundled MinIO         |
-| `minio.auth.rootUser`     | string | `docshare`        | MinIO root user              |
-| `minio.auth.rootPassword` | string | `docshare_secret` | MinIO root password          |
-| `minio.defaultBuckets`    | string | `docshare`        | Buckets to create on startup |
+| Key                                | Type   | Default      | Description                                 |
+|------------------------------------|--------|--------------|---------------------------------------------|
+| `s3.region`                        | string | `us-east-1`  | AWS region                                  |
+| `s3.endpoint`                      | string | `""`         | Custom endpoint (auto: s3.$region.amazonaws.com) |
+| `s3.publicEndpoint`                | string | `""`         | Public endpoint for presigned URLs          |
+| `s3.accessKey`                     | string | `""`         | Access key (empty = IAM role)               |
+| `s3.secretKey`                     | string | `""`         | Secret key (empty = IAM role)               |
+| `s3.bucket`                        | string | `docshare`   | Bucket name                                 |
+| `s3.useSsl`                        | string | `"true"`     | Use SSL                                     |
+| `s3.existingSecret`                | string | `""`         | Existing secret name                        |
+| `s3.existingSecretAccessKeyKey`    | string | `access-key` | Key for access key in secret                |
+| `s3.existingSecretSecretKeyKey`    | string | `secret-key` | Key for secret key in secret                |
 
 ### External Database
 
@@ -256,20 +289,6 @@ Uses the [Bitnami MinIO chart](https://github.com/bitnami/charts/tree/main/bitna
 | `externalDatabase.sslmode`                   | string | `disable`  | SSL mode                 |
 | `externalDatabase.existingSecret`            | string | `""`       | Existing secret name     |
 | `externalDatabase.existingSecretPasswordKey` | string | `password` | Key in existing secret   |
-
-### External MinIO/S3
-
-| Key                                        | Type   | Default      | Description                        |
-|--------------------------------------------|--------|--------------|------------------------------------|
-| `externalMinio.endpoint`                   | string | `""`         | S3/MinIO endpoint                  |
-| `externalMinio.publicEndpoint`             | string | `""`         | Public endpoint for presigned URLs |
-| `externalMinio.accessKey`                  | string | `""`         | Access key                         |
-| `externalMinio.secretKey`                  | string | `""`         | Secret key                         |
-| `externalMinio.bucket`                     | string | `docshare`   | Bucket name                        |
-| `externalMinio.useSsl`                     | string | `"true"`     | Use SSL                            |
-| `externalMinio.existingSecret`             | string | `""`         | Existing secret name               |
-| `externalMinio.existingSecretAccessKeyKey` | string | `access-key` | Key for access key in secret       |
-| `externalMinio.existingSecretSecretKeyKey` | string | `secret-key` | Key for secret key in secret       |
 
 ## Upgrading
 
@@ -291,7 +310,7 @@ Note: The auto-generated secrets are annotated with `helm.sh/resource-policy: ke
 kubectl delete secret docshare-secret -n docshare
 ```
 
-PersistentVolumeClaims created by PostgreSQL and MinIO are also retained. Delete them manually:
+PersistentVolumeClaims created by PostgreSQL are also retained. Delete them manually:
 
 ```bash
 kubectl delete pvc -l app.kubernetes.io/instance=docshare -n docshare
