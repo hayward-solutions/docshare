@@ -136,6 +136,16 @@ func getRequestID() string {
 	return ""
 }
 
+var sensitiveFields = []string{"password", "oldPassword", "newPassword", "secret", "token", "apiKey", "apiKeySecret"}
+
+func redactSensitiveFields(jsonMap map[string]interface{}) {
+	for _, field := range sensitiveFields {
+		if _, exists := jsonMap[field]; exists {
+			jsonMap[field] = "[REDACTED]"
+		}
+	}
+}
+
 func GetRequestBodySummary(c *fiber.Ctx) string {
 	body := c.Body()
 	if len(body) == 0 {
@@ -148,6 +158,7 @@ func GetRequestBodySummary(c *fiber.Ctx) string {
 
 	var jsonMap map[string]interface{}
 	if err := json.Unmarshal(body, &jsonMap); err == nil {
+		redactSensitiveFields(jsonMap)
 		if jsonBytes, err := json.Marshal(jsonMap); err == nil {
 			if len(jsonBytes) > 200 {
 				return string(jsonBytes[:200]) + "..."

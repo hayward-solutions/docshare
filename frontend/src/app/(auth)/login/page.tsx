@@ -166,7 +166,7 @@ export default function LoginPage() {
             {hasLdap && <TabsTrigger value="ldap">Corporate (LDAP)</TabsTrigger>}
           </TabsList>
           
-          <form onSubmit={handleSubmit}>
+          <form id="email" onSubmit={handleSubmit}>
             <TabsContent value="email">
               <CardContent className="space-y-4">
                 <div className="space-y-2">
