@@ -533,7 +533,6 @@ const handleDownload = async (fileId: string, fileName: string) => {
           }}
           fileId={movingFile.id}
           fileName={movingFile.name}
-          isDirectory={movingFile.isDirectory}
           currentParentID={movingFile.parentID}
           onMoved={fetchData}
         />
@@ -547,7 +546,6 @@ const handleDownload = async (fileId: string, fileName: string) => {
           }}
           fileIds={Array.from(selection.selectedIds)}
           fileName={`${selection.count} items`}
-          isDirectory={selection.selectedFiles.some((f) => f.isDirectory)}
           onMoved={() => {
             selection.deselectAll();
             fetchData();

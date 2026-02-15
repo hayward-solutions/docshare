@@ -470,7 +470,6 @@ export default function FilesPage() {
           }}
           fileId={movingFile.id}
           fileName={movingFile.name}
-          isDirectory={movingFile.isDirectory}
           currentParentID={movingFile.parentID}
           onMoved={fetchFiles}
         />
@@ -484,7 +483,6 @@ export default function FilesPage() {
           }}
           fileIds={Array.from(selection.selectedIds)}
           fileName={`${selection.count} items`}
-          isDirectory={selection.selectedFiles.some((f) => f.isDirectory)}
           onMoved={() => {
             selection.deselectAll();
             fetchFiles();

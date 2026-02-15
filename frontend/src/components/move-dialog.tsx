@@ -43,7 +43,6 @@ interface MoveDialogProps {
   fileId?: string;
   fileIds?: string[];
   fileName: string;
-  isDirectory: boolean;
   currentParentID?: string;
   onMoved: () => void;
 }
@@ -104,7 +103,6 @@ export function MoveDialog({
   fileId,
   fileIds,
   fileName,
-  isDirectory: _isDirectory,
   currentParentID,
   onMoved,
 }: MoveDialogProps) {
