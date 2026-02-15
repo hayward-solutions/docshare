@@ -184,10 +184,22 @@ function LoginForm() {
               )}
             </div>
           </form>
+        </CardContent>
+        
+        <CardFooter className="flex flex-col space-y-4">
+          <Button 
+            type="submit" 
+            form="login-form"
+            className="w-full" 
+            disabled={isLoading}
+          >
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Sign In
+          </Button>
 
           {showDividerBeforeProviders && (
             <>
-              <div className="relative">
+              <div className="relative w-full">
                 <div className="absolute inset-0 flex items-center">
                   <Separator className="w-full" />
                 </div>
@@ -196,13 +208,13 @@ function LoginForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className={oauthProviders.length === 1 ? "flex justify-center w-full" : "grid grid-cols-2 gap-3 w-full"}>
                 {oauthProviders.map((provider) => (
                   <Button
                     key={provider.name}
                     variant="outline"
                     onClick={() => handleOAuthLogin(provider.name)}
-                    className="w-full"
+                    className={oauthProviders.length === 1 ? "" : "w-full"}
                   >
                     {provider.name === 'google' && (
                       <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
@@ -235,18 +247,7 @@ function LoginForm() {
               </div>
             </>
           )}
-        </CardContent>
-        
-        <CardFooter className="flex flex-col space-y-4">
-          <Button 
-            type="submit" 
-            form="login-form"
-            className="w-full" 
-            disabled={isLoading}
-          >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
-          </Button>
+
           {!showLdap && (
             <div className="text-sm text-center text-muted-foreground">
               Don&apos;t have an account?{' '}

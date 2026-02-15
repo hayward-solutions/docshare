@@ -49,6 +49,14 @@ export default function AccountSettingsPage() {
   const [serverVersion, setServerVersion] = useState<{ version: string; apiVersion: string } | null>(null);
   const { successWithRefresh } = useActivityToast();
 
+  const providerDisplayNames: Record<string, string> = {
+    google: 'Google',
+    github: 'GitHub',
+    oidc: 'OpenID Connect',
+    saml: 'SAML',
+    ldap: 'LDAP',
+  };
+
   // Profile form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -416,53 +424,67 @@ export default function AccountSettingsPage() {
             <CardHeader>
               <CardTitle>Change Password</CardTitle>
               <CardDescription>
-                Update your password to keep your account secure
+                {user.authProvider
+                  ? 'Your password is managed by your identity provider'
+                  : 'Update your password to keep your account secure'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handlePasswordChange} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                  />
-                </div>
+              {user.authProvider ? (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Password managed externally</AlertTitle>
+                  <AlertDescription>
+                    Your password is managed by {providerDisplayNames[user.authProvider] || user.authProvider}. 
+                    You can change it through your identity provider settings.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={8}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Must be at least 8 characters
-                  </p>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Must be at least 8 characters
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    minLength={8}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
 
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? 'Changing...' : 'Change Password'}
-                </Button>
-              </form>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? 'Changing...' : 'Change Password'}
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
