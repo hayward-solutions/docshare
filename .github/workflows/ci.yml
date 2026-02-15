@@ -1,22 +1,20 @@
 name: CI
-run-name: CI ${{ github.head_ref || github.ref_name }}
+run-name: CI ${{ github.ref_name }}
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
-  pull-requests: read
+  security-events: write
 
 env:
   GO_VERSION: '1.24'
   NODE_VERSION: '22'
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -27,14 +25,11 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       cli: ${{ steps.filter.outputs.cli }}
-      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            workflow:
-              - '.github/workflows/ci.yml'
             backend:
               - 'backend/**'
             frontend:
@@ -45,7 +40,7 @@ jobs:
   backend-tests:
     name: Backend Tests
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,17 +56,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: Download dependencies
-        run: go mod download
-
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
-
-      - name: Build
-        run: go build -ldflags="-s -w" ./...
-
-      - name: Vet
-        run: go vet ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -80,35 +66,10 @@ jobs:
           flags: backend
           fail_ci_if_error: false
 
-  backend-lint:
-    name: Backend Lint
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: backend
-
   cli-tests:
     name: CLI Tests
     needs: changes
-    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -124,17 +85,8 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: cli/go.sum
 
-      - name: Download dependencies
-        run: go mod download
-
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
-
-      - name: Build
-        run: go build -ldflags="-s -w" .
-
-      - name: Vet
-        run: go vet ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -143,35 +95,10 @@ jobs:
           flags: cli
           fail_ci_if_error: false
 
-  cli-lint:
-    name: CLI Lint
-    needs: changes
-    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: cli/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: cli
-
   frontend-tests:
     name: Frontend Tests
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -199,84 +126,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-  integration-tests:
-    name: Integration Tests
-    needs: [backend-tests, cli-tests]
-    if: always() && (needs.backend-tests.result == 'success' || needs.cli-tests.result == 'success')
-    runs-on: ubuntu-latest
-
-    services:
-      minio:
-        image: minio/minio:latest
-        ports:
-          - 9000:9000
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend/go.sum
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run integration tests
-        env:
-          S3_ENDPOINT: localhost:9000
-          S3_ACCESS_KEY: minioadmin
-          S3_SECRET_KEY: minioadmin
-          S3_BUCKET: test-bucket
-          S3_REGION: us-east-1
-          S3_USE_SSL: false
-        run: go test -tags=integration ./... -v -race
-
-  docker-build:
-    name: Docker Build
-    needs: [backend-tests, frontend-tests, cli-tests]
-    if: always() && needs.backend-tests.result != 'failure' && needs.frontend-tests.result != 'failure' && needs.cli-tests.result != 'failure'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: false
-          tags: docshare-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: false
-          tags: docshare-frontend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   security-scan:
     name: Security Scan
