@@ -128,7 +128,6 @@ export default function LoginPage() {
                     <Input
                       id="ldap-username"
                       type="text"
-                      placeholder="domain\username"
                       required
                       value={ldapUsername}
                       onChange={(e) => setLdapUsername(e.target.value)}
