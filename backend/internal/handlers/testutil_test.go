@@ -71,6 +71,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		&models.Transfer{},
 		&models.SSOProvider{},
 		&models.LinkedAccount{},
+		&models.PreviewJob{},
 	)
 	if err != nil {
 		t.Fatalf("failed automigrating models: %v", err)
@@ -160,6 +161,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 	fileRoutes.Get("/:id/download-url", filesHandler.DownloadURL)
 	fileRoutes.Get("/:id/preview", filesHandler.PreviewURL)
 	fileRoutes.Get("/:id/convert-preview", filesHandler.ConvertPreview)
+	fileRoutes.Get("/:id/preview-status", filesHandler.PreviewStatus)
+	fileRoutes.Get("/:id/retry-preview", filesHandler.RetryPreview)
 	fileRoutes.Get("/:id/path", filesHandler.Path)
 	fileRoutes.Post("/:id/share", sharesHandler.ShareFile)
 	fileRoutes.Get("/:id/shares", sharesHandler.ListFileShares)
