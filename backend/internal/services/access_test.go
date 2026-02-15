@@ -113,10 +113,10 @@ func TestAccessService_HasAccess(t *testing.T) {
 			t.Fatalf("failed creating share: %v", err)
 		}
 
-		if !service.HasAccess(nil, otherUser.ID, rootFile.ID, models.SharePermissionView) {
+		if !service.HasAccess(context.TODO(), otherUser.ID, rootFile.ID, models.SharePermissionView) {
 			t.Error("user with view share should have view access")
 		}
-		if service.HasAccess(nil, otherUser.ID, rootFile.ID, models.SharePermissionEdit) {
+		if service.HasAccess(context.TODO(), otherUser.ID, rootFile.ID, models.SharePermissionEdit) {
 			t.Error("user with view share should not have edit access")
 		}
 	})
@@ -173,13 +173,13 @@ func TestAccessService_HasAccess(t *testing.T) {
 			t.Fatalf("failed creating group share: %v", err)
 		}
 
-		if !service.HasAccess(nil, groupUser.ID, groupFile.ID, models.SharePermissionView) {
+		if !service.HasAccess(context.TODO(), groupUser.ID, groupFile.ID, models.SharePermissionView) {
 			t.Error("group member should have view access via group share")
 		}
-		if !service.HasAccess(nil, groupUser.ID, groupFile.ID, models.SharePermissionDownload) {
+		if !service.HasAccess(context.TODO(), groupUser.ID, groupFile.ID, models.SharePermissionDownload) {
 			t.Error("group member should have download access via group share")
 		}
-		if service.HasAccess(nil, groupUser.ID, groupFile.ID, models.SharePermissionEdit) {
+		if service.HasAccess(context.TODO(), groupUser.ID, groupFile.ID, models.SharePermissionEdit) {
 			t.Error("group member should not have edit access with download share")
 		}
 	})
@@ -232,7 +232,7 @@ func TestAccessService_HasAccess(t *testing.T) {
 			t.Fatalf("failed creating parent share: %v", err)
 		}
 
-		if !service.HasAccess(nil, nestedAccessUser.ID, childFile.ID, models.SharePermissionView) {
+		if !service.HasAccess(context.TODO(), nestedAccessUser.ID, childFile.ID, models.SharePermissionView) {
 			t.Error("user should have view access to child via parent share")
 		}
 	})
@@ -274,20 +274,20 @@ func TestAccessService_HasAccess(t *testing.T) {
 			t.Fatalf("failed creating expired share: %v", err)
 		}
 
-		if service.HasAccess(nil, expiredUser.ID, expiredFile.ID, models.SharePermissionView) {
+		if service.HasAccess(context.TODO(), expiredUser.ID, expiredFile.ID, models.SharePermissionView) {
 			t.Error("user with expired share should not have access")
 		}
 	})
 
 	t.Run("invalid permission returns false", func(t *testing.T) {
-		if service.HasAccess(nil, owner.ID, rootFile.ID, "invalid") {
+		if service.HasAccess(context.TODO(), owner.ID, rootFile.ID, "invalid") {
 			t.Error("invalid permission should return false")
 		}
 	})
 
 	t.Run("non-existent file returns false", func(t *testing.T) {
 		fakeID := uuid.New()
-		if service.HasAccess(nil, owner.ID, fakeID, models.SharePermissionView) {
+		if service.HasAccess(context.TODO(), owner.ID, fakeID, models.SharePermissionView) {
 			t.Error("non-existent file should return false")
 		}
 	})

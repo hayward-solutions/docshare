@@ -143,12 +143,12 @@ func TestConfig_Save(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.WriteFile(path, originalData, 0600)
+				_ = os.WriteFile(path, originalData, 0600)
 			} else {
-				os.Remove(path)
+				_ = os.Remove(path)
 			}
 		}()
-		os.Remove(path)
+		_ = os.Remove(path)
 
 		cfg := &Config{
 			ServerURL: "https://api.example.com",
@@ -182,12 +182,12 @@ func TestConfig_Save(t *testing.T) {
 		originalData, _ := os.ReadFile(path)
 		defer func() {
 			if originalData != nil {
-				os.WriteFile(path, originalData, 0600)
+				_ = os.WriteFile(path, originalData, 0600)
 			} else {
-				os.Remove(path)
+				_ = os.Remove(path)
 			}
 		}()
-		os.Remove(path)
+		_ = os.Remove(path)
 
 		cfg := &Config{ServerURL: DefaultURL, Token: "perm-test"}
 		if err := Save(cfg); err != nil {
