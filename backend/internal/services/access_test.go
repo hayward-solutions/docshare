@@ -355,13 +355,13 @@ func TestAccessService_HasPublicAccess(t *testing.T) {
 			t.Fatalf("failed creating public share: %v", err)
 		}
 
-		if !service.HasPublicAccess(nil, publicFile.ID, models.SharePermissionView, false) {
+		if !service.HasPublicAccess(context.TODO(), publicFile.ID, models.SharePermissionView, false) {
 			t.Error("public file should be viewable by anyone")
 		}
-		if !service.HasPublicAccess(nil, publicFile.ID, models.SharePermissionDownload, false) {
+		if !service.HasPublicAccess(context.TODO(), publicFile.ID, models.SharePermissionDownload, false) {
 			t.Error("public file should be downloadable by anyone")
 		}
-		if service.HasPublicAccess(nil, publicFile.ID, models.SharePermissionEdit, false) {
+		if service.HasPublicAccess(context.TODO(), publicFile.ID, models.SharePermissionEdit, false) {
 			t.Error("public file should not be editable by anonymous users")
 		}
 	})
@@ -377,19 +377,19 @@ func TestAccessService_HasPublicAccess(t *testing.T) {
 			t.Fatalf("failed creating logged-in share: %v", err)
 		}
 
-		if service.HasPublicAccess(nil, loggedInFile.ID, models.SharePermissionView, false) {
+		if service.HasPublicAccess(context.TODO(), loggedInFile.ID, models.SharePermissionView, false) {
 			t.Error("logged-in file should not be accessible without login flag")
 		}
-		if !service.HasPublicAccess(nil, loggedInFile.ID, models.SharePermissionView, true) {
+		if !service.HasPublicAccess(context.TODO(), loggedInFile.ID, models.SharePermissionView, true) {
 			t.Error("logged-in file should be accessible with login flag")
 		}
 	})
 
 	t.Run("private file has no public access", func(t *testing.T) {
-		if service.HasPublicAccess(nil, privateFile.ID, models.SharePermissionView, false) {
+		if service.HasPublicAccess(context.TODO(), privateFile.ID, models.SharePermissionView, false) {
 			t.Error("private file should not have public access")
 		}
-		if service.HasPublicAccess(nil, privateFile.ID, models.SharePermissionView, true) {
+		if service.HasPublicAccess(context.TODO(), privateFile.ID, models.SharePermissionView, true) {
 			t.Error("private file should not have public access even with login flag")
 		}
 	})
