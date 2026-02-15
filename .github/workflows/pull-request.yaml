@@ -44,8 +44,8 @@ jobs:
             helm:
               - 'charts/**'
 
-  backend-tests:
-    name: Backend Tests
+  backend-ci:
+    name: Backend CI
     needs: changes
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
@@ -66,6 +66,12 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
 
@@ -82,33 +88,8 @@ jobs:
           flags: backend
           fail_ci_if_error: false
 
-  backend-lint:
-    name: Backend Lint
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: backend
-
-  cli-tests:
-    name: CLI Tests
+  cli-ci:
+    name: CLI CI
     needs: changes
     if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
@@ -131,6 +112,16 @@ jobs:
           BRANCH=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
           echo "version=${BRANCH}-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
 
+      - name: Download dependencies
+        working-directory: cli
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: cli
+
       - name: Run tests
         working-directory: cli
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
@@ -150,33 +141,8 @@ jobs:
           flags: cli
           fail_ci_if_error: false
 
-  cli-lint:
-    name: CLI Lint
-    needs: changes
-    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: cli/go.sum
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: cli
-
-  frontend-tests:
-    name: Frontend Tests
+  frontend-ci:
+    name: Frontend CI
     needs: changes
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
