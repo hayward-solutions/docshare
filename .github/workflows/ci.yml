@@ -1,4 +1,5 @@
 name: CI
+run-name: CI ${{ github.head_ref || github.ref_name }}
 
 on:
   push:
@@ -6,9 +7,45 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      cli: ${{ steps.filter.outputs.cli }}
+      workflow: ${{ steps.filter.outputs.workflow }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            workflow:
+              - '.github/workflows/ci.yml'
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            cli:
+              - 'cli/**'
+
   backend-tests:
     name: Backend Tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,7 +58,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
@@ -29,6 +66,12 @@ jobs:
 
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Build
+        run: go build -ldflags="-s -w" ./...
+
+      - name: Vet
+        run: go vet ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -39,6 +82,8 @@ jobs:
 
   backend-lint:
     name: Backend Lint
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,7 +96,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
       - name: Run golangci-lint
@@ -62,6 +107,8 @@ jobs:
 
   cli-tests:
     name: CLI Tests
+    needs: changes
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -74,7 +121,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: cli/go.sum
 
       - name: Download dependencies
@@ -83,6 +130,12 @@ jobs:
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
 
+      - name: Build
+        run: go build -ldflags="-s -w" .
+
+      - name: Vet
+        run: go vet ./...
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
@@ -90,11 +143,10 @@ jobs:
           flags: cli
           fail_ci_if_error: false
 
-      - name: Build CLI
-        run: go build -o docshare .
-
   cli-lint:
     name: CLI Lint
+    needs: changes
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -107,7 +159,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: cli/go.sum
 
       - name: Run golangci-lint
@@ -116,8 +168,10 @@ jobs:
           version: latest
           working-directory: cli
 
-  frontend-lint:
-    name: Frontend Lint
+  frontend-tests:
+    name: Frontend Tests
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -130,56 +184,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
+      - name: Lint
         run: npm run lint
 
-  frontend-build:
-    name: Frontend Build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
 
       - name: Build
         run: npm run build
 
   integration-tests:
     name: Integration Tests
-    runs-on: ubuntu-latest
     needs: [backend-tests, cli-tests]
+    if: always() && (needs.backend-tests.result == 'success' || needs.cli-tests.result == 'success')
+    runs-on: ubuntu-latest
 
     services:
       minio:
         image: minio/minio:latest
         ports:
           - 9000:9000
-          - 9001:9001
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
         options: >-
-          --name minio
           --health-cmd "curl -f http://localhost:9000/minio/health/live"
           --health-interval 10s
           --health-timeout 5s
@@ -196,7 +231,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
@@ -204,7 +239,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          S3_ENDPOINT: http://localhost:9000
+          S3_ENDPOINT: localhost:9000
           S3_ACCESS_KEY: minioadmin
           S3_SECRET_KEY: minioadmin
           S3_BUCKET: test-bucket
@@ -214,8 +249,9 @@ jobs:
 
   docker-build:
     name: Docker Build
+    needs: [backend-tests, frontend-tests, cli-tests]
+    if: always() && needs.backend-tests.result != 'failure' && needs.frontend-tests.result != 'failure' && needs.cli-tests.result != 'failure'
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-build, cli-tests]
 
     steps:
       - name: Checkout code
@@ -267,5 +303,5 @@ jobs:
       - name: Run Go vulnerability check
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: '1.24'
+          go-version-input: ${{ env.GO_VERSION }}
           work-dir: ./backend
