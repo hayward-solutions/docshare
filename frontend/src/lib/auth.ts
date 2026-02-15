@@ -9,6 +9,7 @@ interface AuthState {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   ldapLogin: (username: string, password: string) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
@@ -41,6 +42,20 @@ export const useAuth = create<AuthState>((set) => ({
       }
     } catch (error) {
       throw error;
+    }
+  },
+
+  loginWithToken: async (token: string) => {
+    localStorage.setItem('token', token);
+    set({ token, isAuthenticated: true });
+
+    const res = await apiMethods.get<User>('/api/auth/me');
+    if (res.success) {
+      set({ user: res.data });
+    } else {
+      localStorage.removeItem('token');
+      set({ token: null, user: null, isAuthenticated: false });
+      throw new Error('Failed to fetch user');
     }
   },
 

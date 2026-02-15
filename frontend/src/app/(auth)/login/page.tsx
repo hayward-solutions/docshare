@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/lib/auth';
 import { APP_VERSION, ssoAPI } from '@/lib/api';
 import { SSOProvider } from '@/lib/types';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [ldapUsername, setLdapUsername] = useState('');
@@ -24,6 +24,15 @@ export default function LoginPage() {
   const [providersLoading, setProvidersLoading] = useState(true);
   const { login, ldapLogin } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error) {
+      toast.error(decodeURIComponent(error));
+      router.replace('/login');
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     ssoAPI.listProviders()
@@ -250,5 +259,13 @@ export default function LoginPage() {
       </Card>
       <p className="text-center text-xs text-muted-foreground">{APP_VERSION}</p>
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -49,7 +49,8 @@ type JWTConfig struct {
 }
 
 type ServerConfig struct {
-	Port string
+	Port        string
+	FrontendURL string
 }
 
 type GotenbergConfig struct {
@@ -158,7 +159,8 @@ func Load() *Config {
 			ExpirationHours: getEnvAsInt("JWT_EXPIRATION_HOURS", 24),
 		},
 		Server: ServerConfig{
-			Port: getEnv("SERVER_PORT", "8080"),
+			Port:        getEnv("SERVER_PORT", "8080"),
+			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3001"),
 		},
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),
