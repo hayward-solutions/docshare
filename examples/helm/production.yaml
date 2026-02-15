@@ -1,0 +1,77 @@
+# Production-ready Helm values
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare --create-namespace \
+#     -f production.yaml
+
+backend:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    jwtSecret: ""  # Set via --set or let auto-generate
+    jwtExpirationHours: "24"
+    s3Bucket: "docshare-prod"
+
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    nextPublicApiUrl: "https://docshare.example.com"
+
+gotenberg:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+  hosts:
+    - host: docshare.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: docshare-tls
+      hosts:
+        - docshare.example.com
+
+postgresql:
+  enabled: true
+  auth:
+    username: docshare
+    password: ""  # Set via --set
+    database: docshare
+  primary:
+    persistence:
+      size: 10Gi
+
+s3:
+  region: "us-east-1"
+  bucket: "docshare-prod"

@@ -2,6 +2,8 @@
 
 Complete guide for deploying DocShare in development and production environments.
 
+> **Ready-to-use examples**: See [examples/](../examples/) for Docker Compose and Helm configurations for common deployment scenarios.
+
 ## Table of Contents
 
 1. [Quick Start (Development)](#quick-start-development)

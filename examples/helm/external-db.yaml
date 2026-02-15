@@ -1,0 +1,48 @@
+# External PostgreSQL database configuration
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare --create-namespace \
+#     -f external-db.yaml
+
+backend:
+  replicaCount: 2
+  env:
+    jwtSecret: ""  # Set via --set
+
+frontend:
+  replicaCount: 2
+  env:
+    nextPublicApiUrl: "https://docshare.example.com"
+
+gotenberg:
+  enabled: true
+
+postgresql:
+  enabled: false
+
+externalDatabase:
+  host: postgres.example.com
+  port: 5432
+  user: docshare
+  password: ""  # Set via --set or use existingSecret
+  database: docshare
+  sslmode: require
+  existingSecret: ""
+  existingSecretPasswordKey: password
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: docshare.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+
+s3:
+  region: "us-east-1"
+  bucket: "docshare-prod"

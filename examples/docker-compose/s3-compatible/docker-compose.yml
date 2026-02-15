@@ -1,0 +1,104 @@
+# Deployment with S3-compatible storage (MinIO example)
+# Suitable for self-hosted storage or providers like Wasabi, Backblaze B2, etc.
+# Usage: docker-compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docshare-postgres
+    environment:
+      POSTGRES_USER: docshare
+      POSTGRES_PASSWORD: docshare_secret
+      POSTGRES_DB: docshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: docshare-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: docshare
+      MINIO_ROOT_PASSWORD: docshare_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: docshare-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set docshare http://minio:9000 docshare docshare_secret;
+      mc mb --ignore-existing docshare/docshare;
+      mc anonymous set none docshare/docshare;
+      exit 0;
+      "
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: docshare-gotenberg
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--libreoffice-restart-after=10"
+
+  backend:
+    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    container_name: docshare-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: docshare
+      DB_PASSWORD: docshare_secret
+      DB_NAME: docshare
+      DB_SSLMODE: disable
+      S3_REGION: "us-east-1"
+      S3_ENDPOINT: "minio:9000"
+      S3_PUBLIC_ENDPOINT: "localhost:9000"
+      S3_ACCESS_KEY: "docshare"
+      S3_SECRET_KEY: "docshare_secret"
+      S3_BUCKET: "docshare"
+      S3_USE_SSL: "false"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      GOTENBERG_URL: http://gotenberg:3000
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  frontend:
+    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    container_name: docshare-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      API_URL: http://backend:8080
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  minio_data:

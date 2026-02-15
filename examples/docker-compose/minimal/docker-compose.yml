@@ -1,0 +1,67 @@
+# Minimal deployment with AWS S3
+# Usage: 
+#   export AWS_ACCESS_KEY_ID=your-key
+#   export AWS_SECRET_ACCESS_KEY=your-secret
+#   export S3_BUCKET=your-bucket
+#   docker-compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docshare-postgres
+    environment:
+      POSTGRES_USER: docshare
+      POSTGRES_PASSWORD: docshare_secret
+      POSTGRES_DB: docshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: docshare-gotenberg
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--libreoffice-restart-after=10"
+
+  backend:
+    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    container_name: docshare-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: docshare
+      DB_PASSWORD: docshare_secret
+      DB_NAME: docshare
+      DB_SSLMODE: disable
+      S3_REGION: "${AWS_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
+      S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-docshare}"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      GOTENBERG_URL: http://gotenberg:3000
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    container_name: docshare-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      API_URL: http://backend:8080
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

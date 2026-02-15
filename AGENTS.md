@@ -26,6 +26,10 @@ DocShare: document sharing platform with file storage, sharing, groups, previews
 │   ├── cmd/          # Commands
 │   └── internal/    # API client, config
 ├── docs/             # API, CLI, deployment docs
+├── examples/         # Deployment examples
+│   ├── docker-compose/  # Docker Compose configs
+│   ├── helm/           # Helm values files
+│   └── sso/            # SSO provider examples
 └── charts/           # Helm charts
 ```
 
