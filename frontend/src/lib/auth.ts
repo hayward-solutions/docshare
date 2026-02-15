@@ -8,6 +8,8 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  ldapLogin: (username: string, password: string) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
@@ -25,9 +27,39 @@ export const useAuth = create<AuthState>((set) => ({
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'Login failed');
       }
     } catch (error) {
       throw error;
+    }
+  },
+
+  ldapLogin: async (username, password) => {
+    try {
+      const res = await apiMethods.post<LoginResponse>('/api/auth/sso/ldap/login', { username, password });
+      if (res.success) {
+        localStorage.setItem('token', res.data.token);
+        set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'LDAP login failed');
+      }
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  loginWithToken: async (token: string) => {
+    localStorage.setItem('token', token);
+    set({ token, isAuthenticated: true });
+
+    const res = await apiMethods.get<User>('/api/auth/me');
+    if (res.success) {
+      set({ user: res.data });
+    } else {
+      localStorage.removeItem('token');
+      set({ token: null, user: null, isAuthenticated: false });
+      throw new Error('Failed to fetch user');
     }
   },
 
@@ -37,6 +69,8 @@ export const useAuth = create<AuthState>((set) => ({
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
+      } else {
+        throw new Error(res.error || 'Registration failed');
       }
     } catch (error) {
       throw error;

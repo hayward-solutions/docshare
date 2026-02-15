@@ -6,21 +6,21 @@ This directory contains example configurations for deploying DocShare in various
 
 ```
 examples/
-├── docker-compose/     # Docker Compose deployment examples
-│   ├── minimal/        # Basic deployment with AWS S3
-│   ├── external-db/    # External PostgreSQL
-│   ├── s3-compatible/  # MinIO or other S3-compatible storage
-│   └── full/           # Full stack with SSO
-├── helm/               # Kubernetes Helm values examples
-│   ├── minimal.yaml    # Development/evaluation
-│   ├── production.yaml # Production-ready
-│   ├── external-db.yaml # External database
-│   └── ha.yaml         # High availability
-└── sso/                # SSO provider examples
-    ├── google/         # Google OAuth2
-    ├── github/         # GitHub OAuth2
-    ├── keycloak/       # Keycloak OIDC
-    └── ldap/           # LDAP/Active Directory
+├── docker-compose/      # Docker Compose deployment examples
+│   ├── minimal/         # Basic deployment with AWS S3
+│   ├── external-db/     # External PostgreSQL
+│   ├── s3-compatible/   # MinIO or other S3-compatible storage
+│   ├── full/            # Full stack with SSO
+│   └── sso/             # SSO provider examples
+│       ├── google/      # Google OAuth2
+│       ├── github/      # GitHub OAuth2
+│       ├── keycloak/    # Keycloak OIDC
+│       └── ldap/        # LDAP/Active Directory
+└── helm/                # Kubernetes Helm values examples
+    ├── minimal.yaml     # Development/evaluation
+    ├── production.yaml  # Production-ready
+    ├── external-db.yaml # External database
+    └── ha.yaml          # High availability
 ```
 
 ## Quick Links
@@ -32,7 +32,7 @@ examples/
 | External DB | [docker-compose/external-db](docker-compose/external-db/) | [helm/external-db.yaml](helm/external-db.yaml) |
 | S3-Compatible | [docker-compose/s3-compatible](docker-compose/s3-compatible/) | - |
 | High Availability | - | [helm/ha.yaml](helm/ha.yaml) |
-| SSO | [docker-compose/full](docker-compose/full/) | [sso/](sso/) |
+| SSO | [docker-compose/full](docker-compose/full/) | [sso/](docker-compose/sso/) |
 
 ## Documentation
 

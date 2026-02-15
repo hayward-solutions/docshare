@@ -6,6 +6,7 @@ export interface User {
   avatarURL?: string;
   role: 'user' | 'admin';
   createdAt: string;
+  authProvider?: string;
 }
 
 export interface Group {

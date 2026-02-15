@@ -48,4 +48,4 @@ docker-compose -f ../docker-compose.yml -f google/docker-compose.yml -f github/d
 
 ## Documentation
 
-For detailed setup instructions, configuration options, and API documentation, see [../../docs/SSO.md](../../docs/SSO.md).
+For detailed setup instructions, configuration options, and API documentation, see [../../docs/SSO.md](../../../docs/SSO.md).

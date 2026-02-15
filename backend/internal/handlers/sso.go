@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"strings"
 
 	"github.com/docshare/backend/internal/config"
@@ -50,7 +51,7 @@ func (h *SSOHandler) GetLoginRedirect(c *fiber.Ctx) error {
 	}
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"authUrl": authCodeURL,
+		"url": authCodeURL,
 	})
 }
 
@@ -81,23 +82,25 @@ func (h *SSOHandler) HandleOAuthCallback(c *fiber.Ctx) error {
 	code := c.Query("code")
 	state := c.Query("state")
 
+	frontendURL := h.Cfg.Server.FrontendURL
+
 	if code == "" {
-		return utils.Error(c, fiber.StatusBadRequest, "authorization code is required")
+		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape("authorization code is required"))
 	}
 
 	profile, err := h.processOAuthCallback(c.Context(), provider, code, state)
 	if err != nil {
-		return utils.Error(c, fiber.StatusUnauthorized, err.Error())
+		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape(err.Error()))
 	}
 
 	user, err := h.SSOService.FindOrCreateUser(c.Context(), profile)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, err.Error())
+		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape(err.Error()))
 	}
 
 	token, err := utils.GenerateToken(user)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "failed to generate token")
+		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape("failed to generate token"))
 	}
 
 	logger.Info("sso_login_success", map[string]interface{}{
@@ -106,10 +109,7 @@ func (h *SSOHandler) HandleOAuthCallback(c *fiber.Ctx) error {
 		"provider": provider,
 	})
 
-	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"token": token,
-		"user":  user,
-	})
+	return c.Redirect(frontendURL + "/auth/callback?token=" + token)
 }
 
 func (h *SSOHandler) processOAuthCallback(ctx context.Context, provider, code, state string) (*services.SSOProfile, error) {
@@ -167,12 +167,7 @@ func (h *SSOHandler) HandleSAMLACS(c *fiber.Ctx) error {
 		"email":   user.Email,
 	})
 
-	redirectURL := h.Cfg.SSO.Google.RedirectURL
-	if redirectURL == "" {
-		redirectURL = "/files"
-	}
-
-	return c.Redirect(redirectURL + "?token=" + token)
+	return c.Redirect(h.Cfg.Server.FrontendURL + "/auth/callback?token=" + token)
 }
 
 type LDAPLoginRequest struct {
