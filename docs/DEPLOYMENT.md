@@ -278,8 +278,6 @@ Follow the same environment variable setup as Option 2, then run backend and fro
     
       frontend:
         restart: always
-        environment:
-          API_URL: http://backend:8080
     ```
 
 4. **Setup reverse proxy (Nginx)**
@@ -532,11 +530,9 @@ For EKS deployments, use IAM roles for service accounts (IRSA):
 
 ### Frontend Environment Variables
 
-| Variable  | Required | Default                 | Description                                          |
-|-----------|----------|-------------------------|------------------------------------------------------|
-| `API_URL` | No       | (empty)                 | Backend API URL (server-side, for SSR if needed)     |
+No environment variables required. `NEXT_PUBLIC_API_URL` is embedded at build time (empty string for production), making all API calls relative (`/api/...`). The reverse proxy routes `/api` to the backend.
 
-**Note:** `NEXT_PUBLIC_API_URL` is embedded at build time, not runtime. For production, it's set to empty string, making API calls relative (`/api/...`). The reverse proxy routes `/api` to the backend. For local development, set it via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`.
+For local development, set via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`.
 
 ### Production Environment Variable Recommendations
 
