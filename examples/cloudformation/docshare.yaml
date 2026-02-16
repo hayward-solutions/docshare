@@ -1,0 +1,970 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DocShare - Document sharing platform with ECS Fargate, ALB, RDS PostgreSQL, and S3
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for the application (e.g., docshare.example.com)
+
+  Route53HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Route53 hosted zone ID for the domain
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for deployment
+
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Comma-delimited list of public subnet IDs for ALB
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Comma-delimited list of private subnet IDs for ECS and RDS
+
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    AllowedValues:
+      - db.t4g.micro
+      - db.t4g.small
+      - db.t4g.medium
+      - db.t4g.large
+      - db.r6g.large
+      - db.r6g.xlarge
+    Description: RDS PostgreSQL instance class
+
+  DbUsername:
+    Type: String
+    Default: docshare
+    Description: PostgreSQL username
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT signing secret (32+ characters)
+
+  S3BucketName:
+    Type: String
+    Default: ''
+    Description: S3 bucket name (auto-generated if empty)
+
+  BackendCpu:
+    Type: Number
+    Default: 256
+    Description: CPU units for backend task (256 = 0.25 vCPU)
+
+  BackendMemory:
+    Type: Number
+    Default: 512
+    Description: Memory (MB) for backend task
+
+  BackendMinCount:
+    Type: Number
+    Default: 1
+    Description: Minimum backend task count
+
+  BackendMaxCount:
+    Type: Number
+    Default: 4
+    Description: Maximum backend task count
+
+  FrontendCpu:
+    Type: Number
+    Default: 256
+    Description: CPU units for frontend task
+
+  FrontendMemory:
+    Type: Number
+    Default: 512
+    Description: Memory (MB) for frontend task
+
+  FrontendMinCount:
+    Type: Number
+    Default: 1
+    Description: Minimum frontend task count
+
+  FrontendMaxCount:
+    Type: Number
+    Default: 4
+    Description: Maximum frontend task count
+
+  GotenbergCpu:
+    Type: Number
+    Default: 512
+    Description: CPU units for Gotenberg task
+
+  GotenbergMemory:
+    Type: Number
+    Default: 1024
+    Description: Memory (MB) for Gotenberg task
+
+  GotenbergMinCount:
+    Type: Number
+    Default: 1
+    Description: Minimum Gotenberg task count
+
+  GotenbergMaxCount:
+    Type: Number
+    Default: 2
+    Description: Maximum Gotenberg task count
+
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Environment name for tagging
+
+Conditions:
+  HasCustomBucketName: !Not [!Equals [!Ref S3BucketName, '']]
+
+Resources:
+
+  # ============================================================================
+  # Security Groups
+  # ============================================================================
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-alb-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for backend ECS service
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-backend-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for frontend ECS service
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-frontend-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  GotenbergSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Gotenberg ECS service
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-gotenberg-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS PostgreSQL
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # KMS Key for S3 Encryption
+  # ============================================================================
+
+  S3KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for DocShare S3 bucket encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowECSAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref AWS::AccountId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-s3-key'
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3KmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-s3-key'
+      TargetKeyId: !Ref S3KmsKey
+
+  # ============================================================================
+  # S3 Bucket
+  # ============================================================================
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - HasCustomBucketName
+        - !Ref S3BucketName
+        - !Sub '${AWS::StackName}-storage'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Ref S3KmsKey
+              SSEAlgorithm: aws:kms
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${S3Bucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub '${S3Bucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # ============================================================================
+  # RDS PostgreSQL
+  # ============================================================================
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for DocShare PostgreSQL
+      SubnetIds: !Ref PrivateSubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-db-subnet-group'
+
+  DbPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}/db-password'
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Parameter group for DocShare PostgreSQL
+      Family: postgres16
+      Parameters:
+        log_connections: '1'
+        log_disconnections: '1'
+        log_duration: '1'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-postgres'
+      DBInstanceClass: !Ref DbInstanceClass
+      Engine: postgres
+      EngineVersion: '16.4'
+      DBName: docshare
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !GetAtt DbPassword.SecretString
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBParameterGroupName: !Ref DbParameterGroup
+      StorageEncrypted: true
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      DeleteAutomatedBackups: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Snapshot
+
+  DbSecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DbPassword
+      TargetId: !Ref DbInstance
+      TargetType: AWS::RDS::DBInstance
+
+  # ============================================================================
+  # ACM Certificate
+  # ============================================================================
+
+  AcmCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      SubjectAlternativeNames:
+        - !Sub '*.${DomainName}'
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref Route53HostedZoneId
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Application Load Balancer
+  # ============================================================================
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-alb'
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-frontend-tg'
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200-299'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  BackendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-backend-tg'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  GotenbergTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-gotenberg-tg'
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  AlbHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
+
+  AlbHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+
+  BackendListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref AlbHttpsListener
+      Priority: 100
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  # ============================================================================
+  # CloudWatch Log Groups
+  # ============================================================================
+
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/backend'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/frontend'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  GotenbergLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/gotenberg'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # IAM Roles
+  # ============================================================================
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-task-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ECRPull
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DbPassword
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  BackendTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-backend-task-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !GetAtt S3Bucket.Arn
+                  - !Sub '${S3Bucket.Arn}/*'
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # ECS Cluster
+  # ============================================================================
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${AWS::StackName}-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Task Definitions
+  # ============================================================================
+
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-backend'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref BackendCpu
+      Memory: !Ref BackendMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt BackendTaskRole.Arn
+      ContainerDefinitions:
+        - Name: backend
+          Image: ghcr.io/hayward-solutions/docshare/backend:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: DB_HOST
+              Value: !GetAtt DbInstance.Endpoint.Address
+            - Name: DB_PORT
+              Value: '5432'
+            - Name: DB_USER
+              Value: !Ref DbUsername
+            - Name: DB_NAME
+              Value: docshare
+            - Name: DB_SSLMODE
+              Value: require
+            - Name: S3_REGION
+              Value: !Ref AWS::Region
+            - Name: S3_BUCKET
+              Value: !Ref S3Bucket
+            - Name: S3_USE_SSL
+              Value: 'true'
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: SERVER_PORT
+              Value: '8080'
+            - Name: GOTENBERG_URL
+              Value: !Sub 'http://${GotenbergService.Name}.${AWS::StackName}-cluster.local:3000'
+          Secrets:
+            - Name: DB_PASSWORD
+              ValueFrom: !Ref DbPassword
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: backend
+
+  FrontendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-frontend'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref FrontendCpu
+      Memory: !Ref FrontendMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: frontend
+          Image: ghcr.io/hayward-solutions/docshare/frontend:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref FrontendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: frontend
+
+  GotenbergTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-gotenberg'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref GotenbergCpu
+      Memory: !Ref GotenbergMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: gotenberg
+          Image: gotenberg/gotenberg:8
+          Essential: true
+          Command:
+            - gotenberg
+            - --api-timeout=120s
+            - --libreoffice-restart-after=10
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref GotenbergLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: gotenberg
+
+  # ============================================================================
+  # ECS Services
+  # ============================================================================
+
+  BackendService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AlbHttpsListener
+      - DbInstance
+    Properties:
+      ServiceName: backend
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: !Ref BackendMinCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - !Ref BackendSecurityGroup
+      LoadBalancers:
+        - TargetGroupArn: !Ref BackendTargetGroup
+          ContainerName: backend
+          ContainerPort: 8080
+      HealthCheckGracePeriodSeconds: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AlbHttpsListener
+    Properties:
+      ServiceName: frontend
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref FrontendTaskDefinition
+      DesiredCount: !Ref FrontendMinCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - !Ref FrontendSecurityGroup
+      LoadBalancers:
+        - TargetGroupArn: !Ref FrontendTargetGroup
+          ContainerName: frontend
+          ContainerPort: 3000
+      HealthCheckGracePeriodSeconds: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  GotenbergService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AlbHttpsListener
+    Properties:
+      ServiceName: gotenberg
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref GotenbergTaskDefinition
+      DesiredCount: !Ref GotenbergMinCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - !Ref GotenbergSecurityGroup
+      HealthCheckGracePeriodSeconds: 60
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Sub '${AWS::StackName}-cluster'
+        Services:
+          - PortName: default
+            DiscoveryName: gotenberg
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # Auto Scaling
+  # ============================================================================
+
+  BackendScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref BackendMaxCount
+      MinCapacity: !Ref BackendMinCount
+      ResourceId: !Sub 'service/${EcsCluster}/${BackendService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  BackendCpuScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-backend-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref BackendScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 60
+        ScaleInCooldown: 120
+
+  FrontendScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref FrontendMaxCount
+      MinCapacity: !Ref FrontendMinCount
+      ResourceId: !Sub 'service/${EcsCluster}/${FrontendService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  FrontendCpuScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-frontend-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref FrontendScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 60
+        ScaleInCooldown: 120
+
+  GotenbergScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref GotenbergMaxCount
+      MinCapacity: !Ref GotenbergMinCount
+      ResourceId: !Sub 'service/${EcsCluster}/${GotenbergService.Name}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  GotenbergCpuScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-gotenberg-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref GotenbergScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 80
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 60
+        ScaleInCooldown: 180
+
+  # ============================================================================
+  # Route53 DNS Record
+  # ============================================================================
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSetGroup
+    DependsOn: Alb
+    Properties:
+      HostedZoneId: !Ref Route53HostedZoneId
+      RecordSets:
+        - Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        - Name: !Sub '*.${DomainName}'
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+
+Outputs:
+
+  AlbDnsName:
+    Description: Application Load Balancer DNS name
+    Value: !GetAtt Alb.DNSName
+
+  AlbUrl:
+    Description: Application URL
+    Value: !Sub 'https://${DomainName}'
+
+  RdsEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt DbInstance.Endpoint.Address
+
+  RdsPort:
+    Description: RDS PostgreSQL port
+    Value: !GetAtt DbInstance.Endpoint.Port
+
+  S3BucketName:
+    Description: S3 bucket name for file storage
+    Value: !Ref S3Bucket
+
+  EcsClusterName:
+    Description: ECS cluster name
+    Value: !Ref EcsCluster
+
+  BackendServiceName:
+    Description: Backend ECS service name
+    Value: !GetAtt BackendService.Name
+
+  FrontendServiceName:
+    Description: Frontend ECS service name
+    Value: !GetAtt FrontendService.Name
+
+  GotenbergServiceName:
+    Description: Gotenberg ECS service name
+    Value: !GetAtt GotenbergService.Name
+
+  AcmCertificateArn:
+    Description: ACM certificate ARN
+    Value: !Ref AcmCertificate
+
+  KmsKeyArn:
+    Description: KMS key ARN for S3 encryption
+    Value: !GetAtt S3KmsKey.Arn
+
+  DbSecretArn:
+    Description: Secrets Manager ARN for database password
+    Value: !Ref DbPassword

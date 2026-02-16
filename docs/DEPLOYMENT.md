@@ -366,7 +366,36 @@ The chart includes:
 
 See the [Helm Chart documentation](HELM.md) for the full configuration reference, production examples, and external database/storage setup.
 
-#### Option 3: Managed Services (Hybrid Cloud)
+#### Option 3: AWS CloudFormation (ECS Fargate)
+
+**Best for:** AWS-native deployments, managed infrastructure, > 100 users
+
+DocShare provides a CloudFormation template for deploying to AWS ECS Fargate with:
+
+- **ECS Fargate** - Serverless container orchestration
+- **Application Load Balancer** - HTTPS termination, path-based routing
+- **RDS PostgreSQL** - Managed database with encryption at rest
+- **S3** - Object storage with KMS encryption
+- **Auto Scaling** - CPU-based scaling policies
+
+```bash
+# Deploy to AWS
+aws cloudformation create-stack \
+  --stack-name docshare \
+  --template-body file://examples/cloudformation/docshare.yaml \
+  --parameters \
+      ParameterKey=DomainName,ParameterValue=docshare.example.com \
+      ParameterKey=Route53HostedZoneId,ParameterValue=Z1234567890ABC \
+      ParameterKey=VpcId,ParameterValue=vpc-abc123 \
+      ParameterKey=PublicSubnetIds,ParameterValue="subnet-aaa,subnet-bbb" \
+      ParameterKey=PrivateSubnetIds,ParameterValue="subnet-xxx,subnet-yyy" \
+      ParameterKey=JwtSecret,ParameterValue=$(openssl rand -hex 32) \
+  --capabilities CAPABILITY_IAM
+```
+
+See the [CloudFormation documentation](CLOUDFORMATION.md) for detailed configuration, cost estimates, and troubleshooting.
+
+#### Option 4: Managed Services (Hybrid Cloud)
 
 **Best for:** Minimal infrastructure management
 
@@ -1463,9 +1492,12 @@ SELECT * FROM pg_stat_user_indexes;
 - [README.md](../README.md) - Project overview
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture details
 - [API.md](API.md) - API documentation
+- [HELM.md](HELM.md) - Helm chart reference
+- [CLOUDFORMATION.md](CLOUDFORMATION.md) - AWS CloudFormation deployment
 - Docker Documentation: https://docs.docker.com/
 - PostgreSQL Documentation: https://www.postgresql.org/docs/
 - AWS S3 Documentation: https://docs.aws.amazon.com/s3/
+- AWS ECS Documentation: https://docs.aws.amazon.com/ecs/
 - Nginx Documentation: https://nginx.org/en/docs/
 
 ---
