@@ -1,0 +1,27 @@
+.grid.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.grid.cards > ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: contents;
+}
+
+.grid.cards > ul > li {
+  background: var(--md-code-bg-color);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 0;
+}
+
+.grid.cards > ul > li > p:first-child {
+  margin-top: 0;
+}
+
+.grid.cards > ul > li > p:last-child {
+  margin-bottom: 0;
+}

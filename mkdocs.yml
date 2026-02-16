@@ -1,0 +1,103 @@
+site_name: DocShare
+site_description: A modern, secure document sharing platform
+site_url: https://hayward-solutions.github.io/docshare/
+repo_url: https://github.com/hayward-solutions/docshare
+repo_name: hayward-solutions/docshare
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+  icon:
+    repo: fontawesome/brands/github
+  logo: assets/logo.svg
+
+plugins:
+  - search
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started: DEPLOYMENT.md
+  - Architecture: ARCHITECTURE.md
+  - API Reference: API.md
+  - CLI Reference: CLI.md
+  - Examples:
+    - Overview: examples/index.md
+    - Docker Compose: examples/docker-compose.md
+    - Helm Charts: examples/helm.md
+    - SSO: examples/sso.md
+    - Ingress: examples/ingress.md
+  - Helm Chart: HELM.md
+  - SSO: SSO.md
+  - Security: SECURITY.md
+  - Roadmap: ROADMAP.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/hayward-solutions/docshare
+
+extra_css:
+  - stylesheets/extra.css
