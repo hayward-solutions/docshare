@@ -21,6 +21,10 @@ examples/
 │       ├── nginx/       # Nginx (flexible config)
 │       ├── traefik/     # Traefik (auto-discovery)
 │       └── tailscale/   # Tailscale (private access)
+├── cloudformation/      # AWS CloudFormation deployment
+│   ├── docshare.yaml    # Main CloudFormation template
+│   ├── deploy-policy.json # IAM policy for deployment
+│   └── README.md        # Deployment guide
 └── helm/                # Kubernetes Helm values examples
     ├── minimal.yaml     # Development/evaluation
     ├── production.yaml  # Production-ready
@@ -35,22 +39,24 @@ examples/
 
 ## Quick Links
 
-| Scenario | Docker Compose | Helm |
-|----------|---------------|------|
-| Minimal | [docker-compose/minimal](docker-compose/minimal/) | [helm/minimal.yaml](helm/minimal.yaml) |
-| Production | - | [helm/production.yaml](helm/production.yaml) |
-| External DB | [docker-compose/external-db](docker-compose/external-db/) | [helm/external-db.yaml](helm/external-db.yaml) |
-| S3-Compatible | [docker-compose/s3-compatible](docker-compose/s3-compatible/) | - |
-| High Availability | - | [helm/ha.yaml](helm/ha.yaml) |
-| SSO | [docker-compose/full](docker-compose/full/) | [sso/](docker-compose/sso/) |
-| **Ingress** | | |
-| Caddy | [docker-compose/ingress/caddy](docker-compose/ingress/caddy/) | [helm/ingress/caddy.yaml](helm/ingress/caddy.yaml) |
-| Nginx | [docker-compose/ingress/nginx](docker-compose/ingress/nginx/) | [helm/ingress/nginx.yaml](helm/ingress/nginx.yaml) |
-| Traefik | [docker-compose/ingress/traefik](docker-compose/ingress/traefik/) | [helm/ingress/traefik.yaml](helm/ingress/traefik.yaml) |
-| Tailscale | [docker-compose/ingress/tailscale](docker-compose/ingress/tailscale/) | [helm/ingress/tailscale.yaml](helm/ingress/tailscale.yaml) |
+| Scenario | Docker Compose | Helm | CloudFormation |
+|----------|---------------|------|----------------|
+| Minimal | [docker-compose/minimal](docker-compose/minimal/) | [helm/minimal.yaml](helm/minimal.yaml) | - |
+| Production | - | [helm/production.yaml](helm/production.yaml) | [cloudformation/](cloudformation/) |
+| External DB | [docker-compose/external-db](docker-compose/external-db/) | [helm/external-db.yaml](helm/external-db.yaml) | - |
+| S3-Compatible | [docker-compose/s3-compatible](docker-compose/s3-compatible/) | - | - |
+| High Availability | - | [helm/ha.yaml](helm/ha.yaml) | - |
+| AWS ECS Fargate | - | - | [cloudformation/](cloudformation/) |
+| SSO | [docker-compose/full](docker-compose/full/) | [sso/](docker-compose/sso/) | - |
+| **Ingress** | | | |
+| Caddy | [docker-compose/ingress/caddy](docker-compose/ingress/caddy/) | [helm/ingress/caddy.yaml](helm/ingress/caddy.yaml) | - |
+| Nginx | [docker-compose/ingress/nginx](docker-compose/ingress/nginx/) | [helm/ingress/nginx.yaml](helm/ingress/nginx.yaml) | - |
+| Traefik | [docker-compose/ingress/traefik](docker-compose/ingress/traefik/) | [helm/ingress/traefik.yaml](helm/ingress/traefik.yaml) | - |
+| Tailscale | [docker-compose/ingress/tailscale](docker-compose/ingress/tailscale/) | [helm/ingress/tailscale.yaml](helm/ingress/tailscale.yaml) | - |
 
 ## Documentation
 
 - [Deployment Guide](../docs/DEPLOYMENT.md)
 - [Helm Chart Reference](../docs/HELM.md)
+- [AWS CloudFormation Reference](../docs/CLOUDFORMATION.md)
 - [SSO Configuration](../docs/SSO.md)
