@@ -26,8 +26,6 @@ frontend:
     limits:
       cpu: 500m
       memory: 256Mi
-  env:
-    nextPublicApiUrl: "https://docshare.example.com"
 
 gotenberg:
   enabled: true

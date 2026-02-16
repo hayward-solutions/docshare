@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Download, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface FileViewerProps {
   file: File;

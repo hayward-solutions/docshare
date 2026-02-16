@@ -28,9 +28,6 @@ frontend:
     type: ClusterIP
     port: 3000
   resources: {}
-  env:
-    nextPublicApiUrl: "http://localhost:8080"
-    apiUrl: ""
 
 gotenberg:
   enabled: true

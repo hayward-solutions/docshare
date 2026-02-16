@@ -64,13 +64,9 @@ backend:
   replicaCount: 2
   env:
     jwtSecret: "generate-with-openssl-rand-hex-32"
-    nextPublicApiUrl: "https://docshare.example.com"
 
 frontend:
   replicaCount: 2
-  env:
-    nextPublicApiUrl: "https://docshare.example.com"
-    apiUrl: "http://docshare-backend:8080"
 
 ingress:
   enabled: true
@@ -227,8 +223,8 @@ gotenberg:
 | `frontend.service.type`         | string | `ClusterIP`                                   | Service type                                                    |
 | `frontend.service.port`         | int    | `3000`                                        | Service port                                                    |
 | `frontend.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
-| `frontend.env.nextPublicApiUrl` | string | `"http://localhost:8080"`                     | Backend API URL (used by browser)                               |
-| `frontend.env.apiUrl`           | string | `""`                                          | Backend API URL (server-side, defaults to internal service URL) |
+
+**Note:** The frontend does not require environment variables for API routing. `NEXT_PUBLIC_API_URL` is embedded at build time (set to empty string), making all API calls relative (`/api/...`). The ingress configuration routes `/api` requests to the backend service.
 
 ### Gotenberg
 

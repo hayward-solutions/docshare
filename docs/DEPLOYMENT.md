@@ -149,7 +149,7 @@ go run cmd/server/main.go
 # Start backend services
 docker-compose up -d postgres backend gotenberg
 
-# Set environment variables
+# Set environment variables (optional, defaults to http://localhost:8080)
 export NEXT_PUBLIC_API_URL=http://localhost:8080
 
 # Install dependencies
@@ -279,7 +279,6 @@ Follow the same environment variable setup as Option 2, then run backend and fro
       frontend:
         restart: always
         environment:
-          NEXT_PUBLIC_API_URL: https://your-domain.com
           API_URL: http://backend:8080
     ```
 
@@ -533,11 +532,11 @@ For EKS deployments, use IAM roles for service accounts (IRSA):
 
 ### Frontend Environment Variables
 
-| Variable              | Required | Default                     | Description                                    |
-|-----------------------|----------|-----------------------------|------------------------------------------------|
-| `NEXT_PUBLIC_API_URL` | Yes      | `http://localhost:8080`     | Backend API URL (public, used by browser)      |
-| `API_URL`             | No       | Same as NEXT_PUBLIC_API_URL | Backend API URL (server-side)                  |
-| `NODE_ENV`            | No       | `development`               | Node environment (`development`, `production`) |
+| Variable  | Required | Default                 | Description                                          |
+|-----------|----------|-------------------------|------------------------------------------------------|
+| `API_URL` | No       | (empty)                 | Backend API URL (server-side, for SSR if needed)     |
+
+**Note:** `NEXT_PUBLIC_API_URL` is embedded at build time, not runtime. For production, it's set to empty string, making API calls relative (`/api/...`). The reverse proxy routes `/api` to the backend. For local development, set it via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`.
 
 ### Production Environment Variable Recommendations
 
@@ -565,8 +564,8 @@ AUDIT_EXPORT_INTERVAL=1h
 
 ```bash
 # Frontend (.env.frontend.prod)
-NEXT_PUBLIC_API_URL=https://api.your-domain.com
-NODE_ENV=production
+# NEXT_PUBLIC_API_URL is set to empty at build time for relative API paths
+# No environment variables needed - reverse proxy handles routing
 ```
 
 ### Generating Secrets

@@ -12,8 +12,6 @@ backend:
 
 frontend:
   replicaCount: 1
-  env:
-    nextPublicApiUrl: "http://localhost:8080"
 
 gotenberg:
   enabled: true
