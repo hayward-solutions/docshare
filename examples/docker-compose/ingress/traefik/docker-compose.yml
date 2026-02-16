@@ -1,0 +1,102 @@
+# Traefik Reverse Proxy Example
+# Modern reverse proxy with auto-discovery via labels
+#
+# Usage:
+#   export DOMAIN=docshare.example.com
+#   export AWS_ACCESS_KEY_ID=your-key
+#   export AWS_SECRET_ACCESS_KEY=your-secret
+#   export S3_BUCKET=your-bucket
+#   docker-compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: docshare
+      POSTGRES_PASSWORD: docshare_secret
+      POSTGRES_DB: docshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--libreoffice-restart-after=10"
+    labels:
+      - "traefik.enable=false"
+
+  backend:
+    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: docshare
+      DB_PASSWORD: docshare_secret
+      DB_NAME: docshare
+      DB_SSLMODE: disable
+      S3_REGION: "${AWS_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
+      S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-docshare}"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      GOTENBERG_URL: http://gotenberg:3000
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.backend-timeout.forwardingtimeouts.readtimeout=120s"
+
+  frontend:
+    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+  traefik:
+    image: traefik:v3
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_data:/data
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Let's Encrypt (uncomment for production)
+      # - "--certificatesresolvers.letsencrypt.acme.email=${EMAIL:-admin@example.com}"
+      # - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      # - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      # Dashboard authentication (generate with htpasswd)
+      # - "traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$2y$$05$$..."
+
+volumes:
+  postgres_data:
+  traefik_data:

@@ -1,53 +1,56 @@
-# High availability deployment with multiple replicas
+# Tailscale Ingress Example
+# Requires:
+#   - Tailscale Kubernetes Operator installed
+#   - HTTPS enabled on your tailnet
+#
 # Usage:
 #   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 #     --namespace docshare --create-namespace \
-#     -f ha.yaml
+#     -f tailscale.yaml
+#
+# Access at: https://docshare.tailXXXXX.ts.net
 
 backend:
-  replicaCount: 3
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 512Mi
-  env:
-    jwtSecret: ""
-    s3Bucket: "docshare-prod"
-
-frontend:
-  replicaCount: 3
+  replicaCount: 1
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 256Mi
     limits:
       cpu: 500m
+      memory: 512Mi
+  env:
+    jwtSecret: ""
+    jwtExpirationHours: "24"
+    s3Bucket: "docshare-prod"
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
       memory: 256Mi
 
 gotenberg:
   enabled: true
-  replicaCount: 2
+  replicaCount: 1
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 200m
+      memory: 512Mi
     limits:
-      cpu: 2000m
-      memory: 2Gi
+      cpu: 1000m
+      memory: 1Gi
 
 ingress:
   enabled: true
-  className: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+  className: tailscale
+  # No annotations needed - Tailscale handles TLS via MagicDNS
   hosts:
-    - host: docshare.example.com
+    - host: docshare
       paths:
         - path: /
           pathType: Prefix
@@ -55,10 +58,8 @@ ingress:
         - path: /api
           pathType: Prefix
           service: backend
-  tls:
-    - secretName: docshare-tls
-      hosts:
-        - docshare.example.com
+  # Tailscale generates its own certificates
+  tls: []
 
 postgresql:
   enabled: true
@@ -68,14 +69,7 @@ postgresql:
     database: docshare
   primary:
     persistence:
-      size: 50Gi
-    resources:
-      requests:
-        cpu: 500m
-        memory: 1Gi
-      limits:
-        cpu: 2000m
-        memory: 4Gi
+      size: 10Gi
 
 s3:
   region: "us-east-1"

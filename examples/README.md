@@ -11,16 +11,26 @@ examples/
 │   ├── external-db/     # External PostgreSQL
 │   ├── s3-compatible/   # MinIO or other S3-compatible storage
 │   ├── full/            # Full stack with SSO
-│   └── sso/             # SSO provider examples
-│       ├── google/      # Google OAuth2
-│       ├── github/      # GitHub OAuth2
-│       ├── keycloak/    # Keycloak OIDC
-│       └── ldap/        # LDAP/Active Directory
+│   ├── sso/             # SSO provider examples
+│   │   ├── google/      # Google OAuth2
+│   │   ├── github/      # GitHub OAuth2
+│   │   ├── keycloak/    # Keycloak OIDC
+│   │   └── ldap/        # LDAP/Active Directory
+│   └── ingress/         # Reverse proxy / ingress examples
+│       ├── caddy/       # Caddy (automatic HTTPS)
+│       ├── nginx/       # Nginx (flexible config)
+│       ├── traefik/     # Traefik (auto-discovery)
+│       └── tailscale/   # Tailscale (private access)
 └── helm/                # Kubernetes Helm values examples
     ├── minimal.yaml     # Development/evaluation
     ├── production.yaml  # Production-ready
     ├── external-db.yaml # External database
-    └── ha.yaml          # High availability
+    ├── ha.yaml          # High availability
+    └── ingress/         # Ingress controller examples
+        ├── caddy.yaml
+        ├── nginx.yaml
+        ├── traefik.yaml
+        └── tailscale.yaml
 ```
 
 ## Quick Links
@@ -33,6 +43,11 @@ examples/
 | S3-Compatible | [docker-compose/s3-compatible](docker-compose/s3-compatible/) | - |
 | High Availability | - | [helm/ha.yaml](helm/ha.yaml) |
 | SSO | [docker-compose/full](docker-compose/full/) | [sso/](docker-compose/sso/) |
+| **Ingress** | | |
+| Caddy | [docker-compose/ingress/caddy](docker-compose/ingress/caddy/) | [helm/ingress/caddy.yaml](helm/ingress/caddy.yaml) |
+| Nginx | [docker-compose/ingress/nginx](docker-compose/ingress/nginx/) | [helm/ingress/nginx.yaml](helm/ingress/nginx.yaml) |
+| Traefik | [docker-compose/ingress/traefik](docker-compose/ingress/traefik/) | [helm/ingress/traefik.yaml](helm/ingress/traefik.yaml) |
+| Tailscale | [docker-compose/ingress/tailscale](docker-compose/ingress/tailscale/) | [helm/ingress/tailscale.yaml](helm/ingress/tailscale.yaml) |
 
 ## Documentation
 

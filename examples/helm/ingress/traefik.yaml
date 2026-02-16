@@ -1,51 +1,54 @@
-# High availability deployment with multiple replicas
+# Traefik Ingress Example
+# Requires: Traefik installed in the cluster
+#
 # Usage:
 #   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 #     --namespace docshare --create-namespace \
-#     -f ha.yaml
+#     -f traefik.yaml
 
 backend:
-  replicaCount: 3
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 512Mi
-  env:
-    jwtSecret: ""
-    s3Bucket: "docshare-prod"
-
-frontend:
-  replicaCount: 3
+  replicaCount: 2
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 256Mi
     limits:
       cpu: 500m
+      memory: 512Mi
+  env:
+    jwtSecret: ""
+    jwtExpirationHours: "24"
+    s3Bucket: "docshare-prod"
+
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
       memory: 256Mi
 
 gotenberg:
   enabled: true
-  replicaCount: 2
+  replicaCount: 1
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 200m
+      memory: 512Mi
     limits:
-      cpu: 2000m
-      memory: 2Gi
+      cpu: 1000m
+      memory: 1Gi
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # For Let's Encrypt, use cert-manager or Traefik's built-in resolver
+    # traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
   hosts:
     - host: docshare.example.com
       paths:
@@ -56,7 +59,7 @@ ingress:
           pathType: Prefix
           service: backend
   tls:
-    - secretName: docshare-tls
+    - secretName: docshare-traefik-tls
       hosts:
         - docshare.example.com
 
@@ -68,14 +71,7 @@ postgresql:
     database: docshare
   primary:
     persistence:
-      size: 50Gi
-    resources:
-      requests:
-        cpu: 500m
-        memory: 1Gi
-      limits:
-        cpu: 2000m
-        memory: 4Gi
+      size: 10Gi
 
 s3:
   region: "us-east-1"

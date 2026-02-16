@@ -11,8 +11,6 @@ backend:
 
 frontend:
   replicaCount: 2
-  env:
-    nextPublicApiUrl: "https://docshare.example.com"
 
 gotenberg:
   enabled: true

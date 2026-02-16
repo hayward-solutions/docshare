@@ -67,9 +67,6 @@ services:
   frontend:
     image: ghcr.io/hayward-solutions/docshare/frontend:latest
     container_name: docshare-frontend
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080
-      API_URL: http://backend:8080
     ports:
       - "3001:3000"
     depends_on:

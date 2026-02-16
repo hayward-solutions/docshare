@@ -346,6 +346,22 @@ export const apiMethods = {
 }
 ```
 
+### API URL Strategy
+
+`NEXT_PUBLIC_API_URL` is embedded at build time, not runtime:
+
+- **Production build**: Set to empty string, making all API calls relative (`/api/...`)
+- **Development**: Set via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`
+
+**Production architecture**:
+- Reverse proxy (Nginx/Traefik/Ingress) routes `/api` to backend
+- Frontend and backend appear as a single origin (no CORS issues)
+- No environment-specific API URL configuration needed
+
+**Development architecture**:
+- Frontend dev server proxies API calls to backend
+- Or set `NEXT_PUBLIC_API_URL` to bypass proxy for direct backend access
+
 ## Data Models
 
 ### Entity Relationship Diagram

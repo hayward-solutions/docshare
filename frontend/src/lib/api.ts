@@ -1,6 +1,6 @@
 import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, PreviewJob, SSOProvider, User } from './types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 interface FetchOptions extends RequestInit {

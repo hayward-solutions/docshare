@@ -1,0 +1,34 @@
+# Caddyfile for DocShare
+# The DOMAIN variable is substituted from environment
+
+{$DOMAIN} {
+	# Automatic HTTPS via Let's Encrypt
+	# Requires EMAIL environment variable for registration
+	
+	# Backend API
+	handle /api/* {
+		reverse_proxy backend:8080 {
+			# Increase timeout for file uploads
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
+	}
+	
+	# Frontend
+	handle {
+		reverse_proxy frontend:3000
+	}
+	
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}
+
+# HTTP redirect (optional - Caddy handles this automatically with HTTPS)
+:80 {
+	redirect https://{$DOMAIN}{uri}
+}

@@ -25,11 +25,6 @@ spec:
             - name: http
               containerPort: {{ .Values.frontend.service.port }}
               protocol: TCP
-          env:
-            - name: NEXT_PUBLIC_API_URL
-              value: {{ .Values.frontend.env.nextPublicApiUrl | quote }}
-            - name: API_URL
-              value: {{ default (include "docshare.backendUrl" .) .Values.frontend.env.apiUrl | quote }}
           readinessProbe:
             httpGet:
               path: /
