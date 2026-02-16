@@ -1,0 +1,76 @@
+# Tailscale Ingress Example
+# Requires:
+#   - Tailscale Kubernetes Operator installed
+#   - HTTPS enabled on your tailnet
+#
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare --create-namespace \
+#     -f tailscale.yaml
+#
+# Access at: https://docshare.tailXXXXX.ts.net
+
+backend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    jwtSecret: ""
+    jwtExpirationHours: "24"
+    s3Bucket: "docshare-prod"
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+gotenberg:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: tailscale
+  # No annotations needed - Tailscale handles TLS via MagicDNS
+  hosts:
+    - host: docshare
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  # Tailscale generates its own certificates
+  tls: []
+
+postgresql:
+  enabled: true
+  auth:
+    username: docshare
+    password: ""
+    database: docshare
+  primary:
+    persistence:
+      size: 10Gi
+
+s3:
+  region: "us-east-1"
+  bucket: "docshare-prod"

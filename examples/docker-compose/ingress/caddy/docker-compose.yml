@@ -1,0 +1,79 @@
+# Caddy Reverse Proxy Example
+# Automatic HTTPS with Let's Encrypt
+#
+# Usage:
+#   export DOMAIN=docshare.example.com
+#   export EMAIL=admin@example.com
+#   export AWS_ACCESS_KEY_ID=your-key
+#   export AWS_SECRET_ACCESS_KEY=your-secret
+#   export S3_BUCKET=your-bucket
+#   docker-compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: docshare
+      POSTGRES_PASSWORD: docshare_secret
+      POSTGRES_DB: docshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--libreoffice-restart-after=10"
+
+  backend:
+    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: docshare
+      DB_PASSWORD: docshare_secret
+      DB_NAME: docshare
+      DB_SSLMODE: disable
+      S3_REGION: "${AWS_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
+      S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-docshare}"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      GOTENBERG_URL: http://gotenberg:3000
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: "${DOMAIN:-localhost}"
+      EMAIL: "${EMAIL:-}"
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

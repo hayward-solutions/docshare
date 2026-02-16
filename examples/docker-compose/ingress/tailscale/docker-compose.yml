@@ -1,0 +1,81 @@
+# Tailscale Sidecar Example
+# Private access to DocShare via Tailscale tailnet
+#
+# Usage:
+#   export TS_AUTHKEY=tskey-auth-xxxxx
+#   export AWS_ACCESS_KEY_ID=your-key
+#   export AWS_SECRET_ACCESS_KEY=your-secret
+#   export S3_BUCKET=your-bucket
+#   docker-compose up -d
+#
+# Access at: https://docshare.tailXXXXX.ts.net
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: docshare
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+    volumes:
+      - tailscale_data:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+
+  postgres:
+    image: postgres:16-alpine
+    network_mode: service:tailscale
+    environment:
+      POSTGRES_USER: docshare
+      POSTGRES_PASSWORD: docshare_secret
+      POSTGRES_DB: docshare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docshare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    network_mode: service:tailscale
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--libreoffice-restart-after=10"
+
+  backend:
+    image: ghcr.io/hayward-solutions/docshare/backend:latest
+    network_mode: service:tailscale
+    environment:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USER: docshare
+      DB_PASSWORD: docshare_secret
+      DB_NAME: docshare
+      DB_SSLMODE: disable
+      S3_REGION: "${AWS_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${AWS_ACCESS_KEY_ID:-}"
+      S3_SECRET_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-docshare}"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      GOTENBERG_URL: http://127.0.0.1:3000
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+    network_mode: service:tailscale
+    depends_on:
+      - backend
+
+volumes:
+  tailscale_data:
+  postgres_data:
