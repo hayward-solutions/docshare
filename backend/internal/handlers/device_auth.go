@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docshare/backend/internal/config"
 	"github.com/docshare/backend/internal/middleware"
 	"github.com/docshare/backend/internal/models"
 	"github.com/docshare/backend/internal/services"
@@ -25,12 +26,13 @@ const (
 )
 
 type DeviceAuthHandler struct {
-	DB    *gorm.DB
-	Audit *services.AuditService
+	DB          *gorm.DB
+	Audit       *services.AuditService
+	FrontendURL string
 }
 
-func NewDeviceAuthHandler(db *gorm.DB, audit *services.AuditService) *DeviceAuthHandler {
-	return &DeviceAuthHandler{DB: db, Audit: audit}
+func NewDeviceAuthHandler(db *gorm.DB, audit *services.AuditService, cfg *config.Config) *DeviceAuthHandler {
+	return &DeviceAuthHandler{DB: db, Audit: audit, FrontendURL: cfg.Server.FrontendURL}
 }
 
 // RequestCode implements the Device Authorization Endpoint (RFC 8628 Section 3.1-3.2).
@@ -63,7 +65,7 @@ func (h *DeviceAuthHandler) RequestCode(c *fiber.Ctx) error {
 		return oauthError(c, fiber.StatusInternalServerError, "server_error", "failed to create device code")
 	}
 
-	verificationURI := frontendURL() + "/device"
+	verificationURI := h.FrontendURL + "/device"
 	verificationURIComplete := verificationURI + "?code=" + userCode
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -279,8 +281,4 @@ func normalizeUserCode(input string) string {
 	s = strings.ReplaceAll(s, "-", "")
 	s = strings.ReplaceAll(s, " ", "")
 	return s
-}
-
-func frontendURL() string {
-	return "http://localhost:3001"
 }

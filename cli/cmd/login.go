@@ -78,7 +78,6 @@ func loginDeviceFlow() error {
 	fmt.Printf("If the browser doesn't open, visit:\n  %s\n\n", deviceResp.VerificationURIComplete)
 	fmt.Printf("Your code: %s\n\n", deviceResp.UserCode)
 
-	// Try to open the browser.
 	_ = openBrowser(deviceResp.VerificationURIComplete)
 
 	// Step 2: Poll for the token.

@@ -86,6 +86,16 @@ func setupTestEnv(t *testing.T) *testEnv {
 	})
 	auditService := services.NewAuditService(db, nil)
 
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			FrontendURL: "http://localhost:3001",
+		},
+		SSO: config.SSOConfig{
+			AutoRegister: true,
+			DefaultRole:  "user",
+		},
+	}
+
 	authHandler := NewAuthHandler(db, auditService)
 	usersHandler := NewUsersHandler(db, auditService)
 	groupsHandler := NewGroupsHandler(db, auditService)
@@ -94,16 +104,10 @@ func setupTestEnv(t *testing.T) *testEnv {
 	activitiesHandler := NewActivitiesHandler(db)
 	auditHandler := NewAuditHandler(db)
 	apiTokenHandler := NewAPITokenHandler(db, auditService)
-	deviceAuthHandler := NewDeviceAuthHandler(db, auditService)
+	deviceAuthHandler := NewDeviceAuthHandler(db, auditService, cfg)
 	transfersHandler := NewTransfersHandler(db, 300)
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
-	cfg := &config.Config{
-		SSO: config.SSOConfig{
-			AutoRegister: true,
-			DefaultRole:  "user",
-		},
-	}
 	ssoHandler := NewSSOHandler(db, cfg)
 
 	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
