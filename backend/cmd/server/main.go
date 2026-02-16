@@ -65,7 +65,7 @@ func main() {
 	activitiesHandler := handlers.NewActivitiesHandler(db)
 	auditHandler := handlers.NewAuditHandler(db)
 	apiTokenHandler := handlers.NewAPITokenHandler(db, auditService)
-	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService)
+	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService, cfg)
 	transfersHandler := handlers.NewTransfersHandler(db, 300)
 	ssoHandler := handlers.NewSSOHandler(db, cfg)
 

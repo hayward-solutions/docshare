@@ -23,8 +23,14 @@ func TestDeviceAuthEndpoints(t *testing.T) {
 
 		deviceCode = body["device_code"].(string)
 		userCode = body["user_code"].(string)
-		if body["verification_uri"] == "" {
-			t.Fatalf("expected verification_uri")
+		verificationURI := body["verification_uri"].(string)
+		verificationURIComplete := body["verification_uri_complete"].(string)
+
+		if verificationURI != "http://localhost:3001/device" {
+			t.Fatalf("expected verification_uri to be 'http://localhost:3001/device', got %v", verificationURI)
+		}
+		if !strings.HasPrefix(verificationURIComplete, "http://localhost:3001/device?code=") {
+			t.Fatalf("expected verification_uri_complete to start with 'http://localhost:3001/device?code=', got %v", verificationURIComplete)
 		}
 	})
 
