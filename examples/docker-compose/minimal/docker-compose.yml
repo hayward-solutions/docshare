@@ -1,6 +1,6 @@
 # Minimal deployment with AWS S3
 #
-# For production, update FRONTEND_URL and BACKEND_URL to match your domain.
+# For production, update WEB_URL and API_URL to match your domain.
 #
 # Usage:
 #   export AWS_ACCESS_KEY_ID=your-key
@@ -49,8 +49,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: http://localhost:3001
-      BACKEND_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
     ports:
       - "8080:8080"
     depends_on:
@@ -61,8 +61,8 @@ services:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     container_name: docshare-web
     environment:
-      BACKEND_URL: http://localhost:8080/api
-      FRONTEND_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
     ports:
       - "3001:3000"
     depends_on:

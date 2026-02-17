@@ -25,6 +25,8 @@ Kubernetes deployment examples using Helm:
 | [production.yaml](https://github.com/hayward-solutions/docshare/blob/main/examples/helm/production.yaml) | Production-ready with TLS and replicas | Production deployments |
 | [external-db.yaml](https://github.com/hayward-solutions/docshare/blob/main/examples/helm/external-db.yaml) | External PostgreSQL database | Managed database services |
 | [ha.yaml](https://github.com/hayward-solutions/docshare/blob/main/examples/helm/ha.yaml) | High availability with multiple replicas | Large-scale deployments |
+| [ingress/external.yaml](https://github.com/hayward-solutions/docshare/blob/main/examples/helm/ingress/external.yaml) | External ingress controller | AWS ALB, Cloudflare, GCP CLB, etc. |
+| [sso.yaml](https://github.com/hayward-solutions/docshare/blob/main/examples/helm/sso.yaml) | SSO with Google, GitHub, OIDC, SAML, LDAP | Enterprise authentication |
 
 See [Helm Examples](helm.md) for detailed configuration.
 

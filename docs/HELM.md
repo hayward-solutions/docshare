@@ -210,9 +210,18 @@ gotenberg:
 | `api.env.jwtExpirationHours` | string | `"24"`                                       | JWT token lifetime                                   |
 | `api.env.serverPort`         | string | `"8080"`                                     | Backend server port                                  |
 | `api.env.gotenbergUrl`       | string | `""`                                         | Gotenberg URL (auto-configured if gotenberg.enabled) |
-| `api.env.webUrl`         | string | `""`                                         | Frontend URL (auto-configured from ingress if empty) |
-| `api.env.apiUrl`          | string | `""`                                         | Backend URL (auto-configured from ingress if empty)  |
+| `api.env.webUrl`         | string | `""`                                         | Frontend URL (deprecated: use `globals.webUrl`)                 |
+| `api.env.apiUrl`          | string | `""`                                         | Backend URL (deprecated: use `globals.apiUrl`)                  |
 | `api.existingSecret`         | string | `""`                                         | Use existing secret for sensitive values             |
+
+### Global
+
+| Key                             | Type   | Default                                       | Description                                                     |
+|---------------------------------|--------|-----------------------------------------------|-----------------------------------------------------------------|
+| `globals.webUrl`           | string | `""`                                         | Public frontend URL (e.g., https://docshare.example.com). Auto-configured from ingress if enabled. |
+| `globals.apiUrl`           | string | `""`                                         | Public API URL (e.g., https://docshare.example.com/api). Auto-configured from ingress if enabled. |
+
+**Note:** Use `globals.webUrl` and `globals.apiUrl` when using an external ingress. These values are automatically passed to both the API and web containers. See [external ingress example](../../examples/helm/ingress/external.yaml) for a complete configuration.
 
 ### Frontend
 
@@ -226,7 +235,7 @@ gotenberg:
 | `web.service.port`         | int    | `3000`                                        | Service port                                                    |
 | `web.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
 
-**Note:** The web receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart (auto-derived from ingress config or `api.env` values), which are passed as environment variables at runtime.
+**Note:** The web receives `API_URL` and `WEB_URL` from the Helm chart (auto-derived from ingress config, `globals`, or `api.env` values), which are passed as environment variables at runtime.
 
 ### Gotenberg
 

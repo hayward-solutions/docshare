@@ -15,9 +15,12 @@ api:
     jwtExpirationHours: "24"
     serverPort: "8080"
     gotenbergUrl: ""  # auto-configured if gotenberg.enabled
-    webUrl: ""  # auto-configured from ingress host if empty
-    apiUrl: ""   # auto-configured from ingress host if empty
   existingSecret: ""  # use an existing Secret instead of the auto-generated one
+
+# Global values accessible to all components
+globals:
+  webUrl: ""  # public web URL (e.g., https://docshare.example.com); auto-configured from ingress if enabled
+  apiUrl: ""  # public API URL (e.g., https://docshare.example.com/api); auto-configured from ingress if enabled
 
 web:
   replicaCount: 1

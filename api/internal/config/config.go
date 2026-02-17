@@ -169,8 +169,8 @@ func Load() *Config {
 		},
 		Server: ServerConfig{
 			Port:        getEnv("SERVER_PORT", "8080"),
-			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3001"),
-			BackendURL:  getEnv("BACKEND_URL", "http://localhost:8080/api"),
+			FrontendURL: getEnv("WEB_URL", "http://localhost:3001"),
+			BackendURL:  getEnv("API_URL", "http://localhost:8080/api"),
 		},
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),

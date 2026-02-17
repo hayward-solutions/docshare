@@ -44,8 +44,8 @@ services:
       JWT_SECRET: change-me-in-production-use-a-long-random-string
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: http://localhost:3001
-      BACKEND_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
     ports:
       - "8080:8080"
     depends_on:
@@ -56,8 +56,8 @@ services:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     container_name: docshare-web
     environment:
-      BACKEND_URL: http://localhost:8080/api
-      FRONTEND_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
     ports:
       - "3001:3000"
     depends_on:

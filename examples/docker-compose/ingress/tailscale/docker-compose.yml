@@ -10,7 +10,7 @@
 #   docker-compose up -d
 #
 # Access at: https://docshare.<TS_TAILNET>.ts.net
-# FRONTEND_URL and BACKEND_URL are derived from TS_TAILNET.
+# WEB_URL and API_URL are derived from TS_TAILNET.
 
 services:
   tailscale:
@@ -68,8 +68,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://127.0.0.1:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
-      BACKEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
+      WEB_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
+      API_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,8 +78,8 @@ services:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     network_mode: service:tailscale
     environment:
-      BACKEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
-      FRONTEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
+      API_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
+      WEB_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
     depends_on:
       - api
 

@@ -1,7 +1,7 @@
 # Full deployment with SSO (Google + GitHub)
 #
-# OAuth redirect URLs are auto-derived from BACKEND_URL.
-# For production, update FRONTEND_URL and BACKEND_URL to match your domain.
+# OAuth redirect URLs are auto-derived from API_URL.
+# For production, update WEB_URL and API_URL to match your domain.
 #
 # Usage:
 #   export GOOGLE_CLIENT_ID=your-client-id
@@ -54,8 +54,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: http://localhost:3001
-      BACKEND_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
       OAUTH_GOOGLE_ENABLED: "true"
       OAUTH_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
       OAUTH_GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
@@ -72,8 +72,8 @@ services:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     container_name: docshare-web
     environment:
-      BACKEND_URL: http://localhost:8080/api
-      FRONTEND_URL: http://localhost:3001
+      API_URL: http://localhost:8080/api
+      WEB_URL: http://localhost:3001
     ports:
       - "3001:3000"
     depends_on:

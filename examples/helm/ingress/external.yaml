@@ -1,0 +1,69 @@
+# External Ingress Example
+# Use when your ingress is managed outside the chart (e.g., AWS ALB, GCP CLB, Cloudflare Tunnel, etc.)
+#
+# Usage:
+#   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
+#     --namespace docshare --create-namespace \
+#     -f examples/helm/ingress/external.yaml
+#
+# Set any secrets via --set:
+#   --set api.env.jwtSecret=your-secret
+#   --set postgresql.auth.password=your-db-password
+
+# Set URLs once via globals - applies to both API and web containers
+globals:
+  webUrl: https://docshare.example.com
+  apiUrl: https://docshare.example.com/api
+
+api:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    jwtSecret: ""  # Set via --set or let auto-generate
+    jwtExpirationHours: "24"
+    s3Bucket: "docshare-prod"
+
+web:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Disable built-in ingress since using external ingress controller
+ingress:
+  enabled: false
+
+gotenberg:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+postgresql:
+  enabled: true
+  auth:
+    username: docshare
+    password: ""  # Set via --set
+    database: docshare
+  primary:
+    persistence:
+      size: 10Gi
+
+s3:
+  region: "us-east-1"
+  bucket: "docshare-prod"

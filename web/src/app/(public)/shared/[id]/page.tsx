@@ -9,7 +9,7 @@ import { FileIconComponent } from '@/components/file-icon';
 import { Download, AlertCircle, Loader2, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 async function fetchPublicFile(id: string, token?: string | null): Promise<File> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

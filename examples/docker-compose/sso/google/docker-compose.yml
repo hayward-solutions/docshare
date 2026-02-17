@@ -7,11 +7,11 @@
 # 1. Go to Google Cloud Console https://console.cloud.google.com
 # 2. Create a project and enable Google+ API / OAuth
 # 3. Create OAuth 2.0 credentials (Web application)
-# 4. Add authorized redirect URI: <BACKEND_URL>/auth/sso/oauth/google/callback
+# 4. Add authorized redirect URI: <API_URL>/auth/sso/oauth/google/callback
 #    (defaults to http://localhost:8080/api/auth/sso/oauth/google/callback)
-# 5. Add authorized JavaScript origins matching your BACKEND_URL origin
+# 5. Add authorized JavaScript origins matching your API_URL origin
 #
-# The redirect URL is auto-derived from BACKEND_URL set in the base docker-compose.yml.
+# The redirect URL is auto-derived from API_URL set in the base docker-compose.yml.
 # To override, set OAUTH_GOOGLE_REDIRECT_URL explicitly.
 
 services:
