@@ -94,6 +94,8 @@ DocShare follows a traditional client-server architecture with the following com
 - **Storage**: AWS S3
 - **Authentication**: JWT (golang-jwt/jwt/v5)
 - **Password Hashing**: bcrypt (golang.org/x/crypto)
+- **MFA**: TOTP (RFC 6238) via `github.com/pquerna/otp`
+- **Passkeys**: WebAuthn (FIDO2) via `github.com/go-webauthn/webauthn`
 
 ### Frontend
 
@@ -464,6 +466,29 @@ Temporary storage for OAuth2 Device Authorization Flow (RFC 8628).
 - **Status**: `pending`, `approved`, or `denied`.
 - **UserID**: The user who approved the code (NULL until approved).
 
+#### 3. MFAConfig
+Stores MFA settings per user.
+- **UserID**: The owner of the MFA configuration.
+- **Type**: MFA type (`totp` or `passkey`).
+- **Enabled**: Whether MFA is active for this method.
+- **Secret**: Encrypted TOTP secret (for TOTP).
+
+#### 4. MFAChallenge
+Temporary storage for MFA verification.
+- **UserID**: The user attempting MFA.
+- **Challenge**: The challenge data (TOTP code or WebAuthn assertion).
+- **ExpiresAt**: Expiration timestamp (5 minutes for TOTP).
+- **Verified**: Whether the challenge was successfully verified.
+
+#### 5. WebAuthnCredential
+Stores registered passkeys.
+- **UserID**: The owner of the credential.
+- **CredentialID**: The WebAuthn credential ID.
+- **PublicKey**: The credential public key.
+- **AttestationType**: The attestation type used during registration.
+- **Transport**: Supported transports (usb, nfc, ble, hybrid).
+- **LastUsedAt**: Last time the credential was used for authentication.
+
 ### Audit & Activity Models
 
 ```
@@ -552,7 +577,7 @@ A singleton table used to track the timestamp of the last successful S3 audit lo
 
 ### Authentication Flow
 
-DocShare supports three authentication paths:
+DocShare supports five authentication paths:
 
 #### 1. JWT Flow (Web)
 Standard login/register flow returning a 24h JWT.
@@ -566,6 +591,12 @@ Standard login/register flow returning a 24h JWT.
 
 #### 3. Device Flow (OAuth2 RFC 8628)
 For CLI tools that cannot open a browser.
+
+#### 4. MFA (TOTP)
+After initial login with username/password, users with MFA enabled must enter a time-based one-time password from an authenticator app (Google Authenticator, Authy, 1Password, etc.).
+
+#### 5. Passkeys (WebAuthn)
+Passwordless authentication using WebAuthn/FIDO2. Users can register security keys (hardware tokens like YubiKey, or platform authenticators like Windows Hello, Touch ID, Face ID).
 
 ```
 ┌─────────┐          ┌─────────┐          ┌─────────┐
@@ -851,6 +882,14 @@ Users can view and download their own audit logs via the **Account Settings > Au
 - **Short Expiry**: Codes expire after 15 minutes.
 - **Single Use**: Device codes are hard-deleted immediately after a JWT is issued.
 - **User Code Entropy**: Uses a consonant-only alphabet to avoid ambiguous characters (e.g., 0/O, 1/I) and prevent accidental word formation.
+
+### MFA Security
+
+- **TOTP**: Time-based one-time passwords with 30-second validity.
+- **Passkeys**: WebAuthn/FIDO2 with cryptographic proof.
+- **Encrypted Storage**: MFA secrets are encrypted at rest.
+- **Rate Limiting**: MFA verification is rate-limited to prevent brute-force attacks.
+- **Backup Codes**: Users can generate backup codes for account recovery.
 
 ### CORS Configuration
 

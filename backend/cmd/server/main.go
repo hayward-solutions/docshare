@@ -18,7 +18,9 @@ import (
 	"github.com/docshare/backend/pkg/logger"
 	"github.com/docshare/backend/pkg/previewtoken"
 	"github.com/docshare/backend/pkg/utils"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
@@ -27,6 +29,7 @@ func main() {
 
 	cfg := config.Load()
 	utils.ConfigureJWT(cfg.JWT.Secret, cfg.JWT.ExpirationHours)
+	utils.ConfigureEncryption(cfg.JWT.Secret)
 	previewtoken.SetSecret(cfg.JWT.Secret)
 
 	db, err := database.Connect(cfg.DB)
@@ -40,6 +43,8 @@ func main() {
 		for range ticker.C {
 			handlers.CleanupExpiredDeviceCodes(db)
 			handlers.CleanupExpiredTransfers(db)
+			handlers.CleanupExpiredMFAChallenges(db)
+			utils.CleanupExpiredJTIs()
 		}
 	}()
 
@@ -68,6 +73,19 @@ func main() {
 	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService, cfg)
 	transfersHandler := handlers.NewTransfersHandler(db, 300)
 	ssoHandler := handlers.NewSSOHandler(db, cfg)
+
+	waConfig := &webauthn.Config{
+		RPDisplayName: cfg.WebAuthn.RPDisplayName,
+		RPID:          cfg.WebAuthn.RPID,
+		RPOrigins:     cfg.WebAuthn.RPOrigins,
+	}
+	wa, err := webauthn.New(waConfig)
+	if err != nil {
+		log.Fatalf("webauthn initialization failed: %v", err)
+	}
+
+	mfaHandler := handlers.NewMFAHandler(db, auditService)
+	webAuthnHandler := handlers.NewWebAuthnHandler(db, wa, auditService)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -170,6 +188,47 @@ func main() {
 	deviceRoutes.Post("/token", deviceAuthHandler.PollToken)
 	deviceRoutes.Get("/verify", authMiddleware.RequireAuth, deviceAuthHandler.Verify)
 	deviceRoutes.Post("/approve", authMiddleware.RequireAuth, deviceAuthHandler.Approve)
+
+	mfaRoutes := api.Group("/auth/mfa")
+	mfaRoutes.Get("/status", authMiddleware.RequireAuth, mfaHandler.Status)
+	mfaRoutes.Post("/totp/setup", authMiddleware.RequireAuth, mfaHandler.TOTPSetup)
+	mfaRoutes.Post("/totp/verify-setup", authMiddleware.RequireAuth, mfaHandler.TOTPVerifySetup)
+	mfaRoutes.Post("/totp/disable", authMiddleware.RequireAuth, mfaHandler.TOTPDisable)
+	mfaRoutes.Post("/recovery/regenerate", authMiddleware.RequireAuth, mfaHandler.RegenerateRecovery)
+
+	passkeyRoutes := api.Group("/auth/passkey")
+	passkeyRoutes.Post("/register/begin", authMiddleware.RequireAuth, webAuthnHandler.RegisterBegin)
+	passkeyRoutes.Post("/register/finish", authMiddleware.RequireAuth, webAuthnHandler.RegisterFinish)
+
+	mfaVerifyLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 5 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "too many attempts, please try again later",
+			})
+		},
+	})
+
+	mfaVerifyRoutes := api.Group("/auth/mfa/verify")
+	mfaVerifyRoutes.Use(mfaVerifyLimiter)
+	mfaVerifyRoutes.Post("/totp", mfaHandler.VerifyTOTP)
+	mfaVerifyRoutes.Post("/recovery", mfaHandler.VerifyRecovery)
+	mfaVerifyRoutes.Post("/webauthn/begin", webAuthnHandler.VerifyBegin)
+	mfaVerifyRoutes.Post("/webauthn/finish", webAuthnHandler.VerifyFinish)
+
+	passkeyLoginRoutes := api.Group("/auth/passkey/login")
+	passkeyLoginRoutes.Use(mfaVerifyLimiter)
+	passkeyLoginRoutes.Post("/begin", webAuthnHandler.LoginBegin)
+	passkeyLoginRoutes.Post("/finish", webAuthnHandler.LoginFinish)
+
+	passkeysRoutes := api.Group("/auth/passkeys", authMiddleware.RequireAuth)
+	passkeysRoutes.Get("/", webAuthnHandler.List)
+	passkeysRoutes.Put("/:id", webAuthnHandler.Rename)
+	passkeysRoutes.Delete("/:id", webAuthnHandler.Delete)
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)

@@ -40,6 +40,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		})
 		logger.Init()
 		utils.ConfigureJWT("test-secret", 24)
+		utils.ConfigureEncryption("test-encryption-secret-32-bytes!")
 	})
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -72,6 +73,9 @@ func setupTestEnv(t *testing.T) *testEnv {
 		&models.SSOProvider{},
 		&models.LinkedAccount{},
 		&models.PreviewJob{},
+		&models.MFAConfig{},
+		&models.WebAuthnCredential{},
+		&models.MFAChallenge{},
 	)
 	if err != nil {
 		t.Fatalf("failed automigrating models: %v", err)
@@ -109,6 +113,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
 	ssoHandler := NewSSOHandler(db, cfg)
+	mfaHandler := NewMFAHandler(db, auditService)
 
 	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
@@ -219,6 +224,15 @@ func setupTestEnv(t *testing.T) *testEnv {
 	ssoProtectedRoutes := api.Group("/auth/sso", authMiddleware.RequireAuth)
 	ssoProtectedRoutes.Get("/linked-accounts", ssoHandler.GetLinkedAccounts)
 	ssoProtectedRoutes.Delete("/linked-accounts/:id", ssoHandler.UnlinkAccount)
+
+	mfaRoutes := api.Group("/auth/mfa")
+	mfaRoutes.Get("/status", authMiddleware.RequireAuth, mfaHandler.Status)
+	mfaRoutes.Post("/totp/setup", authMiddleware.RequireAuth, mfaHandler.TOTPSetup)
+	mfaRoutes.Post("/totp/verify-setup", authMiddleware.RequireAuth, mfaHandler.TOTPVerifySetup)
+	mfaRoutes.Post("/totp/disable", authMiddleware.RequireAuth, mfaHandler.TOTPDisable)
+	mfaRoutes.Post("/verify/totp", mfaHandler.VerifyTOTP)
+	mfaRoutes.Post("/verify/recovery", mfaHandler.VerifyRecovery)
+	mfaRoutes.Post("/recovery/regenerate", authMiddleware.RequireAuth, mfaHandler.RegenerateRecovery)
 
 	return &testEnv{app: app, db: db}
 }

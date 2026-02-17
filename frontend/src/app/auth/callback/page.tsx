@@ -8,14 +8,34 @@ import { Loader2 } from 'lucide-react';
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loginWithToken } = useAuth();
+  const { loginWithToken, setMFAChallenge } = useAuth();
 
   useEffect(() => {
     const token = searchParams.get('token');
     const errorParam = searchParams.get('error');
+    const mfaRequired = searchParams.get('mfa_required');
+    const mfaToken = searchParams.get('mfa_token');
+    const methodsParam = searchParams.get('methods');
 
     if (errorParam) {
       router.push('/login?error=' + encodeURIComponent(errorParam));
+      return;
+    }
+
+    if (mfaRequired === 'true' && mfaToken) {
+      let methods: ('totp' | 'webauthn')[] = [];
+      if (methodsParam) {
+        try {
+          const parsed = JSON.parse(methodsParam);
+          if (Array.isArray(parsed) && parsed.every((m) => m === 'totp' || m === 'webauthn')) {
+            methods = parsed;
+          }
+        } catch {
+          methods = [];
+        }
+      }
+      setMFAChallenge(mfaToken, methods);
+      router.push('/mfa');
       return;
     }
 
@@ -31,7 +51,7 @@ function CallbackHandler() {
       .catch((err) => {
         router.push('/login?error=' + encodeURIComponent(err.message || 'Authentication failed'));
       });
-  }, [searchParams, router, loginWithToken]);
+  }, [searchParams, router, loginWithToken, setMFAChallenge]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">

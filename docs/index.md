@@ -22,6 +22,7 @@ DocShare was created to solve a simple problem: a private server to host documen
 - **Audit logging** — Complete trail of all actions for compliance and security
 - **API tokens** — Generate long-lived personal access tokens for CLI and programmatic use
 - **Device flow** — Authenticate CLI tools and apps via browser approval (OAuth2 RFC 8628)
+- **MFA & Passkeys** — TOTP authenticator apps and WebAuthn passkeys for enhanced security
 - **CLI tool** — Upload, download, share, and manage files from the terminal
 
 ## CLI

@@ -9,6 +9,7 @@ A modern, self-hosted document sharing platform. Upload, share, and manage files
 - **Document previews** -- Preview Office documents, PDFs, and images in the browser
 - **S3 storage** -- Store files in AWS S3 or any S3-compatible backend (MinIO, Wasabi, Backblaze B2)
 - **SSO** -- Google, GitHub, Keycloak (OIDC), LDAP, and SAML authentication
+- **MFA & Passkeys** -- TOTP authenticator apps and WebAuthn passkeys for enhanced security
 - **Audit logging** -- Full trail of all actions with periodic S3 export
 - **CLI** -- Upload, download, share, and manage files from the terminal
 - **API tokens & device flow** -- Programmatic access via long-lived tokens or OAuth2 device authorization

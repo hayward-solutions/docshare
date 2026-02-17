@@ -82,6 +82,44 @@ export interface LoginResponse {
   user: User;
 }
 
+export interface MFALoginResponse {
+  mfaRequired: true;
+  mfaToken: string;
+  methods: ('totp' | 'webauthn')[];
+}
+
+export interface MFAStatus {
+  mfaEnabled: boolean;
+  totpEnabled: boolean;
+  totpVerifiedAt: string | null;
+  webauthnEnabled: boolean;
+  webauthnCredentialsCount: number;
+  recoveryCodesRemaining: number;
+}
+
+export interface TOTPSetupResponse {
+  secret: string;
+  qrUri: string;
+}
+
+export interface RecoveryCodesResponse {
+  recoveryCodes: string[];
+}
+
+export interface WebAuthnCredentialInfo {
+  id: string;
+  name: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  backupEligible: boolean;
+  backupState: boolean;
+}
+
+export interface PasskeyRegisterResponse {
+  credential: WebAuthnCredentialInfo;
+  recoveryCodes?: string[];
+}
+
 export interface BreadcrumbItem {
   id: string;
   name: string;
