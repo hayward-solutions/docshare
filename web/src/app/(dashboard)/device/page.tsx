@@ -88,13 +88,13 @@ export default function DeviceVerificationPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending Approval</Badge>;
+        return <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800">Pending Approval</Badge>;
       case 'approved':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Already Approved</Badge>;
+        return <Badge variant="outline" className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800">Already Approved</Badge>;
       case 'denied':
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Denied</Badge>;
+        return <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800">Denied</Badge>;
       case 'expired':
-        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">Expired</Badge>;
+        return <Badge variant="outline" className="bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800">Expired</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -103,12 +103,12 @@ export default function DeviceVerificationPage() {
   if (isSuccess) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] p-4">
-        <Card className="w-full max-w-md border-green-100 shadow-lg shadow-green-50/50">
+        <Card className="w-full max-w-md border-green-100 dark:border-green-900 shadow-lg shadow-green-50/50 dark:shadow-green-950/50">
           <CardHeader className="text-center pb-2">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8 text-green-600" />
+            <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
-            <CardTitle className="text-2xl text-green-700">Device Authorized!</CardTitle>
+            <CardTitle className="text-2xl text-green-700 dark:text-green-300">Device Authorized!</CardTitle>
             <CardDescription className="text-base pt-2">
               You have successfully logged in to the device.
             </CardDescription>
@@ -190,11 +190,11 @@ export default function DeviceVerificationPage() {
 
               {verification.status === 'pending' && !verification.expired ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 text-blue-900 rounded-md border border-blue-100">
-                    <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950 text-blue-900 dark:text-blue-100 rounded-md border border-blue-100 dark:border-blue-900">
+                    <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
                     <div className="text-sm">
                       <p className="font-medium">Authorize as {user?.email}</p>
-                      <p className="text-blue-700/80 text-xs">This device will have full access to your account.</p>
+                      <p className="text-blue-700/80 dark:text-blue-300/80 text-xs">This device will have full access to your account.</p>
                     </div>
                   </div>
 
@@ -229,11 +229,11 @@ export default function DeviceVerificationPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-red-50 text-red-900 rounded-md border border-red-100">
-                    <XCircle className="w-5 h-5 text-red-600 shrink-0" />
+                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950 text-red-900 dark:text-red-100 rounded-md border border-red-100 dark:border-red-900">
+                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
                     <div className="text-sm">
                       <p className="font-medium">Cannot Authorize</p>
-                      <p className="text-red-700/80 text-xs">
+                      <p className="text-red-700/80 dark:text-red-300/80 text-xs">
                         {verification.expired 
                           ? 'This code has expired. Please generate a new one.' 
                           : `This code is ${verification.status}.`}

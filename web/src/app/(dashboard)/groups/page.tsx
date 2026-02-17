@@ -106,7 +106,7 @@ export default function GroupsPage() {
 
       {groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Users className="h-12 w-12 text-slate-300" />
+          <Users className="h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-semibold">No groups yet</h3>
           <p className="text-sm text-muted-foreground">Create a group to start sharing files with your team.</p>
         </div>

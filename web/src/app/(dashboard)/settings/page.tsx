@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useActivityToast } from '@/hooks/use-activity-toast';
-import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle, Info } from 'lucide-react';
+import { User as UserIcon, Lock, Users, Upload, Shield, FileText, Download, Key, Plus, Copy, Trash2, AlertTriangle, Info, Sun, Moon, Monitor } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
@@ -41,9 +41,13 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MFASettings } from "@/components/mfa-settings";
+import { useTheme } from 'next-themes';
+import { ThemePreference } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function AccountSettingsPage() {
   const { user, loadUser } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
@@ -288,6 +292,16 @@ export default function AccountSettingsPage() {
     }
   };
 
+  const handleThemeChange = async (value: ThemePreference) => {
+    setTheme(value);
+    try {
+      await userAPI.updateProfile({ theme: value });
+      await loadUser();
+    } catch {
+      toast.error('Failed to save theme preference');
+    }
+  };
+
   if (!user) {
     return <div>Loading...</div>;
   }
@@ -302,10 +316,14 @@ export default function AccountSettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserIcon className="h-4 w-4" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="flex items-center gap-2">
+            <Sun className="h-4 w-4" />
+            Appearance
           </TabsTrigger>
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Lock className="h-4 w-4" />
@@ -416,6 +434,44 @@ export default function AccountSettingsPage() {
                   {isLoading ? 'Saving...' : 'Save Changes'}
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="appearance">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+              <CardDescription>
+                Choose how DocShare looks to you. Your preference is saved to your account and applies across all devices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                {([
+                  { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
+                  { value: 'dark' as const, label: 'Dark', icon: Moon, description: 'Always use dark mode' },
+                  { value: 'system' as const, label: 'System', icon: Monitor, description: 'Follow your OS setting' },
+                ]).map(({ value, label, icon: Icon, description }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleThemeChange(value)}
+                    className={cn(
+                      'flex flex-col items-center gap-3 rounded-lg border-2 p-6 transition-colors',
+                      theme === value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50 hover:bg-accent'
+                    )}
+                  >
+                    <Icon className={cn('h-8 w-8', theme === value ? 'text-primary' : 'text-muted-foreground')} />
+                    <div className="text-center">
+                      <p className="font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -558,16 +614,16 @@ export default function AccountSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {createdToken && (
-                <Alert className="bg-green-50 border-green-200 text-green-900 [&>svg]:text-green-600">
+                <Alert className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-900 dark:text-green-100 [&>svg]:text-green-600 dark:[&>svg]:text-green-400">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="text-green-800">Token Created Successfully</AlertTitle>
-                  <AlertDescription className="text-green-700">
+                  <AlertTitle className="text-green-800 dark:text-green-200">Token Created Successfully</AlertTitle>
+                  <AlertDescription className="text-green-700 dark:text-green-300">
                     <p className="mb-2">Make sure to copy your personal access token now. You won&apos;t be able to see it again!</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <code className="bg-white px-2 py-1 rounded border border-green-200 font-mono text-sm flex-1 break-all">
+                      <code className="bg-card px-2 py-1 rounded border border-green-200 dark:border-green-800 font-mono text-sm flex-1 break-all">
                         {createdToken}
                       </code>
-                      <Button size="sm" variant="outline" onClick={handleCopyToken} className="h-8 shrink-0 bg-white hover:bg-green-50 border-green-200 text-green-700">
+                      <Button size="sm" variant="outline" onClick={handleCopyToken} className="h-8 shrink-0 bg-card hover:bg-green-50 dark:hover:bg-green-950 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300">
                         <Copy className="h-4 w-4 mr-2" />
                         Copy
                       </Button>

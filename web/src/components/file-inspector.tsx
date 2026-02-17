@@ -34,7 +34,7 @@ function CopyPublicLinkButton({ fileId }: { fileId: string }) {
 
   return (
     <Button variant="outline" size="sm" className="h-6 text-[11px] mt-1.5" onClick={handleCopy}>
-      {copied ? <Check className="mr-1 h-3 w-3 text-green-600" /> : <Link className="mr-1 h-3 w-3" />}
+      {copied ? <Check className="mr-1 h-3 w-3 text-green-600 dark:text-green-400" /> : <Link className="mr-1 h-3 w-3" />}
       {copied ? 'Copied' : 'Copy link'}
     </Button>
   );
@@ -99,7 +99,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
   const getPermissionBadge = (permission: string) => {
     switch (permission) {
       case 'edit':
-        return <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">Editor</Badge>;
+        return <Badge variant="default" className="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600">Editor</Badge>;
       case 'download':
       case 'view':
         return <Badge variant="secondary">Viewer</Badge>;
@@ -127,11 +127,11 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
             ) : file ? (
               <div className="space-y-6 p-6">
                 <div className="flex flex-col items-center space-y-4">
-                  <div className="rounded-xl border bg-slate-50 p-6 shadow-sm">
+                  <div className="rounded-xl border bg-muted p-6 shadow-sm">
                     <FileIconComponent 
                       mimeType={file.mimeType} 
                       isDirectory={file.isDirectory} 
-                      className="h-20 w-20 text-blue-600" 
+                      className="h-20 w-20 text-blue-600 dark:text-blue-400" 
                     />
                   </div>
                   <div className="text-center">
@@ -151,7 +151,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                 <div className="grid grid-cols-2 gap-4">
                   <Card>
                     <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-2">
-                      <HardDrive className="h-5 w-5 text-slate-500" />
+                      <HardDrive className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <p className="text-xs text-muted-foreground">Size</p>
                         <p className="font-medium">{file.isDirectory ? '-' : formatBytes(file.size)}</p>
@@ -160,7 +160,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                   </Card>
                   <Card>
                     <CardContent className="p-4 flex flex-col items-center justify-center text-center space-y-2">
-                      <Calendar className="h-5 w-5 text-slate-500" />
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
                       <div>
                         <p className="text-xs text-muted-foreground">Created</p>
                         <p className="font-medium">{format(new Date(file.createdAt), 'MMM d, yyyy')}</p>
@@ -181,7 +181,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                     <UserIcon className="h-4 w-4" /> Owner
                   </h4>
                   {file.owner ? (
-                    <div className="flex items-center space-x-3 rounded-lg border p-3 bg-slate-50/50">
+                    <div className="flex items-center space-x-3 rounded-lg border p-3 bg-muted/50">
                       <Avatar>
                         <AvatarImage src={file.owner.avatarURL} />
                         <AvatarFallback>{file.owner.firstName[0]}</AvatarFallback>
@@ -192,7 +192,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                         </p>
                         <p className="text-xs text-muted-foreground truncate">{file.owner.email}</p>
                       </div>
-                      <Badge variant="outline" className="ml-auto border-blue-200 bg-blue-50 text-blue-700">Owner</Badge>
+                      <Badge variant="outline" className="ml-auto border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">Owner</Badge>
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">Unknown owner</p>
@@ -213,7 +213,7 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                   
                   <div className="space-y-2">
                     {file.owner && (
-                      <div className="flex items-center justify-between space-x-3 rounded-lg p-2 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center justify-between space-x-3 rounded-lg p-2 hover:bg-accent transition-colors">
                         <div className="flex items-center space-x-3 overflow-hidden">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={file.owner.avatarURL} />
@@ -226,17 +226,17 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
                             <p className="text-xs text-muted-foreground truncate">{file.owner.email}</p>
                           </div>
                         </div>
-                        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 shrink-0">Owner</Badge>
+                        <Badge variant="outline" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 shrink-0">Owner</Badge>
                       </div>
                     )}
 
                     {shares.map((share) => (
-                      <div key={share.id} className="rounded-lg p-2 hover:bg-slate-50 transition-colors">
+                      <div key={share.id} className="rounded-lg p-2 hover:bg-accent transition-colors">
                         <div className="flex items-center justify-between space-x-3">
                           <div className="flex items-center space-x-3 overflow-hidden">
                             <Avatar className="h-8 w-8">
                               {share.shareType === 'public_anyone' ? (
-                                <AvatarFallback className="bg-green-100 text-green-700"><Globe className="h-4 w-4" /></AvatarFallback>
+                                <AvatarFallback className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"><Globe className="h-4 w-4" /></AvatarFallback>
                               ) : share.shareType === 'public_logged_in' ? (
                                 <AvatarFallback className="bg-amber-100 text-amber-700"><LogIn className="h-4 w-4" /></AvatarFallback>
                               ) : share.sharedWithUser ? (

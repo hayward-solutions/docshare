@@ -57,21 +57,21 @@ function formatRelativeTime(dateString: string): string {
 function getActivityIcon(action: string) {
   switch (action) {
     case 'file.upload':
-      return <Upload className="h-5 w-5 text-blue-500" />;
+      return <Upload className="h-5 w-5 text-blue-500 dark:text-blue-400" />;
     case 'file.download':
-      return <Download className="h-5 w-5 text-green-500" />;
+      return <Download className="h-5 w-5 text-green-500 dark:text-green-400" />;
     case 'file.delete':
-      return <Trash2 className="h-5 w-5 text-red-500" />;
+      return <Trash2 className="h-5 w-5 text-red-500 dark:text-red-400" />;
     case 'share.create':
     case 'share.delete':
       return <Share2 className="h-5 w-5 text-purple-500" />;
     case 'folder.create':
-      return <FolderPlus className="h-5 w-5 text-yellow-500" />;
+      return <FolderPlus className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />;
     case 'group.member_add':
     case 'group.member_remove':
       return <Users className="h-5 w-5 text-indigo-500" />;
     default:
-      return <Bell className="h-5 w-5 text-gray-500" />;
+      return <Bell className="h-5 w-5 text-gray-500 dark:text-gray-400" />;
   }
 }
 
@@ -227,7 +227,7 @@ export default function ActivityPage() {
                           {activity.message}
                         </p>
                         {!activity.isRead && (
-                          <span className="h-2 w-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                          <span className="h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-600 mt-1.5 flex-shrink-0" />
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">

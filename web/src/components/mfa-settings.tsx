@@ -237,7 +237,7 @@ export function MFASettings() {
                 <KeyRound className="h-4 w-4" />
                 <span className="font-medium">Authenticator App</span>
                 {status?.totpEnabled ? (
-                  <Badge variant="default" className="bg-green-600">Enabled</Badge>
+                  <Badge variant="default" className="bg-green-600 dark:bg-green-500">Enabled</Badge>
                 ) : (
                   <Badge variant="secondary">Disabled</Badge>
                 )}
@@ -270,7 +270,7 @@ export function MFASettings() {
                 <Fingerprint className="h-4 w-4" />
                 <span className="font-medium">Passkeys</span>
                 {passkeys.length > 0 ? (
-                  <Badge variant="default" className="bg-green-600">{passkeys.length} registered</Badge>
+                  <Badge variant="default" className="bg-green-600 dark:bg-green-500">{passkeys.length} registered</Badge>
                 ) : (
                   <Badge variant="secondary">None</Badge>
                 )}
@@ -377,7 +377,7 @@ export function MFASettings() {
           </DialogHeader>
           <div className="space-y-4">
             {totpQrUri && (
-              <div className="flex justify-center p-4 bg-white rounded-lg">
+              <div className="flex justify-center p-4 bg-card rounded-lg">
                 <QRCodeSVG value={totpQrUri} size={200} />
               </div>
             )}

@@ -87,11 +87,11 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
         {...getRootProps()}
         className={cn(
           "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-          isDragActive ? "border-primary bg-primary/5" : "border-slate-200 hover:border-primary/50"
+          isDragActive ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
         )}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center gap-2 text-slate-500">
+        <div className="flex flex-col items-center gap-2 text-muted-foreground">
           <Upload className="h-8 w-8" />
           <p className="text-sm font-medium">
             {isDragActive ? "Drop files here" : "Drag & drop files here, or click to select"}
@@ -102,8 +102,8 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
       {uploadingFiles.length > 0 && (
         <div className="space-y-2">
           {uploadingFiles.map((item) => (
-            <div key={item.file.name + item.file.size} className="flex items-center gap-3 rounded-lg border p-3 bg-white">
-              <FileIcon className="h-8 w-8 text-blue-500" />
+            <div key={item.file.name + item.file.size} className="flex items-center gap-3 rounded-lg border p-3 bg-card">
+              <FileIcon className="h-8 w-8 text-blue-500 dark:text-blue-400" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-sm font-medium truncate">{item.file.name}</p>
@@ -119,9 +119,9 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
                 </div>
                 <Progress value={item.progress} className="h-2" />
               </div>
-              {item.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-              {item.status === 'completed' && <span className="text-xs text-green-600 font-medium">Done</span>}
-              {item.status === 'error' && <span className="text-xs text-red-600 font-medium">Error</span>}
+              {item.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />}
+              {item.status === 'completed' && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Done</span>}
+              {item.status === 'error' && <span className="text-xs text-red-600 dark:text-red-400 font-medium">Error</span>}
             </div>
           ))}
         </div>

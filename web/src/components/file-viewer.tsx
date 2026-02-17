@@ -217,13 +217,13 @@ export function FileViewer({ file }: FileViewerProps) {
   if (isLoading) {
     if (isOfficeDoc(file.mimeType) && (previewJob?.status === 'pending' || previewJob?.status === 'processing')) {
       return (
-        <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-slate-50">
+        <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-muted">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-slate-600">
+          <p className="text-muted-foreground">
             {previewJob?.status === 'pending' ? 'Preview queued...' : 'Generating preview...'}
           </p>
           {previewJob && (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Attempt {previewJob.attempts} of {previewJob.maxAttempts}
             </p>
           )}
@@ -239,9 +239,9 @@ export function FileViewer({ file }: FileViewerProps) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-slate-50">
-        <AlertCircle className="h-12 w-12 text-slate-400" />
-        <p className="text-slate-600">{error}</p>
+      <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-muted">
+        <AlertCircle className="h-12 w-12 text-muted-foreground" />
+        <p className="text-muted-foreground">{error}</p>
         <div className="flex gap-2">
           {isOfficeDoc(file.mimeType) && previewJob?.status === 'failed' && (
             <Button onClick={handleRetryPreview}>
@@ -266,7 +266,7 @@ export function FileViewer({ file }: FileViewerProps) {
 
   if (file.mimeType.startsWith('image/') && blobUrl) {
     return (
-      <div className="flex justify-center bg-slate-100 rounded-lg p-4 overflow-hidden">
+      <div className="flex justify-center bg-muted rounded-lg p-4 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={blobUrl}
@@ -281,7 +281,7 @@ export function FileViewer({ file }: FileViewerProps) {
     return (
       <iframe
         src={blobUrl}
-        className="w-full h-[80vh] rounded-lg border bg-white"
+        className="w-full h-[80vh] rounded-lg border bg-card"
         title={file.name}
       />
     );
@@ -299,7 +299,7 @@ export function FileViewer({ file }: FileViewerProps) {
 
   if (file.mimeType.startsWith('audio/') && blobUrl) {
     return (
-      <div className="flex items-center justify-center bg-slate-100 rounded-lg p-8">
+      <div className="flex items-center justify-center bg-muted rounded-lg p-8">
         <audio controls src={blobUrl} className="w-full max-w-md">
           <track kind="captions" />
         </audio>
@@ -318,8 +318,8 @@ export function FileViewer({ file }: FileViewerProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-slate-50">
-      <p className="text-slate-600">Preview not available for this file type.</p>
+    <div className="flex flex-col items-center justify-center gap-4 p-8 border rounded-lg bg-muted">
+      <p className="text-muted-foreground">Preview not available for this file type.</p>
       <Button onClick={handleDownload}>
         <Download className="mr-2 h-4 w-4" />
         Download File

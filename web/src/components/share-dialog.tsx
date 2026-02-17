@@ -50,7 +50,7 @@ function CopyLinkButton({ fileId }: { fileId: string }) {
 
   return (
     <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCopy}>
-      {copied ? <Check className="mr-1.5 h-3 w-3 text-green-600" /> : <Link className="mr-1.5 h-3 w-3" />}
+      {copied ? <Check className="mr-1.5 h-3 w-3 text-green-600 dark:text-green-400" /> : <Link className="mr-1.5 h-3 w-3" />}
       {copied ? 'Copied' : 'Copy link'}
     </Button>
   );
@@ -235,7 +235,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'private' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'hover:bg-slate-50'}`}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'private' ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300' : 'hover:bg-accent'}`}
                     onClick={() => setShareType('private')}
                   >
                     <UserIcon className="h-4 w-4" />
@@ -243,7 +243,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                   </button>
                   <button
                     type="button"
-                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'public_anyone' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'hover:bg-slate-50'}`}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'public_anyone' ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300' : 'hover:bg-accent'}`}
                     onClick={() => {
                       setShareType('public_anyone');
                       setSelectedUser('');
@@ -256,7 +256,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                   </button>
                   <button
                     type="button"
-                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'public_logged_in' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'hover:bg-slate-50'}`}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors ${shareType === 'public_logged_in' ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300' : 'hover:bg-accent'}`}
                     onClick={() => {
                       setShareType('public_logged_in');
                       setSelectedUser('');
@@ -312,9 +312,9 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                   </div>
 
                   <div className="relative flex items-center py-2">
-                    <div className="grow border-t border-slate-200"></div>
-                    <span className="mx-4 shrink-0 text-slate-400 text-xs">OR</span>
-                    <div className="grow border-t border-slate-200"></div>
+                    <div className="grow border-t border-border"></div>
+                    <span className="mx-4 shrink-0 text-muted-foreground text-xs">OR</span>
+                    <div className="grow border-t border-border"></div>
                   </div>
 
                   <div className="space-y-2">
@@ -389,7 +389,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                         <div className="flex items-center space-x-3">
                           <Avatar className="h-8 w-8">
                             {share.shareType === 'public_anyone' ? (
-                              <AvatarFallback className="bg-green-100 text-green-700"><Globe className="h-4 w-4" /></AvatarFallback>
+                              <AvatarFallback className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"><Globe className="h-4 w-4" /></AvatarFallback>
                             ) : share.shareType === 'public_logged_in' ? (
                               <AvatarFallback className="bg-amber-100 text-amber-700"><LogIn className="h-4 w-4" /></AvatarFallback>
                             ) : share.sharedWithUser ? (
@@ -437,7 +437,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            className="h-8 w-8 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
                             onClick={() => handleRemoveShare(share.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -445,7 +445,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
                         </div>
                       </div>
                       {(share.shareType === 'public_anyone' || share.shareType === 'public_logged_in') && (
-                        <div className="border-t bg-slate-50/50 px-3 py-2">
+                        <div className="border-t bg-muted/50 px-3 py-2">
                           <CopyLinkButton fileId={share.fileID} />
                         </div>
                       )}

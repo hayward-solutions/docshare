@@ -1,9 +1,12 @@
+export type ThemePreference = 'light' | 'dark' | 'system';
+
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   avatarURL?: string;
+  theme?: ThemePreference;
   role: 'user' | 'admin';
   createdAt: string;
   authProvider?: string;

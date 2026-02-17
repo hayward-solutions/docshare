@@ -250,7 +250,7 @@ export default function GroupDetailPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-red-500 hover:text-red-600"
+                      className="h-8 w-8 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-400"
                       onClick={() => handleRemoveMember(membership.userID)}
                     >
                       <Trash2 className="h-4 w-4" />
