@@ -46,7 +46,7 @@ export default function GroupDetailPage() {
 
   const fetchGroup = useCallback(async () => {
     try {
-      const res = await apiMethods.get<Group>(`/api/groups/${id}`);
+      const res = await apiMethods.get<Group>(`/groups/${id}`);
       if (res.success) {
         setGroup(res.data);
       }
@@ -69,7 +69,7 @@ export default function GroupDetailPage() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await apiMethods.get<User[]>('/api/users/search', { search: searchQuery, limit: 5 });
+        const res = await apiMethods.get<User[]>('/users/search', { search: searchQuery, limit: 5 });
         const data = res as { success: boolean; data: User[] | { users: User[] } };
         if (data.success) {
           if (Array.isArray(data.data)) {
@@ -88,7 +88,7 @@ export default function GroupDetailPage() {
     if (!selectedUserId) return;
     setIsAdding(true);
     try {
-      await apiMethods.post(`/api/groups/${id}/members`, { userID: selectedUserId, role: memberRole });
+      await apiMethods.post(`/groups/${id}/members`, { userID: selectedUserId, role: memberRole });
       toast.success('Member added');
       setAddOpen(false);
       setSearchQuery('');
@@ -105,7 +105,7 @@ export default function GroupDetailPage() {
   const handleRemoveMember = async (userId: string) => {
     if (!confirm('Remove this member from the group?')) return;
     try {
-      await apiMethods.delete(`/api/groups/${id}/members/${userId}`);
+      await apiMethods.delete(`/groups/${id}/members/${userId}`);
       toast.success('Member removed');
       fetchGroup();
     } catch {
@@ -116,7 +116,7 @@ export default function GroupDetailPage() {
   const handleDeleteGroup = async () => {
     if (!confirm('Delete this group? This cannot be undone.')) return;
     try {
-      await apiMethods.delete(`/api/groups/${id}`);
+      await apiMethods.delete(`/groups/${id}`);
       toast.success('Group deleted');
       router.push('/groups');
     } catch {

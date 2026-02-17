@@ -34,7 +34,7 @@ export default function SharedWithMePage() {
   useEffect(() => {
     const fetchShared = async () => {
       try {
-        const res = await apiMethods.get<File[]>('/api/shared');
+        const res = await apiMethods.get<File[]>('/shared');
         if (res.success) {
           setFiles(Array.isArray(res.data) ? res.data : []);
         }

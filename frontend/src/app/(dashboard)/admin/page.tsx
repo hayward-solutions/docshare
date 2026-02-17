@@ -60,7 +60,7 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await apiMethods.get<User[]>('/api/users', { page, limit: 20, search: search || undefined });
+      const res = await apiMethods.get<User[]>('/users', { page, limit: 20, search: search || undefined });
       if (res.success) {
         setUsers(res.data);
         if (res.pagination) {
@@ -89,7 +89,7 @@ export default function AdminPage() {
     if (!editUser) return;
     setIsSaving(true);
     try {
-      await apiMethods.put(`/api/users/${editUser.id}`, {
+      await apiMethods.put(`/users/${editUser.id}`, {
         firstName: editFirstName,
         lastName: editLastName,
         role: editRole,
@@ -107,7 +107,7 @@ export default function AdminPage() {
   const handleDelete = async (userId: string) => {
     if (!confirm('Delete this user? This cannot be undone.')) return;
     try {
-      await apiMethods.delete(`/api/users/${userId}`);
+      await apiMethods.delete(`/users/${userId}`);
       toast.success('User deleted');
       fetchUsers();
     } catch {

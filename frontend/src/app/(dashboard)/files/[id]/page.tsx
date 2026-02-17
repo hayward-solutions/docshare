@@ -93,17 +93,17 @@ export default function FileDetailPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const fileRes = await apiMethods.get<File>(`/api/files/${id}`);
+      const fileRes = await apiMethods.get<File>(`/files/${id}`);
       if (!fileRes.success) throw new Error('Failed to load file');
       setFile(fileRes.data);
 
-      const pathRes = await apiMethods.get<BreadcrumbItem[]>(`/api/files/${id}/path`);
+      const pathRes = await apiMethods.get<BreadcrumbItem[]>(`/files/${id}/path`);
       if (pathRes.success) {
         setBreadcrumbs(pathRes.data);
       }
 
       if (fileRes.data.isDirectory) {
-        const childrenRes = await apiMethods.get<File[]>(`/api/files/${id}/children`);
+        const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`);
         if (childrenRes.success) {
           setChildren(childrenRes.data);
         }
@@ -134,7 +134,7 @@ export default function FileDetailPage() {
         if (searchScope === 'here' && file?.isDirectory) {
           params.directoryID = id;
         }
-        const res = await apiMethods.get<File[]>('/api/files/search', params);
+        const res = await apiMethods.get<File[]>('/files/search', params);
         if (res.success) {
           setSearchResults(res.data);
         }
@@ -151,7 +151,7 @@ export default function FileDetailPage() {
   const handleDelete = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
     try {
-      await apiMethods.delete(`/api/files/${fileId}`);
+      await apiMethods.delete(`/files/${fileId}`);
       successWithRefresh('File deleted');
       if (fileId === id) {
         router.push(file?.parentID ? `/files/${file.parentID}` : '/files');
@@ -177,7 +177,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
     if (!confirm(`Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}?`)) return;
     try {
       await Promise.all(
-        Array.from(selection.selectedIds).map((delId) => apiMethods.delete(`/api/files/${delId}`)),
+        Array.from(selection.selectedIds).map((delId) => apiMethods.delete(`/files/${delId}`)),
       );
       successWithRefresh(`${count} item${count > 1 ? 's' : ''} deleted`);
       selection.deselectAll();

@@ -23,7 +23,7 @@ export const useAuth = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     try {
-      const res = await apiMethods.post<LoginResponse>('/api/auth/login', { email, password });
+      const res = await apiMethods.post<LoginResponse>('/auth/login', { email, password });
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
@@ -37,7 +37,7 @@ export const useAuth = create<AuthState>((set) => ({
 
   ldapLogin: async (username, password) => {
     try {
-      const res = await apiMethods.post<LoginResponse>('/api/auth/sso/ldap/login', { username, password });
+      const res = await apiMethods.post<LoginResponse>('/auth/sso/ldap/login', { username, password });
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
@@ -53,7 +53,7 @@ export const useAuth = create<AuthState>((set) => ({
     localStorage.setItem('token', token);
     set({ token, isAuthenticated: true });
 
-    const res = await apiMethods.get<User>('/api/auth/me');
+    const res = await apiMethods.get<User>('/auth/me');
     if (res.success) {
       set({ user: res.data });
     } else {
@@ -65,7 +65,7 @@ export const useAuth = create<AuthState>((set) => ({
 
   register: async (data) => {
     try {
-      const res = await apiMethods.post<LoginResponse>('/api/auth/register', data);
+      const res = await apiMethods.post<LoginResponse>('/auth/register', data);
       if (res.success) {
         localStorage.setItem('token', res.data.token);
         set({ token: res.data.token, user: res.data.user, isAuthenticated: true });
@@ -91,7 +91,7 @@ export const useAuth = create<AuthState>((set) => ({
     }
 
     try {
-      const res = await apiMethods.get<User>('/api/auth/me');
+      const res = await apiMethods.get<User>('/auth/me');
       if (res.success) {
         set({ user: res.data, isAuthenticated: true, isLoading: false });
       } else {
