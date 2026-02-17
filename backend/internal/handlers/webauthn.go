@@ -92,10 +92,6 @@ func (h *WebAuthnHandler) loadWebAuthnUser(userID uuid.UUID) (*webAuthnUser, err
 	return &webAuthnUser{user: user, creds: creds}, nil
 }
 
-type registerBeginResponse struct {
-	Options interface{} `json:"options"`
-}
-
 func (h *WebAuthnHandler) RegisterBegin(c *fiber.Ctx) error {
 	user := middleware.GetCurrentUser(c)
 	if user == nil {

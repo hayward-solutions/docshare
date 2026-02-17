@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 
 	"github.com/docshare/backend/internal/config"
@@ -89,7 +90,7 @@ func TestPreviewService_ConvertToPreview_Directory(t *testing.T) {
 	db.Create(dir)
 
 	t.Run("returns error for directory", func(t *testing.T) {
-		_, err := service.ConvertToPreview(nil, dir)
+		_, err := service.ConvertToPreview(context.Background(), dir)
 		if err == nil {
 			t.Fatal("expected error for directory")
 		}
