@@ -22,9 +22,9 @@ spec:
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
           imagePullPolicy: {{ .Values.web.image.pullPolicy }}
           env:
-            - name: BACKEND_URL
+            - name: API_URL
               value: {{ include "docshare.externalApiUrl" . | quote }}
-            - name: FRONTEND_URL
+            - name: WEB_URL
               value: {{ include "docshare.externalFrontendUrl" . | quote }}
           ports:
             - name: http

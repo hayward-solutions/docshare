@@ -6,11 +6,11 @@
 # Setup:
 # 1. Go to GitHub Developer Settings https://github.com/settings/developers
 # 2. Create a new OAuth App
-# 3. Homepage URL: your FRONTEND_URL (defaults to http://localhost:3001)
-# 4. Authorization callback URL: <BACKEND_URL>/auth/sso/oauth/github/callback
+# 3. Homepage URL: your WEB_URL (defaults to http://localhost:3001)
+# 4. Authorization callback URL: <API_URL>/auth/sso/oauth/github/callback
 #    (defaults to http://localhost:8080/api/auth/sso/oauth/github/callback)
 #
-# The callback URL is auto-derived from BACKEND_URL set in the base docker-compose.yml.
+# The callback URL is auto-derived from API_URL set in the base docker-compose.yml.
 # To override, set OAUTH_GITHUB_REDIRECT_URL explicitly.
 
 services:

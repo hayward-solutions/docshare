@@ -1,7 +1,7 @@
 # Nginx Reverse Proxy Example
 # Classic reverse proxy with flexible configuration
 #
-# Both services share a single domain via nginx. FRONTEND_URL and BACKEND_URL
+# Both services share a single domain via nginx. WEB_URL and API_URL
 # are set to http://localhost (nginx default port 80). For production, update
 # these to match your domain (e.g. https://docshare.example.com).
 #
@@ -49,8 +49,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: http://localhost
-      BACKEND_URL: http://localhost/api
+      WEB_URL: http://localhost
+      API_URL: http://localhost/api
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,8 +58,8 @@ services:
   web:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     environment:
-      BACKEND_URL: http://localhost/api
-      FRONTEND_URL: http://localhost
+      API_URL: http://localhost/api
+      WEB_URL: http://localhost
     depends_on:
       - api
 

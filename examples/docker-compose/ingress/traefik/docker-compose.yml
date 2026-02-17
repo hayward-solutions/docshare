@@ -1,7 +1,7 @@
 # Traefik Reverse Proxy Example
 # Modern reverse proxy with auto-discovery via labels
 #
-# Both services share a single domain via Traefik. FRONTEND_URL and BACKEND_URL
+# Both services share a single domain via Traefik. WEB_URL and API_URL
 # are derived from the DOMAIN variable (defaults to localhost).
 #
 # Usage:
@@ -51,8 +51,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
-      FRONTEND_URL: "https://${DOMAIN:-localhost}"
-      BACKEND_URL: "https://${DOMAIN:-localhost}/api"
+      WEB_URL: "https://${DOMAIN:-localhost}"
+      API_URL: "https://${DOMAIN:-localhost}/api"
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,8 +66,8 @@ services:
   web:
     image: ghcr.io/hayward-solutions/docshare/web:latest
     environment:
-      BACKEND_URL: "https://${DOMAIN:-localhost}/api"
-      FRONTEND_URL: "https://${DOMAIN:-localhost}"
+      API_URL: "https://${DOMAIN:-localhost}/api"
+      WEB_URL: "https://${DOMAIN:-localhost}"
     depends_on:
       - api
     labels:

@@ -51,8 +51,8 @@ func TestLoad(t *testing.T) {
 		t.Setenv("SERVER_PORT", "9090")
 		t.Setenv("JWT_SECRET", "my-secret")
 		t.Setenv("JWT_EXPIRATION_HOURS", "48")
-		t.Setenv("FRONTEND_URL", "https://app.example.com")
-		t.Setenv("BACKEND_URL", "https://api.example.com/api")
+		t.Setenv("WEB_URL", "https://app.example.com")
+		t.Setenv("API_URL", "https://api.example.com/api")
 
 		cfg := Load()
 
@@ -114,7 +114,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("OAUTH_GOOGLE_ENABLED", "true")
 		t.Setenv("OAUTH_GOOGLE_CLIENT_ID", "client-id")
 		t.Setenv("OAUTH_GOOGLE_CLIENT_SECRET", "client-secret")
-		t.Setenv("BACKEND_URL", "https://api.example.com/api")
+		t.Setenv("API_URL", "https://api.example.com/api")
 		unsetEnv(t, "OAUTH_GOOGLE_REDIRECT_URL")
 
 		cfg := Load()
@@ -129,7 +129,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("OAUTH_GITHUB_ENABLED", "true")
 		t.Setenv("OAUTH_GITHUB_CLIENT_ID", "client-id")
 		t.Setenv("OAUTH_GITHUB_CLIENT_SECRET", "client-secret")
-		t.Setenv("BACKEND_URL", "https://api.example.com/api")
+		t.Setenv("API_URL", "https://api.example.com/api")
 		unsetEnv(t, "OAUTH_GITHUB_REDIRECT_URL")
 
 		cfg := Load()
@@ -144,7 +144,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("OAUTH_OIDC_ENABLED", "true")
 		t.Setenv("OAUTH_OIDC_CLIENT_ID", "client-id")
 		t.Setenv("OAUTH_OIDC_CLIENT_SECRET", "client-secret")
-		t.Setenv("BACKEND_URL", "https://api.example.com/api")
+		t.Setenv("API_URL", "https://api.example.com/api")
 		unsetEnv(t, "OAUTH_OIDC_REDIRECT_URL")
 
 		cfg := Load()
@@ -157,7 +157,7 @@ func TestLoad(t *testing.T) {
 
 	t.Run("SAML ACS URL auto-generates from backend URL", func(t *testing.T) {
 		t.Setenv("SAML_ENABLED", "true")
-		t.Setenv("BACKEND_URL", "https://api.example.com/api")
+		t.Setenv("API_URL", "https://api.example.com/api")
 		unsetEnv(t, "SAML_SP_ACS_URL")
 
 		cfg := Load()

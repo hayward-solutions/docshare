@@ -1,6 +1,6 @@
 import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, MFAStatus, PasskeyRegisterResponse, PreviewJob, RecoveryCodesResponse, SSOProvider, TOTPSetupResponse, User, WebAuthnCredentialInfo } from './types';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 interface FetchOptions extends RequestInit {

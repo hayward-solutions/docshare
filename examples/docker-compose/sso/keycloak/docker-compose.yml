@@ -11,12 +11,12 @@
 # - Create a realm called "docshare"
 # - Create an OIDC client with:
 #   - Client ID: docshare
-#   - Valid Redirect URIs: <BACKEND_URL>/auth/sso/oauth/oidc/callback
+#   - Valid Redirect URIs: <API_URL>/auth/sso/oauth/oidc/callback
 #     (defaults to http://localhost:8080/api/auth/sso/oauth/oidc/callback)
-#   - Web Origins matching your BACKEND_URL origin
+#   - Web Origins matching your API_URL origin
 # - Create users or configure LDAP federation
 #
-# The redirect URL is auto-derived from BACKEND_URL set in the base docker-compose.yml.
+# The redirect URL is auto-derived from API_URL set in the base docker-compose.yml.
 # To override, set OAUTH_OIDC_REDIRECT_URL explicitly.
 
 services:

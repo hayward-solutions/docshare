@@ -226,7 +226,7 @@ gotenberg:
 | `web.service.port`         | int    | `3000`                                        | Service port                                                    |
 | `web.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
 
-**Note:** The web receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart (auto-derived from ingress config or `api.env` values), which are passed as environment variables at runtime.
+**Note:** The web receives `API_URL` and `WEB_URL` from the Helm chart (auto-derived from ingress config or `api.env` values), which are passed as environment variables at runtime.
 
 ### Gotenberg
 
