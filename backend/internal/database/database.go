@@ -53,6 +53,9 @@ func migrate(db *gorm.DB) error {
 		&models.PreviewJob{},
 		&models.SSOProvider{},
 		&models.LinkedAccount{},
+		&models.MFAConfig{},
+		&models.WebAuthnCredential{},
+		&models.MFAChallenge{},
 	); err != nil {
 		return err
 	}

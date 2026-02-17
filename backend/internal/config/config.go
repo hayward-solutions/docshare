@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -22,6 +23,13 @@ type Config struct {
 	SSO       SSOConfig
 	SAML      SAMLConfig
 	LDAP      LDAPConfig
+	WebAuthn  WebAuthnConfig
+}
+
+type WebAuthnConfig struct {
+	RPDisplayName string
+	RPID          string
+	RPOrigins     []string
 }
 
 type DBConfig struct {
@@ -237,6 +245,22 @@ func Load() *Config {
 	}
 	if cfg.SAML.Enabled && cfg.SAML.SPACSURL == "" {
 		cfg.SAML.SPACSURL = backendURL + "/auth/sso/saml/acs"
+	}
+
+	rpID := getEnv("WEBAUTHN_RP_ID", "")
+	if rpID == "" {
+		if parsed, err := url.Parse(cfg.Server.FrontendURL); err == nil {
+			rpID = parsed.Hostname()
+		}
+	}
+	rpOrigins := []string{cfg.Server.FrontendURL}
+	if extra := getEnv("WEBAUTHN_RP_ORIGINS", ""); extra != "" {
+		rpOrigins = append(rpOrigins, strings.Split(extra, ",")...)
+	}
+	cfg.WebAuthn = WebAuthnConfig{
+		RPDisplayName: getEnv("WEBAUTHN_RP_DISPLAY_NAME", "DocShare"),
+		RPID:          rpID,
+		RPOrigins:     rpOrigins,
 	}
 
 	return cfg

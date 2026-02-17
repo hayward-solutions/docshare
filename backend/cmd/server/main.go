@@ -18,6 +18,7 @@ import (
 	"github.com/docshare/backend/pkg/logger"
 	"github.com/docshare/backend/pkg/previewtoken"
 	"github.com/docshare/backend/pkg/utils"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
@@ -40,6 +41,7 @@ func main() {
 		for range ticker.C {
 			handlers.CleanupExpiredDeviceCodes(db)
 			handlers.CleanupExpiredTransfers(db)
+			handlers.CleanupExpiredMFAChallenges(db)
 		}
 	}()
 
@@ -68,6 +70,19 @@ func main() {
 	deviceAuthHandler := handlers.NewDeviceAuthHandler(db, auditService, cfg)
 	transfersHandler := handlers.NewTransfersHandler(db, 300)
 	ssoHandler := handlers.NewSSOHandler(db, cfg)
+
+	waConfig := &webauthn.Config{
+		RPDisplayName: cfg.WebAuthn.RPDisplayName,
+		RPID:          cfg.WebAuthn.RPID,
+		RPOrigins:     cfg.WebAuthn.RPOrigins,
+	}
+	wa, err := webauthn.New(waConfig)
+	if err != nil {
+		log.Fatalf("webauthn initialization failed: %v", err)
+	}
+
+	mfaHandler := handlers.NewMFAHandler(db, auditService)
+	webAuthnHandler := handlers.NewWebAuthnHandler(db, wa, auditService)
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
@@ -170,6 +185,28 @@ func main() {
 	deviceRoutes.Post("/token", deviceAuthHandler.PollToken)
 	deviceRoutes.Get("/verify", authMiddleware.RequireAuth, deviceAuthHandler.Verify)
 	deviceRoutes.Post("/approve", authMiddleware.RequireAuth, deviceAuthHandler.Approve)
+
+	mfaRoutes := api.Group("/auth/mfa")
+	mfaRoutes.Get("/status", authMiddleware.RequireAuth, mfaHandler.Status)
+	mfaRoutes.Post("/totp/setup", authMiddleware.RequireAuth, mfaHandler.TOTPSetup)
+	mfaRoutes.Post("/totp/verify-setup", authMiddleware.RequireAuth, mfaHandler.TOTPVerifySetup)
+	mfaRoutes.Post("/totp/disable", authMiddleware.RequireAuth, mfaHandler.TOTPDisable)
+	mfaRoutes.Post("/verify/totp", mfaHandler.VerifyTOTP)
+	mfaRoutes.Post("/verify/recovery", mfaHandler.VerifyRecovery)
+	mfaRoutes.Post("/verify/webauthn/begin", webAuthnHandler.VerifyBegin)
+	mfaRoutes.Post("/verify/webauthn/finish", webAuthnHandler.VerifyFinish)
+	mfaRoutes.Post("/recovery/regenerate", authMiddleware.RequireAuth, mfaHandler.RegenerateRecovery)
+
+	passkeyRoutes := api.Group("/auth/passkey")
+	passkeyRoutes.Post("/register/begin", authMiddleware.RequireAuth, webAuthnHandler.RegisterBegin)
+	passkeyRoutes.Post("/register/finish", authMiddleware.RequireAuth, webAuthnHandler.RegisterFinish)
+	passkeyRoutes.Post("/login/begin", webAuthnHandler.LoginBegin)
+	passkeyRoutes.Post("/login/finish", webAuthnHandler.LoginFinish)
+
+	passkeysRoutes := api.Group("/auth/passkeys", authMiddleware.RequireAuth)
+	passkeysRoutes.Get("/", webAuthnHandler.List)
+	passkeysRoutes.Put("/:id", webAuthnHandler.Rename)
+	passkeysRoutes.Delete("/:id", webAuthnHandler.Delete)
 
 	auditRoutes := api.Group("/audit-log", authMiddleware.RequireAuth)
 	auditRoutes.Get("/export", auditHandler.ExportMyLog)

@@ -1,4 +1,4 @@
-import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, PreviewJob, SSOProvider, User } from './types';
+import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, MFAStatus, PasskeyRegisterResponse, PreviewJob, RecoveryCodesResponse, SSOProvider, TOTPSetupResponse, User, WebAuthnCredentialInfo } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
@@ -160,4 +160,42 @@ export const ssoAPI = {
     apiMethods.get<LinkedAccount[]>('/auth/linked-accounts'),
   unlinkAccount: async (id: string) =>
     apiMethods.delete('/auth/linked-accounts/' + id),
+};
+
+export const mfaAPI = {
+  getStatus: async () =>
+    apiMethods.get<MFAStatus>('/auth/mfa/status'),
+  setupTOTP: async () =>
+    apiMethods.post<TOTPSetupResponse>('/auth/mfa/totp/setup', {}),
+  verifyTOTPSetup: async (code: string) =>
+    apiMethods.post<RecoveryCodesResponse>('/auth/mfa/totp/verify-setup', { code }),
+  disableTOTP: async (password: string) =>
+    apiMethods.post<{ message: string }>('/auth/mfa/totp/disable', { password }),
+  verifyTOTP: async (mfaToken: string, code: string) =>
+    apiMethods.post<{ token: string; user: User }>('/auth/mfa/verify/totp', { mfaToken, code }),
+  verifyRecovery: async (mfaToken: string, code: string) =>
+    apiMethods.post<{ token: string; user: User }>('/auth/mfa/verify/recovery', { mfaToken, code }),
+  verifyWebAuthnBegin: async (mfaToken: string) =>
+    apiMethods.post<{ options: PublicKeyCredentialRequestOptions }>('/auth/mfa/verify/webauthn/begin', { mfaToken }),
+  verifyWebAuthnFinish: async (mfaToken: string, response: Record<string, unknown>) =>
+    apiMethods.post<{ token: string; user: User }>('/auth/mfa/verify/webauthn/finish', { mfaToken, response }),
+  regenerateRecovery: async (password: string) =>
+    apiMethods.post<RecoveryCodesResponse>('/auth/mfa/recovery/regenerate', { password }),
+};
+
+export const passkeyAPI = {
+  registerBegin: async () =>
+    apiMethods.post<{ options: PublicKeyCredentialCreationOptions }>('/auth/passkey/register/begin', {}),
+  registerFinish: async (name: string, response: Record<string, unknown>) =>
+    apiMethods.post<PasskeyRegisterResponse>('/auth/passkey/register/finish', { name, response }),
+  loginBegin: async () =>
+    apiMethods.post<{ options: PublicKeyCredentialRequestOptions; challengeID: string }>('/auth/passkey/login/begin', {}),
+  loginFinish: async (challengeID: string, response: Record<string, unknown>) =>
+    apiMethods.post<{ token: string; user: User }>('/auth/passkey/login/finish', { challengeID, response }),
+  list: async () =>
+    apiMethods.get<WebAuthnCredentialInfo[]>('/auth/passkeys'),
+  rename: async (id: string, name: string) =>
+    apiMethods.put<WebAuthnCredentialInfo>('/auth/passkeys/' + id, { name }),
+  delete: async (id: string) =>
+    apiMethods.delete('/auth/passkeys/' + id),
 };

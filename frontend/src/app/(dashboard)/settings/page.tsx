@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { MFASettings } from "@/components/mfa-settings";
 
 export default function AccountSettingsPage() {
   const { user, loadUser } = useAuth();
@@ -487,6 +488,10 @@ export default function AccountSettingsPage() {
               )}
             </CardContent>
           </Card>
+
+          <div className="mt-6">
+            <MFASettings />
+          </div>
         </TabsContent>
 
         <TabsContent value="groups">

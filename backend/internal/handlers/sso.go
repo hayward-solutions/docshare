@@ -98,6 +98,16 @@ func (h *SSOHandler) HandleOAuthCallback(c *fiber.Ctx) error {
 		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape(err.Error()))
 	}
 
+	hasMFA, methods := UserHasMFA(h.DB, user.ID)
+	if hasMFA {
+		mfaToken, err := utils.GenerateMFAToken(user.ID, user.Email)
+		if err != nil {
+			return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape("failed to generate MFA token"))
+		}
+		methodsJSON, _ := json.Marshal(methods)
+		return c.Redirect(frontendURL + "/auth/callback?mfa_required=true&mfa_token=" + url.QueryEscape(mfaToken) + "&methods=" + url.QueryEscape(string(methodsJSON)))
+	}
+
 	token, err := utils.GenerateToken(user)
 	if err != nil {
 		return c.Redirect(frontendURL + "/login?error=" + url.QueryEscape("failed to generate token"))
@@ -157,6 +167,18 @@ func (h *SSOHandler) HandleSAMLACS(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 
+	frontendURL := h.Cfg.Server.FrontendURL
+
+	hasMFA, methods := UserHasMFA(h.DB, user.ID)
+	if hasMFA {
+		mfaToken, err := utils.GenerateMFAToken(user.ID, user.Email)
+		if err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "failed to generate MFA token")
+		}
+		methodsJSON, _ := json.Marshal(methods)
+		return c.Redirect(frontendURL + "/auth/callback?mfa_required=true&mfa_token=" + url.QueryEscape(mfaToken) + "&methods=" + url.QueryEscape(string(methodsJSON)))
+	}
+
 	token, err := utils.GenerateToken(user)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to generate token")
@@ -167,7 +189,7 @@ func (h *SSOHandler) HandleSAMLACS(c *fiber.Ctx) error {
 		"email":   user.Email,
 	})
 
-	return c.Redirect(h.Cfg.Server.FrontendURL + "/auth/callback?token=" + token)
+	return c.Redirect(frontendURL + "/auth/callback?token=" + token)
 }
 
 type LDAPLoginRequest struct {
@@ -197,6 +219,19 @@ func (h *SSOHandler) HandleLDAPLogin(c *fiber.Ctx) error {
 	user, err := h.SSOService.FindOrCreateUser(c.Context(), profile)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	hasMFA, methods := UserHasMFA(h.DB, user.ID)
+	if hasMFA {
+		mfaToken, err := utils.GenerateMFAToken(user.ID, user.Email)
+		if err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "failed to generate MFA token")
+		}
+		return utils.Success(c, fiber.StatusOK, fiber.Map{
+			"mfaRequired": true,
+			"mfaToken":    mfaToken,
+			"methods":     methods,
+		})
 	}
 
 	token, err := utils.GenerateToken(user)

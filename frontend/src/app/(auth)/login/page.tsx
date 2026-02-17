@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/lib/auth';
-import { APP_VERSION, ssoAPI } from '@/lib/api';
+import { APP_VERSION, passkeyAPI, ssoAPI } from '@/lib/api';
 import { SSOProvider } from '@/lib/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Fingerprint } from 'lucide-react';
+import { decodePublicKeyCredentialRequestOptions, encodeCredentialRequestResponse } from '@/lib/webauthn';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -20,9 +21,10 @@ function LoginForm() {
   const [ldapUsername, setLdapUsername] = useState('');
   const [ldapPassword, setLdapPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [providers, setProviders] = useState<SSOProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
-  const { login, ldapLogin } = useAuth();
+  const { login, ldapLogin, mfaPending, loginWithToken, isAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -50,8 +52,6 @@ function LoginForm() {
     setIsLoading(true);
     try {
       await login(email, password);
-      toast.success('Logged in successfully');
-      router.push('/files');
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to login');
     } finally {
@@ -64,12 +64,52 @@ function LoginForm() {
     setIsLoading(true);
     try {
       await ldapLogin(ldapUsername, ldapPassword);
-      toast.success('Logged in successfully');
-      router.push('/files');
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to login');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mfaPending) {
+      router.push('/mfa');
+    }
+  }, [mfaPending, router]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/files');
+    }
+  }, [isAuthenticated, router]);
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true);
+    try {
+      const beginRes = await passkeyAPI.loginBegin();
+      if (!beginRes.success) throw new Error('Failed to start passkey login');
+
+      const options = decodePublicKeyCredentialRequestOptions(
+        beginRes.data.options as unknown as Record<string, unknown>
+      );
+
+      const credential = await navigator.credentials.get({
+        publicKey: options,
+      }) as PublicKeyCredential;
+
+      if (!credential) throw new Error('No credential returned');
+
+      const encoded = encodeCredentialRequestResponse(credential);
+      const finishRes = await passkeyAPI.loginFinish(beginRes.data.challengeID, encoded);
+      if (finishRes.success) {
+        await loginWithToken(finishRes.data.token);
+        toast.success('Logged in with passkey');
+        router.push('/files');
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Passkey login failed');
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -195,6 +235,21 @@ function LoginForm() {
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handlePasskeyLogin}
+            disabled={passkeyLoading || isLoading}
+          >
+            {passkeyLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Fingerprint className="mr-2 h-4 w-4" />
+            )}
+            Sign in with passkey
           </Button>
 
           {showDividerBeforeProviders && (

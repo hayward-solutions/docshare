@@ -139,6 +139,32 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		"ip":      c.IP(),
 	})
 
+	hasMFA, methods := UserHasMFA(h.DB, user.ID)
+	if hasMFA {
+		h.Audit.LogAsync(services.AuditEntry{
+			UserID:       &user.ID,
+			Action:       "user.login_mfa_pending",
+			ResourceType: "user",
+			ResourceID:   &user.ID,
+			Details: map[string]interface{}{
+				"email":   user.Email,
+				"methods": methods,
+			},
+			IPAddress: c.IP(),
+			RequestID: getRequestID(c),
+		})
+
+		mfaToken, err := utils.GenerateMFAToken(user.ID, user.Email)
+		if err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "failed generating MFA token")
+		}
+		return utils.Success(c, fiber.StatusOK, fiber.Map{
+			"mfaRequired": true,
+			"mfaToken":    mfaToken,
+			"methods":     methods,
+		})
+	}
+
 	h.Audit.LogAsync(services.AuditEntry{
 		UserID:       &user.ID,
 		Action:       "user.login",
