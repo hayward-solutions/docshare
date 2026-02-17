@@ -156,7 +156,7 @@ export default function FilesPage() {
   const handleDownload = async (fileId: string, fileName: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : undefined;
     await downloadFile({
-      url: `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/files/${fileId}/download`,
+      url: `${process.env.NEXT_PUBLIC_BACKEND_URL ?? '/api'}/files/${fileId}/download`,
       filename: fileName,
       token: token || undefined,
     });

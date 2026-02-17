@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -12,7 +13,7 @@ const (
 	fileName   = "config.json"
 	dirPerms   = 0700
 	filePerms  = 0600
-	DefaultURL = "http://localhost:8080"
+	DefaultURL = "http://localhost:8080/api"
 )
 
 // Config holds persisted CLI configuration.
@@ -50,11 +51,14 @@ func Load() (*Config, error) {
 	if cfg.ServerURL == "" {
 		cfg.ServerURL = DefaultURL
 	}
+	cfg.ServerURL = migrateServerURL(cfg.ServerURL)
 	return &cfg, nil
 }
 
 // Save writes the config to disk, creating the directory if needed.
+// ServerURL is normalized to include the /api suffix before persisting.
 func Save(cfg *Config) error {
+	cfg.ServerURL = migrateServerURL(cfg.ServerURL)
 	p, err := Path()
 	if err != nil {
 		return err
@@ -85,4 +89,12 @@ func Clear() error {
 // HasToken reports whether a token is configured.
 func (c *Config) HasToken() bool {
 	return c.Token != ""
+}
+
+func migrateServerURL(u string) string {
+	trimmed := strings.TrimRight(u, "/")
+	if !strings.HasSuffix(trimmed, "/api") {
+		return trimmed + "/api"
+	}
+	return trimmed
 }

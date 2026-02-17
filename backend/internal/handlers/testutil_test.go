@@ -112,7 +112,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
-	app.Use(middleware.CORS())
+	app.Use(middleware.CORS(cfg.Server.FrontendURL))
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.SecurityLogger())
 

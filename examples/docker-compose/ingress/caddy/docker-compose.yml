@@ -1,6 +1,9 @@
 # Caddy Reverse Proxy Example
 # Automatic HTTPS with Let's Encrypt
 #
+# Both services share a single domain via Caddy. FRONTEND_URL and BACKEND_URL
+# are derived from the DOMAIN variable (defaults to localhost).
+#
 # Usage:
 #   export DOMAIN=docshare.example.com
 #   export EMAIL=admin@example.com
@@ -47,6 +50,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
+      FRONTEND_URL: "https://${DOMAIN:-localhost}"
+      BACKEND_URL: "https://${DOMAIN:-localhost}/api"
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,6 +1,6 @@
 import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, PreviewJob, SSOProvider, User } from './types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 interface FetchOptions extends RequestInit {
@@ -80,13 +80,13 @@ export const apiMethods = {
 
 export const activityAPI = {
   list: async (page = 1, limit = 20) =>
-    apiMethods.get<Activity[]>('/api/activities', { page, limit }),
+    apiMethods.get<Activity[]>('/activities', { page, limit }),
   unreadCount: async () =>
-    apiMethods.get<{ count: number }>('/api/activities/unread-count'),
+    apiMethods.get<{ count: number }>('/activities/unread-count'),
   markRead: async (id: string) =>
-    apiMethods.put('/api/activities/' + id + '/read', {}),
+    apiMethods.put('/activities/' + id + '/read', {}),
   markAllRead: async () =>
-    apiMethods.put('/api/activities/read-all', {}),
+    apiMethods.put('/activities/read-all', {}),
 };
 
 export const auditAPI = {
@@ -96,68 +96,68 @@ export const auditAPI = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const response = await fetch(`${API_URL}/api/audit-log/export?format=${format}`, { headers });
+    const response = await fetch(`${API_URL}/audit-log/export?format=${format}`, { headers });
     if (!response.ok) throw new Error('Failed to download audit log');
     return response.blob();
   },
 };
 
 export const tokenAPI = {
-  list: async () => apiMethods.get<APIToken[]>('/api/auth/tokens'),
+  list: async () => apiMethods.get<APIToken[]>('/auth/tokens'),
   create: async (data: { name: string; expiresIn?: string }) =>
-    apiMethods.post<APITokenCreateResponse>('/api/auth/tokens', data),
-  revoke: async (id: string) => apiMethods.delete('/api/auth/tokens/' + id),
+    apiMethods.post<APITokenCreateResponse>('/auth/tokens', data),
+  revoke: async (id: string) => apiMethods.delete('/auth/tokens/' + id),
 };
 
 export const deviceAPI = {
   verify: async (code: string) =>
-    apiMethods.get<DeviceCodeVerification>('/api/auth/device/verify', { code }),
+    apiMethods.get<DeviceCodeVerification>('/auth/device/verify', { code }),
   approve: async (userCode: string) =>
-    apiMethods.post<{ message: string }>('/api/auth/device/approve', { userCode }),
+    apiMethods.post<{ message: string }>('/auth/device/approve', { userCode }),
 };
 
 export const userAPI = {
   updateProfile: async (data: { firstName?: string; lastName?: string; avatarURL?: string | null }) =>
-    apiMethods.put<User>('/api/auth/me', data),
+    apiMethods.put<User>('/auth/me', data),
   changePassword: async (data: { oldPassword: string; newPassword: string }) =>
-    apiMethods.put('/api/auth/password', data),
-  getCurrentUser: async () => apiMethods.get<User>('/api/auth/me'),
-  getGroups: async () => apiMethods.get<Group[]>('/api/groups'),
+    apiMethods.put('/auth/password', data),
+  getCurrentUser: async () => apiMethods.get<User>('/auth/me'),
+  getGroups: async () => apiMethods.get<Group[]>('/groups'),
   uploadAvatar: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('parentID', '');
     
-    const res = await apiMethods.upload<{ id: string; storagePath?: string }>('/api/files/upload', formData);
+    const res = await apiMethods.upload<{ id: string; storagePath?: string }>('/files/upload', formData);
     if (res.success) {
-      return { success: true, url: res.data.storagePath ? `${API_URL}/api/files/${res.data.id}/download-url` : null };
+      return { success: true, url: res.data.storagePath ? `${API_URL}/files/${res.data.id}/download-url` : null };
     }
     return { success: false, error: 'Upload failed' };
   }
 };
 
 export const versionAPI = {
-  get: async () => apiMethods.get<{ version: string; apiVersion: string }>('/api/version'),
+  get: async () => apiMethods.get<{ version: string; apiVersion: string }>('/version'),
 };
 
 export const previewAPI = {
   convert: async (fileId: string) =>
-    apiMethods.post<{ job: PreviewJob }>('/api/files/' + fileId + '/convert-preview', {}),
+    apiMethods.post<{ job: PreviewJob }>('/files/' + fileId + '/convert-preview', {}),
   getStatus: async (fileId: string) =>
-    apiMethods.get<{ job: PreviewJob | null; file: unknown }>('/api/files/' + fileId + '/preview-status'),
+    apiMethods.get<{ job: PreviewJob | null; file: unknown }>('/files/' + fileId + '/preview-status'),
   retry: async (fileId: string) =>
-    apiMethods.post<{ job: PreviewJob }>('/api/files/' + fileId + '/retry-preview', {}),
+    apiMethods.post<{ job: PreviewJob }>('/files/' + fileId + '/retry-preview', {}),
 };
 
 export const ssoAPI = {
   listProviders: async () =>
-    apiMethods.get<SSOProvider[]>('/api/auth/sso/providers'),
+    apiMethods.get<SSOProvider[]>('/auth/sso/providers'),
   getOAuthUrl: async (provider: string) =>
-    apiMethods.get<{ url: string }>('/api/auth/sso/oauth/' + provider),
+    apiMethods.get<{ url: string }>('/auth/sso/oauth/' + provider),
   ldapLogin: async (data: { username: string; password: string }) =>
-    apiMethods.post<{ token: string; user: User }>('/api/auth/sso/ldap/login', data),
+    apiMethods.post<{ token: string; user: User }>('/auth/sso/ldap/login', data),
   listLinkedAccounts: async () =>
-    apiMethods.get<LinkedAccount[]>('/api/auth/linked-accounts'),
+    apiMethods.get<LinkedAccount[]>('/auth/linked-accounts'),
   unlinkAccount: async (id: string) =>
-    apiMethods.delete('/api/auth/linked-accounts/' + id),
+    apiMethods.delete('/auth/linked-accounts/' + id),
 };

@@ -1,13 +1,17 @@
 # DocShare with GitHub OAuth2
 #
 # Usage (from project root):
-#   docker-compose -f docker-compose.yml -f examples/sso/github/docker-compose.yml up -d
+#   docker-compose -f docker-compose.yml -f examples/docker-compose/sso/github/docker-compose.yml up -d
 #
 # Setup:
 # 1. Go to GitHub Developer Settings https://github.com/settings/developers
 # 2. Create a new OAuth App
-# 3. Homepage URL: http://localhost:3001
-# 4. Authorization callback URL: http://localhost:8080/api/auth/sso/oauth/github/callback
+# 3. Homepage URL: your FRONTEND_URL (defaults to http://localhost:3001)
+# 4. Authorization callback URL: <BACKEND_URL>/auth/sso/oauth/github/callback
+#    (defaults to http://localhost:8080/api/auth/sso/oauth/github/callback)
+#
+# The callback URL is auto-derived from BACKEND_URL set in the base docker-compose.yml.
+# To override, set OAUTH_GITHUB_REDIRECT_URL explicitly.
 
 services:
   backend:
@@ -15,6 +19,5 @@ services:
       OAUTH_GITHUB_ENABLED: "true"
       OAUTH_GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"
       OAUTH_GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET}"
-      OAUTH_GITHUB_REDIRECT_URL: "http://localhost:8080/api/auth/sso/oauth/github/callback"
       OAUTH_GITHUB_SCOPES: "read:user,user:email"
       SSO_AUTO_REGISTER: "true"

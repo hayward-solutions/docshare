@@ -38,19 +38,18 @@ func TestConfig_Load(t *testing.T) {
 	originalPath, _ := Path()
 
 	t.Run("returns default config when file does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
-		testConfigPath := filepath.Join(tempDir, dirName, fileName)
+		path, _ := Path()
+		configDir := filepath.Dir(path)
 
-		if err := os.MkdirAll(filepath.Dir(testConfigPath), 0755); err != nil {
-			t.Fatalf("failed to create config dir: %v", err)
-		}
+		originalData, _ := os.ReadFile(path)
+		defer func() {
+			if originalData != nil {
+				_ = os.MkdirAll(configDir, 0755)
+				_ = os.WriteFile(path, originalData, 0600)
+			}
+		}()
 
-		cfg := &Config{ServerURL: DefaultURL, Token: ""}
-		data, _ := json.MarshalIndent(cfg, "", "  ")
-		if err := os.WriteFile(testConfigPath, data, 0600); err != nil {
-			t.Fatalf("failed to write config: %v", err)
-		}
-		os.Remove(testConfigPath)
+		os.Remove(path)
 
 		cfg, err := Load()
 		if err != nil {
@@ -81,7 +80,7 @@ func TestConfig_Load(t *testing.T) {
 		}
 
 		expectedConfig := &Config{
-			ServerURL: "https://example.com",
+			ServerURL: "https://example.com/api",
 			Token:     "test-token-123",
 		}
 		data, _ := json.MarshalIndent(expectedConfig, "", "  ")
@@ -272,7 +271,7 @@ func TestConfig_HasToken(t *testing.T) {
 }
 
 func TestConfig_DefaultURL(t *testing.T) {
-	if DefaultURL != "http://localhost:8080" {
-		t.Errorf("expected DefaultURL 'http://localhost:8080', got %s", DefaultURL)
+	if DefaultURL != "http://localhost:8080/api" {
+		t.Errorf("expected DefaultURL 'http://localhost:8080/api', got %s", DefaultURL)
 	}
 }

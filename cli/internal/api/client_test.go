@@ -11,7 +11,7 @@ import (
 
 func TestNewClient(t *testing.T) {
 	t.Run("creates client with correct base URL", func(t *testing.T) {
-		client := NewClient("http://localhost:8080/", "test-token")
+		client := NewClient("http://localhost:8080/api", "test-token")
 		if client.BaseURL != "http://localhost:8080/api" {
 			t.Errorf("expected BaseURL 'http://localhost:8080/api', got %s", client.BaseURL)
 		}
@@ -21,7 +21,7 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("removes trailing slash from base URL", func(t *testing.T) {
-		client := NewClient("http://example.com///", "")
+		client := NewClient("http://example.com/api///", "")
 		if client.BaseURL != "http://example.com/api" {
 			t.Errorf("expected BaseURL 'http://example.com/api', got %s", client.BaseURL)
 		}

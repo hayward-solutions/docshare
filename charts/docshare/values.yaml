@@ -16,6 +16,8 @@ backend:
     jwtExpirationHours: "24"
     serverPort: "8080"
     gotenbergUrl: ""  # auto-configured if gotenberg.enabled
+    frontendUrl: ""  # auto-configured from ingress host if empty
+    backendUrl: ""   # auto-configured from ingress host if empty
   existingSecret: ""  # use an existing Secret instead of the auto-generated one
 
 frontend:

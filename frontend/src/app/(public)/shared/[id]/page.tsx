@@ -9,14 +9,14 @@ import { FileIconComponent } from '@/components/file-icon';
 import { Download, AlertCircle, Loader2, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
 
 async function fetchPublicFile(id: string, token?: string | null): Promise<File> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}/api/public/files/${id}`, { headers });
+  const res = await fetch(`${API_URL}/public/files/${id}`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to load file');
   return data.data;
@@ -27,7 +27,7 @@ async function fetchPublicChildren(id: string, token?: string | null): Promise<F
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}/api/public/files/${id}/children`, { headers });
+  const res = await fetch(`${API_URL}/public/files/${id}/children`, { headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to load files');
   return data.data;
@@ -79,7 +79,7 @@ export default function PublicSharedPage() {
 
   const handleDownload = (fileId: string, fileName: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const url = `${API_URL}/api/public/files/${fileId}/download`;
+    const url = `${API_URL}/public/files/${fileId}/download`;
     const a = document.createElement('a');
     if (token) {
       fetch(url, { headers: { Authorization: `Bearer ${token}` } })

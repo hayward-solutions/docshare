@@ -51,6 +51,7 @@ type JWTConfig struct {
 type ServerConfig struct {
 	Port        string
 	FrontendURL string
+	BackendURL  string
 }
 
 type GotenbergConfig struct {
@@ -161,6 +162,7 @@ func Load() *Config {
 		Server: ServerConfig{
 			Port:        getEnv("SERVER_PORT", "8080"),
 			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3001"),
+			BackendURL:  getEnv("BACKEND_URL", "http://localhost:8080/api"),
 		},
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),
@@ -221,6 +223,20 @@ func Load() *Config {
 
 	if cfg.S3.Endpoint == "" {
 		cfg.S3.Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", cfg.S3.Region)
+	}
+
+	backendURL := strings.TrimRight(cfg.Server.BackendURL, "/")
+	if cfg.SSO.Google.Enabled && cfg.SSO.Google.RedirectURL == "" {
+		cfg.SSO.Google.RedirectURL = backendURL + "/auth/sso/oauth/google/callback"
+	}
+	if cfg.SSO.GitHub.Enabled && cfg.SSO.GitHub.RedirectURL == "" {
+		cfg.SSO.GitHub.RedirectURL = backendURL + "/auth/sso/oauth/github/callback"
+	}
+	if cfg.SSO.OIDC.Enabled && cfg.SSO.OIDC.RedirectURL == "" {
+		cfg.SSO.OIDC.RedirectURL = backendURL + "/auth/sso/oauth/oidc/callback"
+	}
+	if cfg.SAML.Enabled && cfg.SAML.SPACSURL == "" {
+		cfg.SAML.SPACSURL = backendURL + "/auth/sso/saml/acs"
 	}
 
 	return cfg

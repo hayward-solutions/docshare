@@ -20,10 +20,10 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
-// NewClient creates a Client from a base URL (e.g. http://localhost:8080) and bearer token.
+// NewClient creates a Client from a base API URL (e.g. http://localhost:8080/api) and bearer token.
 func NewClient(baseURL, token string) *Client {
 	return &Client{
-		BaseURL: strings.TrimRight(baseURL, "/") + "/api",
+		BaseURL: strings.TrimRight(baseURL, "/"),
 		Token:   token,
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Minute, // generous for large uploads

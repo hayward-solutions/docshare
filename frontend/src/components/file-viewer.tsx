@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Download, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface FileViewerProps {
   file: File;
 }
 
 async function fetchPreviewBlob(fileId: string): Promise<{ blobUrl: string; contentType: string }> {
-  const res = await apiMethods.get<{ path: string; token: string }>(`/api/files/${fileId}/preview`);
+  const res = await apiMethods.get<{ path: string; token: string }>(`/files/${fileId}/preview`);
   if (!res.success) throw new Error('Failed to get preview token');
 
   const proxyUrl = `${API_URL}${res.data.path}?token=${res.data.token}`;
@@ -208,7 +208,7 @@ export function FileViewer({ file }: FileViewerProps) {
   const handleDownload = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : undefined;
     await downloadFile({
-      url: `${API_URL}/api/files/${file.id}/download`,
+      url: `${API_URL}/files/${file.id}/download`,
       filename: file.name,
       token: token || undefined,
     });

@@ -1,5 +1,8 @@
 # Deployment with S3-compatible storage (MinIO example)
 # Suitable for self-hosted storage or providers like Wasabi, Backblaze B2, etc.
+#
+# For production, update FRONTEND_URL and BACKEND_URL to match your domain.
+#
 # Usage: docker-compose up -d
 
 services:
@@ -78,6 +81,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
+      FRONTEND_URL: http://localhost:3001
+      BACKEND_URL: http://localhost:8080/api
     ports:
       - "8080:8080"
     depends_on:

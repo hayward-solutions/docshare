@@ -75,6 +75,7 @@ func (h *DeviceAuthHandler) RequestCode(c *fiber.Ctx) error {
 		"verification_uri_complete": verificationURIComplete,
 		"expires_in":                int(time.Until(expiresAt).Seconds()),
 		"interval":                  devicePollInterval,
+		"frontend_url":              h.FrontendURL,
 	})
 }
 
