@@ -183,7 +183,7 @@ export default function FilesPage() {
                   <button
                     type="button"
                     onClick={() => setSearchScope(searchScope === 'here' ? 'everywhere' : 'here')}
-                    className="absolute right-2 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-2 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     {searchScope === 'here' ? (
                       <FolderOpen className="h-3.5 w-3.5" />
@@ -198,11 +198,11 @@ export default function FilesPage() {
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="flex items-center border rounded-md bg-white">
+          <div className="flex items-center border rounded-md bg-card">
             <Button
               variant="ghost"
               size="icon"
-              className={`rounded-none rounded-l-md ${viewMode === 'grid' ? 'bg-slate-100' : ''}`}
+              className={`rounded-none rounded-l-md ${viewMode === 'grid' ? 'bg-muted' : ''}`}
               onClick={() => setViewMode('grid')}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -210,7 +210,7 @@ export default function FilesPage() {
             <Button
               variant="ghost"
               size="icon"
-              className={`rounded-none rounded-r-md ${viewMode === 'list' ? 'bg-slate-100' : ''}`}
+              className={`rounded-none rounded-r-md ${viewMode === 'list' ? 'bg-muted' : ''}`}
               onClick={() => setViewMode('list')}
             >
               <List className="h-4 w-4" />
@@ -235,13 +235,13 @@ export default function FilesPage() {
       {(isLoading || isSearching) ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
           {['s1', 's2', 's3', 's4', 's5'].map((key) => (
-            <div key={key} className="h-32 animate-pulse rounded-lg bg-slate-200" />
+            <div key={key} className="h-32 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
       ) : displayedFiles.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="rounded-full bg-slate-100 p-4">
-            <FileIconComponent mimeType="" isDirectory={true} className="h-8 w-8 text-slate-400" />
+          <div className="rounded-full bg-muted p-4">
+            <FileIconComponent mimeType="" isDirectory={true} className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="mt-4 text-lg font-semibold">{isSearchActive ? 'No results found' : 'No files found'}</h3>
           <p className="text-sm text-muted-foreground">
@@ -253,7 +253,7 @@ export default function FilesPage() {
           {displayedFiles.map((file) => (
             <div
               key={file.id}
-              className={`group relative flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow-md ${selection.isSelected(file.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
+              className={`group relative flex flex-col justify-between rounded-lg border bg-card p-4 transition-shadow hover:shadow-md ${selection.isSelected(file.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
             >
               <Link href={`/files/${file.id}`} className="absolute inset-0 z-0" />
               <div className="flex items-start justify-between">
@@ -266,7 +266,7 @@ export default function FilesPage() {
                   <FileIconComponent 
                     mimeType={file.mimeType} 
                     isDirectory={file.isDirectory} 
-                    className="h-10 w-10 text-blue-600" 
+                    className="h-10 w-10 text-blue-600 dark:text-blue-400" 
                   />
                 </div>
                 <DropdownMenu>
@@ -303,7 +303,7 @@ export default function FilesPage() {
                       <Move className="mr-2 h-4 w-4" />
                       Move
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(file.id)}>
+                    <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(file.id)}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>
@@ -312,14 +312,14 @@ export default function FilesPage() {
               </div>
               <div className="mt-4">
                 <div className="flex items-center gap-2">
-                  <p className="truncate font-medium text-slate-900" title={file.name}>
+                  <p className="truncate font-medium text-foreground" title={file.name}>
                     {file.name}
                   </p>
                   {file.sharedWith !== undefined && file.sharedWith > 0 && (
-                    <Share2 className="h-4 w-4 text-blue-400" />
+                    <Share2 className="h-4 w-4 text-blue-400 dark:text-blue-300" />
                   )}
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {file.parentName ? (
                     <span className="flex items-center gap-1">
                       <FolderOpen className="h-3 w-3" />
@@ -336,7 +336,7 @@ export default function FilesPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border bg-white">
+        <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -357,7 +357,7 @@ export default function FilesPage() {
             </TableHeader>
             <TableBody>
               {displayedFiles.map((file) => (
-                <TableRow key={file.id} className={`group ${selection.isSelected(file.id) ? 'bg-blue-50' : ''}`}>
+                <TableRow key={file.id} className={`group ${selection.isSelected(file.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
                   <TableCell className="pl-4">
                     <Checkbox
                       checked={selection.isSelected(file.id)}
@@ -368,7 +368,7 @@ export default function FilesPage() {
                     <FileIconComponent 
                       mimeType={file.mimeType} 
                       isDirectory={file.isDirectory} 
-                      className="h-5 w-5 text-blue-600" 
+                      className="h-5 w-5 text-blue-600 dark:text-blue-400" 
                     />
                   </TableCell>
                   <TableCell className="font-medium">
@@ -378,7 +378,7 @@ export default function FilesPage() {
                           {file.name}
                         </Link>
                         {file.sharedWith !== undefined && file.sharedWith > 0 && (
-                          <Share2 className="h-4 w-4 text-blue-400" />
+                          <Share2 className="h-4 w-4 text-blue-400 dark:text-blue-300" />
                         )}
                       </div>
                       {file.parentName && (
@@ -437,7 +437,7 @@ export default function FilesPage() {
                           <Move className="mr-2 h-4 w-4" />
                           Move
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(file.id)}>
+                        <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(file.id)}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>

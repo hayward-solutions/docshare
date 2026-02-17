@@ -99,15 +99,15 @@ export default function PublicSharedPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className="flex min-h-screen items-center justify-center bg-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (requiresLogin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-muted p-4">
         <div className="max-w-md text-center space-y-4">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
             <LogIn className="h-8 w-8 text-amber-600" />
@@ -126,9 +126,9 @@ export default function PublicSharedPage() {
 
   if (error || !file) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-muted p-4">
         <div className="max-w-md text-center space-y-4">
-          <AlertCircle className="mx-auto h-12 w-12 text-slate-400" />
+          <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-semibold">File Not Found</h2>
           <p className="text-muted-foreground">{error || 'This shared link is invalid or has expired.'}</p>
         </div>
@@ -137,18 +137,18 @@ export default function PublicSharedPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white px-6 py-4">
+    <div className="min-h-screen bg-muted">
+      <header className="border-b bg-card px-6 py-4">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-slate-900">DocShare</Link>
+          <Link href="/" className="text-lg font-bold text-foreground">DocShare</Link>
           <span className="text-xs text-muted-foreground">Shared file</span>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl p-6 space-y-6">
         <div className="flex items-center gap-4">
-          <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <FileIconComponent mimeType={file.mimeType} isDirectory={file.isDirectory} className="h-12 w-12 text-blue-600" />
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <FileIconComponent mimeType={file.mimeType} isDirectory={file.isDirectory} className="h-12 w-12 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold truncate">{file.name}</h1>
@@ -166,15 +166,15 @@ export default function PublicSharedPage() {
         </div>
 
         {file.isDirectory && (
-          <div className="rounded-lg border bg-white">
+          <div className="rounded-lg border bg-card">
             {children.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">This folder is empty.</div>
             ) : (
               <div className="divide-y">
                 {children.map((child) => (
-                  <div key={child.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <div key={child.id} className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors">
                     <Link href={`/shared/${child.id}`} className="flex items-center gap-3 min-w-0 flex-1">
-                      <FileIconComponent mimeType={child.mimeType} isDirectory={child.isDirectory} className="h-5 w-5 shrink-0 text-blue-600" />
+                      <FileIconComponent mimeType={child.mimeType} isDirectory={child.isDirectory} className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
                       <div className="min-w-0">
                         <p className="truncate font-medium text-sm">{child.name}</p>
                         <p className="text-xs text-muted-foreground">

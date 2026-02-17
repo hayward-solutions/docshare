@@ -61,7 +61,7 @@ export default function SharedWithMePage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-md border bg-white">
+        <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -76,7 +76,7 @@ export default function SharedWithMePage() {
               {files.map((file) => (
                 <TableRow key={file.id}>
                   <TableCell>
-                    <FileIconComponent mimeType={file.mimeType} isDirectory={file.isDirectory} className="h-5 w-5 text-blue-600" />
+                    <FileIconComponent mimeType={file.mimeType} isDirectory={file.isDirectory} className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </TableCell>
                   <TableCell className="font-medium">
                     <Link href={`/files/${file.id}`} className="hover:underline">

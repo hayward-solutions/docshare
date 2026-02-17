@@ -133,7 +133,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="rounded-md border bg-white">
+      <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -161,7 +161,7 @@ export default function AdminPage() {
                       <Edit className="h-4 w-4" />
                     </Button>
                     {user.id !== currentUser?.id && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDelete(user.id)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 dark:text-red-400" onClick={() => handleDelete(user.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}

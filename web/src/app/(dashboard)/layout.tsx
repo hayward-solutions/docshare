@@ -114,7 +114,7 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
   return (
     <div className="flex h-full flex-col gap-4 py-4">
       <div className="px-6 py-2">
-        <h1 className="text-xl font-bold text-white">DocShare</h1>
+        <h1 className="text-xl font-bold text-sidebar-foreground">DocShare</h1>
       </div>
       <ScrollArea className="flex-1 overflow-hidden">
         <nav className="space-y-1 px-3 pr-4">
@@ -128,14 +128,14 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                 )}
               >
                 <item.icon className="h-5 w-5" />
                 <span className="flex-1">{item.name}</span>
                 {item.badge && (
-                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                  <span className="bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
                     {item.badge}
                   </span>
                 )}
@@ -145,20 +145,20 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
         </nav>
       </ScrollArea>
       <div className="px-3 py-2">
-       <div className="flex items-center gap-3 rounded-lg bg-slate-800 px-3 py-3">
+       <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent px-3 py-3">
          <Avatar className="h-9 w-9">
            <AvatarImage src={user?.avatarURL} />
            <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
          </Avatar>
          <div className="flex flex-1 flex-col overflow-hidden">
-           <span className="truncate text-sm font-medium text-white">
+            <span className="truncate text-sm font-medium text-sidebar-foreground">
              {user?.firstName} {user?.lastName}
            </span>
-           <span className="truncate text-xs text-slate-400">{user?.email}</span>
+            <span className="truncate text-xs text-sidebar-foreground/60">{user?.email}</span>
          </div>
          <DropdownMenu>
            <DropdownMenuTrigger asChild>
-             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground">
                <Settings className="h-4 w-4" />
              </Button>
            </DropdownMenuTrigger>
@@ -172,7 +172,7 @@ const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
                </Link>
              </DropdownMenuItem>
              <DropdownMenuSeparator />
-             <DropdownMenuItem onClick={logout} className="text-red-600">
+              <DropdownMenuItem onClick={logout} className="text-destructive">
                <LogOut className="mr-2 h-4 w-4" />
                Log out
              </DropdownMenuItem>
@@ -206,13 +206,13 @@ export default function DashboardLayout({
 
   return (
     <ActivityProvider>
-      <div className="flex h-screen overflow-hidden bg-slate-50">
-        <div className="hidden w-64 shrink-0 flex-col bg-slate-900 md:flex">
+      <div className="flex h-screen overflow-hidden bg-background">
+        <div className="hidden w-64 shrink-0 flex-col bg-sidebar md:flex">
           <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 md:hidden">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background px-4 md:hidden">
             <h1 className="text-lg font-bold">DocShare</h1>
             <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
               <SheetTrigger asChild>
@@ -220,7 +220,7 @@ export default function DashboardLayout({
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 bg-slate-900 p-0 border-r-slate-800">
+              <SheetContent side="left" className="w-64 bg-sidebar p-0 border-r-sidebar-border">
                 <NavContent user={user} pathname={pathname} setIsMobileOpen={setIsMobileOpen} logout={logout} />
               </SheetContent>
             </Sheet>

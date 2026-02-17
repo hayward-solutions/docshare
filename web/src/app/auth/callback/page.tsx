@@ -54,7 +54,7 @@ function CallbackHandler() {
   }, [searchParams, router, loginWithToken, setMFAChallenge]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-screen items-center justify-center bg-muted">
       <div className="text-center">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
         <p className="mt-4 text-sm text-muted-foreground">Completing sign in...</p>
@@ -65,7 +65,7 @@ function CallbackHandler() {
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-slate-50"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-muted"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
       <CallbackHandler />
     </Suspense>
   );

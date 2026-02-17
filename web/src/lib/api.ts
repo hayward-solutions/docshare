@@ -117,7 +117,7 @@ export const deviceAPI = {
 };
 
 export const userAPI = {
-  updateProfile: async (data: { firstName?: string; lastName?: string; avatarURL?: string | null }) =>
+  updateProfile: async (data: { firstName?: string; lastName?: string; avatarURL?: string | null; theme?: string }) =>
     apiMethods.put<User>('/auth/me', data),
   changePassword: async (data: { oldPassword: string; newPassword: string }) =>
     apiMethods.put('/auth/password', data),

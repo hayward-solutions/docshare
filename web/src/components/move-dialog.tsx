@@ -206,13 +206,13 @@ export function MoveDialog({
           <div key={node.id} className="space-y-1">
             <div
               className={`flex items-center gap-1 rounded-md border px-2 py-1 ${
-                isSelected ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-slate-50'
+                isSelected ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950' : 'border-transparent hover:bg-accent'
               }`}
               style={{ paddingLeft: `${depth * 16 + 8}px` }}
             >
               <button
                 type="button"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-slate-200 disabled:opacity-40"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent disabled:opacity-40"
                 disabled={!hasChildren}
                 onClick={() => hasChildren && toggleExpanded(node.id)}
               >
@@ -226,7 +226,7 @@ export function MoveDialog({
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
                 onClick={() => setSelectedFolderID(node.id)}
               >
-                <Folder className="h-4 w-4 shrink-0 text-blue-600" />
+                <Folder className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                 <span className="truncate text-sm">{node.name}</span>
               </button>
             </div>
@@ -267,8 +267,8 @@ export function MoveDialog({
               type="button"
               className={`mb-2 w-full rounded-md border px-2 py-2 text-left text-sm ${
                 selectedFolderID === ''
-                  ? 'border-blue-500 bg-blue-50 font-medium'
-                  : 'border-transparent hover:bg-slate-50'
+                  ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-950 font-medium'
+                  : 'border-transparent hover:bg-accent'
               }`}
               onClick={() => setSelectedFolderID('')}
             >
@@ -286,7 +286,7 @@ export function MoveDialog({
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Destination: <span className="font-medium text-slate-900">{selectedParentName ?? 'None'}</span>
+            Destination: <span className="font-medium text-foreground">{selectedParentName ?? 'None'}</span>
           </p>
         </div>
 

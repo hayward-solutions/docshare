@@ -197,6 +197,7 @@ type updateMeRequest struct {
 	FirstName *string `json:"firstName"`
 	LastName  *string `json:"lastName"`
 	AvatarURL *string `json:"avatarURL"`
+	Theme     *string `json:"theme"`
 }
 
 func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
@@ -232,6 +233,13 @@ func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
 		} else {
 			updates["avatar_url"] = trimmed
 		}
+	}
+	if req.Theme != nil {
+		value := strings.TrimSpace(*req.Theme)
+		if value != "light" && value != "dark" && value != "system" {
+			return utils.Error(c, fiber.StatusBadRequest, "theme must be light, dark, or system")
+		}
+		updates["theme"] = value
 	}
 
 	if len(updates) == 0 {

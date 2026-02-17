@@ -15,6 +15,7 @@ type User struct {
 	LastName            string               `json:"lastName" gorm:"type:varchar(100);not null"`
 	Role                UserRole             `json:"role" gorm:"type:varchar(20);not null;default:'user'"`
 	AvatarURL           *string              `json:"avatarURL,omitempty" gorm:"type:text"`
+	Theme               *string              `json:"theme,omitempty" gorm:"type:varchar(20);default:'system'"`
 	IsEmailVerified     bool                 `json:"isEmailVerified" gorm:"default:false"`
 	AuthProvider        *string              `json:"authProvider,omitempty" gorm:"type:varchar(20)"`
 	ExternalID          *string              `json:"-" gorm:"type:varchar(255)"`
