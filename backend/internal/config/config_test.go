@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -313,7 +314,7 @@ func TestOAuthProviderConfig_ClientConfig(t *testing.T) {
 		Scopes:       "openid,email,profile",
 	}
 
-	oauthConfig := cfg.ClientConfig(nil)
+	oauthConfig := cfg.ClientConfig(context.TODO())
 	if oauthConfig.ClientID != "my-client-id" {
 		t.Errorf("expected ClientID 'my-client-id', got %s", oauthConfig.ClientID)
 	}
@@ -337,7 +338,7 @@ func TestOIDCProviderConfig_ClientConfig(t *testing.T) {
 		IssuerURL:    "https://idp.example.com",
 	}
 
-	oauthConfig := cfg.ClientConfig(nil)
+	oauthConfig := cfg.ClientConfig(context.TODO())
 	if oauthConfig.ClientID != "oidc-client-id" {
 		t.Errorf("expected ClientID 'oidc-client-id', got %s", oauthConfig.ClientID)
 	}
