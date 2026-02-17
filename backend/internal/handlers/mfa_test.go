@@ -107,23 +107,24 @@ func TestMFAHandler_TOTPVerifySetup_InvalidCode(t *testing.T) {
 
 func TestMFAHandler_LoginWithMFA(t *testing.T) {
 	env := setupTestEnv(t)
-	user, token := createTestUser(t, env.db, "mfa-login@test.com", "password123", models.UserRoleUser)
+	_, token := createTestUser(t, env.db, "mfa-login@test.com", "password123", models.UserRoleUser)
 
-	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupResp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupBody := decodeJSONMap(t, setupResp)
+	setupData := setupBody["data"].(map[string]interface{})
+	secret := setupData["secret"].(string)
 
-	var mfaCfg models.MFAConfig
-	env.db.First(&mfaCfg, "user_id = ?", user.ID)
-
-	code, _ := totp.GenerateCode(mfaCfg.TOTPSecret, time.Now())
-	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/verify-setup", map[string]interface{}{
+	code, _ := totp.GenerateCode(secret, time.Now())
+	resp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/verify-setup", map[string]interface{}{
 		"code": code,
 	}, authHeaders(token))
+	assertStatus(t, resp, http.StatusOK)
 
 	loginPayload := map[string]interface{}{
 		"email":    "mfa-login@test.com",
 		"password": "password123",
 	}
-	resp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/login", loginPayload, map[string]string{
+	resp = performJSONRequest(t, env.app, http.MethodPost, "/api/auth/login", loginPayload, map[string]string{
 		"Content-Type": "application/json",
 	})
 	assertStatus(t, resp, http.StatusOK)
@@ -146,7 +147,7 @@ func TestMFAHandler_LoginWithMFA(t *testing.T) {
 		t.Fatal("expected methods to be non-empty")
 	}
 
-	totpCode, _ := totp.GenerateCode(mfaCfg.TOTPSecret, time.Now())
+	totpCode, _ := totp.GenerateCode(secret, time.Now())
 
 	resp = performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/verify/totp", map[string]interface{}{
 		"mfaToken": mfaToken,
@@ -169,12 +170,12 @@ func TestMFAHandler_RecoveryCode(t *testing.T) {
 	env := setupTestEnv(t)
 	user, token := createTestUser(t, env.db, "mfa-recovery@test.com", "password123", models.UserRoleUser)
 
-	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupResp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupBody := decodeJSONMap(t, setupResp)
+	setupData := setupBody["data"].(map[string]interface{})
+	secret := setupData["secret"].(string)
 
-	var mfaCfg models.MFAConfig
-	env.db.First(&mfaCfg, "user_id = ?", user.ID)
-
-	code, _ := totp.GenerateCode(mfaCfg.TOTPSecret, time.Now())
+	code, _ := totp.GenerateCode(secret, time.Now())
 	resp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/verify-setup", map[string]interface{}{
 		"code": code,
 	}, authHeaders(token))
@@ -208,14 +209,14 @@ func TestMFAHandler_RecoveryCode(t *testing.T) {
 
 func TestMFAHandler_TOTPDisable(t *testing.T) {
 	env := setupTestEnv(t)
-	user, token := createTestUser(t, env.db, "totp-disable@test.com", "password123", models.UserRoleUser)
+	_, token := createTestUser(t, env.db, "totp-disable@test.com", "password123", models.UserRoleUser)
 
-	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupResp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupBody := decodeJSONMap(t, setupResp)
+	setupData := setupBody["data"].(map[string]interface{})
+	secret := setupData["secret"].(string)
 
-	var mfaCfg models.MFAConfig
-	env.db.First(&mfaCfg, "user_id = ?", user.ID)
-
-	code, _ := totp.GenerateCode(mfaCfg.TOTPSecret, time.Now())
+	code, _ := totp.GenerateCode(secret, time.Now())
 	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/verify-setup", map[string]interface{}{
 		"code": code,
 	}, authHeaders(token))
@@ -236,14 +237,14 @@ func TestMFAHandler_TOTPDisable(t *testing.T) {
 
 func TestMFAHandler_RegenerateRecovery(t *testing.T) {
 	env := setupTestEnv(t)
-	user, token := createTestUser(t, env.db, "regen-recovery@test.com", "password123", models.UserRoleUser)
+	_, token := createTestUser(t, env.db, "regen-recovery@test.com", "password123", models.UserRoleUser)
 
-	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupResp := performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/setup", map[string]interface{}{}, authHeaders(token))
+	setupBody := decodeJSONMap(t, setupResp)
+	setupData := setupBody["data"].(map[string]interface{})
+	secret := setupData["secret"].(string)
 
-	var mfaCfg models.MFAConfig
-	env.db.First(&mfaCfg, "user_id = ?", user.ID)
-
-	code, _ := totp.GenerateCode(mfaCfg.TOTPSecret, time.Now())
+	code, _ := totp.GenerateCode(secret, time.Now())
 	performJSONRequest(t, env.app, http.MethodPost, "/api/auth/mfa/totp/verify-setup", map[string]interface{}{
 		"code": code,
 	}, authHeaders(token))

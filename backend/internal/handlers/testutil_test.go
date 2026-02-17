@@ -40,6 +40,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		})
 		logger.Init()
 		utils.ConfigureJWT("test-secret", 24)
+		utils.ConfigureEncryption("test-encryption-secret-32-bytes!")
 	})
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
