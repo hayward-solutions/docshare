@@ -15,7 +15,7 @@ This document outlines the planned features and improvements for DocShare.
 Near-term priorities for the next few releases:
 
 1. ~~**Background preview generation** — Move document preview generation to a job queue to improve upload response times~~ ✅ Completed
-2. **Pagination** — Add to all list endpoints for better performance with large datasets
+2. ~~**Pagination** — Add to all list endpoints for better performance with large datasets~~ ✅ Completed
 3. **Rate limiting** — Prevent API abuse
 
 ---
@@ -24,7 +24,7 @@ Near-term priorities for the next few releases:
 
 Features planned for the medium term:
 
-1. **OAuth/SSO** — Support for single sign-on with providers like Google, GitHub, Microsoft Entra ID
+1. ~~**OAuth/SSO** — Support for single sign-on with providers like Google, GitHub, Microsoft Entra ID~~ ✅ Completed
 2. **Virus scanning** — Integrate ClamAV or similar for file content scanning
 3. **File versioning** — Keep history of file changes
 4. **Trash/recovery** — Soft delete with restore capability
@@ -39,7 +39,7 @@ Features planned for the medium term:
 2. **Mobile apps** — React Native or native iOS/Android
 3. **Advanced permissions** — Custom permission combinations
 4. **Multi-tenant** — Support multiple organizations
-5. **Multi-factor authentication** — Enhanced account security
+5. ~~**Multi-factor authentication** — Enhanced account security~~ 5. ✅ Completed
 
 ---
 
