@@ -492,7 +492,7 @@ func (h *FilesHandler) PreviewURL(c *fiber.Ctx) error {
 	token := previewtoken.Generate(fileID.String(), currentUser.ID.String())
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"path":  "/api/files/" + fileID.String() + "/proxy",
+		"path":  "/files/" + fileID.String() + "/proxy",
 		"token": token,
 	})
 }

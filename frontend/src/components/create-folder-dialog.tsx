@@ -31,7 +31,7 @@ export function CreateFolderDialog({ parentID, onFolderCreated }: CreateFolderDi
     e.preventDefault();
     setIsLoading(true);
     try {
-      await apiMethods.post('/api/files/directory', { name, parentID });
+      await apiMethods.post('/files/directory', { name, parentID });
       toast.success('Folder created successfully');
       setOpen(false);
       setName('');

@@ -1,4 +1,8 @@
 # Full deployment with SSO (Google + GitHub)
+#
+# OAuth redirect URLs are auto-derived from BACKEND_URL.
+# For production, update FRONTEND_URL and BACKEND_URL to match your domain.
+#
 # Usage:
 #   export GOOGLE_CLIENT_ID=your-client-id
 #   export GOOGLE_CLIENT_SECRET=your-client-secret
@@ -50,14 +54,14 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
+      FRONTEND_URL: http://localhost:3001
+      BACKEND_URL: http://localhost:8080/api
       OAUTH_GOOGLE_ENABLED: "true"
       OAUTH_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
       OAUTH_GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
-      OAUTH_GOOGLE_REDIRECT_URL: "http://localhost:3001/auth/callback/google"
       OAUTH_GITHUB_ENABLED: "true"
       OAUTH_GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"
       OAUTH_GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET}"
-      OAUTH_GITHUB_REDIRECT_URL: "http://localhost:3001/auth/callback/github"
     ports:
       - "8080:8080"
     depends_on:

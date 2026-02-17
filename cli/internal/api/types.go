@@ -60,6 +60,7 @@ type DeviceCodeResponse struct {
 	VerificationURIComplete string `json:"verification_uri_complete"`
 	ExpiresIn               int    `json:"expires_in"`
 	Interval                int    `json:"interval"`
+	FrontendURL             string `json:"frontend_url"`
 }
 
 // DeviceTokenResponse is returned by POST /auth/device/token on success.

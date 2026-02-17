@@ -1,5 +1,8 @@
 # Minimal deployment with AWS S3
-# Usage: 
+#
+# For production, update FRONTEND_URL and BACKEND_URL to match your domain.
+#
+# Usage:
 #   export AWS_ACCESS_KEY_ID=your-key
 #   export AWS_SECRET_ACCESS_KEY=your-secret
 #   export S3_BUCKET=your-bucket
@@ -46,6 +49,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       GOTENBERG_URL: http://gotenberg:3000
       SERVER_PORT: 8080
+      FRONTEND_URL: http://localhost:3001
+      BACKEND_URL: http://localhost:8080/api
     ports:
       - "8080:8080"
     depends_on:

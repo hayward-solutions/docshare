@@ -31,7 +31,7 @@ export default function GroupsPage() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const res = await apiMethods.get<Group[]>('/api/groups');
+      const res = await apiMethods.get<Group[]>('/groups');
       if (res.success) {
         setGroups(res.data);
       }
@@ -50,7 +50,7 @@ export default function GroupsPage() {
     e.preventDefault();
     setIsCreating(true);
     try {
-      await apiMethods.post('/api/groups', { name, description: description || undefined });
+      await apiMethods.post('/groups', { name, description: description || undefined });
       toast.success('Group created');
       setCreateOpen(false);
       setName('');

@@ -56,14 +56,14 @@ export function FileInspector({ open, onOpenChange, fileId }: FileInspectorProps
     
     setIsLoading(true);
     try {
-      const fileRes = await apiMethods.get<File>(`/api/files/${fileId}`);
+      const fileRes = await apiMethods.get<File>(`/files/${fileId}`);
       if (fileRes.success) {
         setFile(fileRes.data);
       } else {
         throw new Error('Failed to load file details');
       }
 
-      const sharesRes = await apiMethods.get<Share[]>(`/api/files/${fileId}/shares`);
+      const sharesRes = await apiMethods.get<Share[]>(`/files/${fileId}/shares`);
       if (sharesRes.success) {
         setShares(sharesRes.data);
       } else {

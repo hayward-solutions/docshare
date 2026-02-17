@@ -60,6 +60,28 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 {{- end -}}
 
+{{- define "docshare.externalFrontendUrl" -}}
+{{- if .Values.backend.env.frontendUrl -}}
+{{- .Values.backend.env.frontendUrl -}}
+{{- else if .Values.ingress.enabled -}}
+{{- $host := (index .Values.ingress.hosts 0).host -}}
+{{- if .Values.ingress.tls -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
+{{- else -}}
+http://localhost:3001
+{{- end -}}
+{{- end -}}
+
+{{- define "docshare.externalBackendUrl" -}}
+{{- if .Values.backend.env.backendUrl -}}
+{{- .Values.backend.env.backendUrl -}}
+{{- else if .Values.ingress.enabled -}}
+{{- $host := (index .Values.ingress.hosts 0).host -}}
+{{- if .Values.ingress.tls -}}https://{{ $host }}/api{{- else -}}http://{{ $host }}/api{{- end -}}
+{{- else -}}
+http://localhost:8080/api
+{{- end -}}
+{{- end -}}
+
 {{- define "docshare.secretName" -}}
 {{- if .Values.backend.existingSecret -}}
 {{- .Values.backend.existingSecret -}}

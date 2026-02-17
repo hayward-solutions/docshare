@@ -85,7 +85,7 @@ export default function FilesPage() {
   const fetchFiles = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await apiMethods.get<File[]>('/api/files');
+      const res = await apiMethods.get<File[]>('/files');
       if (res.success) {
         setFiles(res.data);
       }
@@ -112,7 +112,7 @@ export default function FilesPage() {
       try {
         const params: Record<string, string> = { q: searchQuery };
         // At root, "here" and "everywhere" are equivalent (no directoryID)
-        const res = await apiMethods.get<File[]>('/api/files/search', params);
+        const res = await apiMethods.get<File[]>('/files/search', params);
         if (res.success) {
           setSearchResults(res.data);
         }
@@ -129,7 +129,7 @@ export default function FilesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
     try {
-      await apiMethods.delete(`/api/files/${id}`);
+      await apiMethods.delete(`/files/${id}`);
       successWithRefresh('File deleted');
       fetchFiles();
     } catch {
@@ -142,7 +142,7 @@ export default function FilesPage() {
     if (!confirm(`Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}?`)) return;
     try {
       await Promise.all(
-        Array.from(selection.selectedIds).map((id) => apiMethods.delete(`/api/files/${id}`)),
+        Array.from(selection.selectedIds).map((id) => apiMethods.delete(`/files/${id}`)),
       );
       successWithRefresh(`${count} item${count > 1 ? 's' : ''} deleted`);
       selection.deselectAll();
@@ -156,7 +156,7 @@ export default function FilesPage() {
   const handleDownload = async (fileId: string, fileName: string) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : undefined;
     await downloadFile({
-      url: `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/files/${fileId}/download`,
+      url: `${process.env.NEXT_PUBLIC_BACKEND_URL ?? '/api'}/files/${fileId}/download`,
       filename: fileName,
       token: token || undefined,
     });

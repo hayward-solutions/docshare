@@ -21,6 +21,11 @@ spec:
         - name: frontend
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          env:
+            - name: BACKEND_URL
+              value: {{ include "docshare.externalBackendUrl" . | quote }}
+            - name: FRONTEND_URL
+              value: {{ include "docshare.externalFrontendUrl" . | quote }}
           ports:
             - name: http
               containerPort: {{ .Values.frontend.service.port }}

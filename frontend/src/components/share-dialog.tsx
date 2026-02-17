@@ -88,7 +88,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
     const id = resolvedIds[0];
     if (!id) return;
     try {
-      const res = await apiMethods.get<Share[]>(`/api/files/${id}/shares`);
+      const res = await apiMethods.get<Share[]>(`/files/${id}/shares`);
       if (res.success) {
         setShares(res.data);
       }
@@ -99,7 +99,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
 
   const fetchGroups = useCallback(async () => {
     try {
-      const res = await apiMethods.get<Group[]>('/api/groups');
+      const res = await apiMethods.get<Group[]>('/groups');
       if (res.success) {
         setGroups(res.data);
       }
@@ -122,7 +122,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
          return;
        }
        try {
-         const res = await apiMethods.get<User[]>('/api/users/search', { search: searchQuery, limit: 5 });
+         const res = await apiMethods.get<User[]>('/users/search', { search: searchQuery, limit: 5 });
          
           const data = res as { success: boolean; data?: { users?: User[] } | User[] };
          if (data.success && data.data) {
@@ -157,7 +157,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
 
       await Promise.all(
         resolvedIds.map((id) =>
-          apiMethods.post(`/api/files/${id}/share`, body),
+          apiMethods.post(`/files/${id}/share`, body),
         ),
       );
       const label = shareType === 'public_anyone'
@@ -186,7 +186,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
 
   const handleRemoveShare = async (shareId: string) => {
     try {
-      await apiMethods.delete(`/api/shares/${shareId}`);
+      await apiMethods.delete(`/shares/${shareId}`);
       toast.success('Share removed');
       fetchShares();
     } catch (error: unknown) {
@@ -196,7 +196,7 @@ export function ShareDialog({ fileId, fileIds, fileName, open, onOpenChange }: S
 
   const handleUpdatePermission = async (shareId: string, newPermission: string) => {
     try {
-      await apiMethods.put(`/api/shares/${shareId}`, { permission: newPermission });
+      await apiMethods.put(`/shares/${shareId}`, { permission: newPermission });
       toast.success('Permission updated');
       fetchShares();
     } catch (error: unknown) {

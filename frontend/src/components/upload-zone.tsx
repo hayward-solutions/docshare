@@ -43,7 +43,7 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
         ));
       }, 100);
 
-      await apiMethods.upload('/api/files/upload', formData);
+      await apiMethods.upload('/files/upload', formData);
       
       clearInterval(interval);
       setUploadingFiles(prev => prev.map(f => 

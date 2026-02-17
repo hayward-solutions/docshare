@@ -1,7 +1,7 @@
 # DocShare with LDAP Authentication
 #
-# Usage:
-#   docker-compose -f docker-compose.yml -f docker-compose.sso-ldap.yml up -d
+# Usage (from project root):
+#   docker-compose -f docker-compose.yml -f examples/docker-compose/sso/ldap/docker-compose.yml up -d
 #
 # This adds OpenLDAP for corporate directory authentication.
 # Configure your LDAP settings below.

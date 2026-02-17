@@ -48,7 +48,7 @@ interface MoveDialogProps {
 }
 
 async function fetchDirectoryTree(dir: File): Promise<DirectoryNode> {
-  const childrenRes = await apiMethods.get<File[]>(`/api/files/${dir.id}/children`);
+  const childrenRes = await apiMethods.get<File[]>(`/files/${dir.id}/children`);
   const childDirectories = childrenRes.success
     ? childrenRes.data.filter((child: File) => child.isDirectory)
     : [];
@@ -116,7 +116,7 @@ export function MoveDialog({
   const loadDirectories = useCallback(async () => {
     setIsLoadingTree(true);
     try {
-      const rootRes = await apiMethods.get<File[]>('/api/files');
+      const rootRes = await apiMethods.get<File[]>('/files');
       if (!rootRes.success) {
         throw new Error('Failed to load folders');
       }
@@ -178,7 +178,7 @@ export function MoveDialog({
     try {
       await Promise.all(
         resolvedIds.map((id) =>
-          apiMethods.put(`/api/files/${id}`, { parentID: selectedFolderID }),
+          apiMethods.put(`/files/${id}`, { parentID: selectedFolderID }),
         ),
       );
       toast.success(resolvedIds.length > 1 ? `${resolvedIds.length} items moved` : 'Moved successfully');

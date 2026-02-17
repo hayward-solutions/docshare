@@ -19,3 +19,5 @@ data:
   GOTENBERG_URL: {{ default (include "docshare.gotenbergUrl" .) .Values.backend.env.gotenbergUrl | quote }}
   SERVER_PORT: {{ .Values.backend.env.serverPort | quote }}
   JWT_EXPIRATION_HOURS: {{ .Values.backend.env.jwtExpirationHours | quote }}
+  FRONTEND_URL: {{ include "docshare.externalFrontendUrl" . | quote }}
+  BACKEND_URL: {{ include "docshare.externalBackendUrl" . | quote }}

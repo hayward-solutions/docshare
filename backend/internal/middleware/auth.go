@@ -25,9 +25,14 @@ func NewAuthMiddleware(db *gorm.DB) *AuthMiddleware {
 	return &AuthMiddleware{DB: db}
 }
 
-func CORS() fiber.Handler {
+func CORS(frontendURL string) fiber.Handler {
+	origins := frontendURL
+	if strings.Contains(frontendURL, "localhost") {
+		loopback := strings.Replace(frontendURL, "localhost", "127.0.0.1", 1)
+		origins = frontendURL + "," + loopback
+	}
 	return cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3001,http://127.0.0.1:3001",
+		AllowOrigins: origins,
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 	})
