@@ -207,7 +207,7 @@ export function MFASettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Two-Factor Authentication
+            Multi-Factor Authentication
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -223,7 +223,7 @@ export function MFASettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Two-Factor Authentication
+            Multi-Factor Authentication
           </CardTitle>
           <CardDescription>
             Add an extra layer of security to your account

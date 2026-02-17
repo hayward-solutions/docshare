@@ -108,7 +108,7 @@ export default function MFAChallengePage() {
   return (
     <Card>
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Two-Factor Authentication</CardTitle>
+        <CardTitle className="text-2xl">Multi-Factor Authentication</CardTitle>
         <CardDescription>
           Verify your identity to continue signing in
         </CardDescription>
