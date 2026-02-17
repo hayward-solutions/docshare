@@ -4,7 +4,7 @@
 #     --namespace docshare --create-namespace \
 #     -f ha.yaml
 
-backend:
+api:
   replicaCount: 3
   resources:
     requests:
@@ -17,7 +17,7 @@ backend:
     jwtSecret: ""
     s3Bucket: "docshare-prod"
 
-frontend:
+web:
   replicaCount: 3
   resources:
     requests:
@@ -51,10 +51,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
   tls:
     - secretName: docshare-tls
       hosts:

@@ -10,7 +10,7 @@
 #
 # Access at: https://docshare.tailXXXXX.ts.net
 
-backend:
+api:
   replicaCount: 1
   resources:
     requests:
@@ -24,7 +24,7 @@ backend:
     jwtExpirationHours: "24"
     s3Bucket: "docshare-prod"
 
-frontend:
+web:
   replicaCount: 1
   resources:
     requests:
@@ -54,10 +54,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
   # Tailscale generates its own certificates
   tls: []
 

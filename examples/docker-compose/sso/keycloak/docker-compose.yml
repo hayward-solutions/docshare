@@ -38,7 +38,7 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  api:
     environment:
       # OIDC Configuration
       OAUTH_OIDC_ENABLED: "true"

@@ -23,22 +23,22 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                {{- if eq .service "backend" }}
-                name: {{ include "docshare.fullname" $ }}-backend
+                {{- if eq .service "api" }}
+                name: {{ include "docshare.fullname" $ }}-api
                 port:
-                  number: {{ $.Values.backend.service.port }}
-                {{- else if eq .service "frontend" }}
-                name: {{ include "docshare.fullname" $ }}-frontend
+                  number: {{ $.Values.api.service.port }}
+                {{- else if eq .service "web" }}
+                name: {{ include "docshare.fullname" $ }}-web
                 port:
-                  number: {{ $.Values.frontend.service.port }}
+                  number: {{ $.Values.web.service.port }}
                 {{- else if eq .service "gotenberg" }}
                 name: {{ include "docshare.fullname" $ }}-gotenberg
                 port:
                   number: {{ $.Values.gotenberg.service.port }}
                 {{- else }}
-                name: {{ include "docshare.fullname" $ }}-frontend
+                name: {{ include "docshare.fullname" $ }}-web
                 port:
-                  number: {{ $.Values.frontend.service.port }}
+                  number: {{ $.Values.web.service.port }}
                 {{- end }}
           {{- end }}
     {{- end }}

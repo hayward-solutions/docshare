@@ -14,7 +14,7 @@
 # To override, set OAUTH_GITHUB_REDIRECT_URL explicitly.
 
 services:
-  backend:
+  api:
     environment:
       OAUTH_GITHUB_ENABLED: "true"
       OAUTH_GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"

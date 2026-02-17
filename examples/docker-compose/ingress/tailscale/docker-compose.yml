@@ -51,8 +51,8 @@ services:
       - "--api-timeout=120s"
       - "--libreoffice-restart-after=10"
 
-  backend:
-    image: ghcr.io/hayward-solutions/docshare/backend:latest
+  api:
+    image: ghcr.io/hayward-solutions/docshare/api:latest
     network_mode: service:tailscale
     environment:
       DB_HOST: 127.0.0.1
@@ -74,14 +74,14 @@ services:
       postgres:
         condition: service_healthy
 
-  frontend:
-    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+  web:
+    image: ghcr.io/hayward-solutions/docshare/web:latest
     network_mode: service:tailscale
     environment:
       BACKEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
       FRONTEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
     depends_on:
-      - backend
+      - api
 
 volumes:
   tailscale_data:

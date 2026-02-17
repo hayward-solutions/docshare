@@ -7,8 +7,8 @@ This document describes the architecture, design decisions, and technical implem
 1. [System Architecture](#system-architecture)
 2. [Technology Stack](#technology-stack)
 3. [Project Structure](#project-structure)
-4. [Backend Architecture](#backend-architecture)
-5. [Frontend Architecture](#frontend-architecture)
+4. [API Architecture](#api-architecture)
+5. [Web Application Architecture](#web-application-architecture)
 6. [Data Models](#data-models)
 7. [Authentication & Authorization](#authentication--authorization)
 8. [File Storage Strategy](#file-storage-strategy)
@@ -117,12 +117,12 @@ DocShare follows a traditional client-server architecture with the following com
 
 ```
 docshare/
-├── backend/
+├── api/                     # Go Fiber REST API
 │   ├── cmd/
 │   │   └── server/          # Application entry point
 │   ├── internal/
 │   │   ├── config/          # Configuration management
-│   │   ├── database/        # Database connection & migrations
+│   │   ├── database/       # Database connection & migrations
 │   │   ├── handlers/        # HTTP request handlers (controllers)
 │   │   ├── middleware/      # HTTP middleware (auth, logging, CORS)
 │   │   ├── models/          # Database models & entities
@@ -138,22 +138,22 @@ docshare/
 ├── cli/
 │   ├── cmd/                 # CLI command definitions (Cobra)
 │   ├── internal/
-│   │   ├── api/             # HTTP client & API response types
-│   │   ├── config/          # Config file persistence (~/.config/docshare/)
-│   │   ├── output/          # Table formatting, JSON output
-│   │   └── pathutil/        # Path-to-UUID resolution
+│   │   ├── api/            # HTTP client & API response types
+│   │   ├── config/         # Config file persistence (~/.config/docshare/)
+│   │   ├── output/         # Table formatting, JSON output
+│   │   └── pathutil/       # Path-to-UUID resolution
 │   ├── install.sh           # Curl-able install script
 │   ├── main.go
 │   ├── go.mod
 │   └── go.sum
-├── frontend/
+├── web/                     # Next.js Web Application
 │   ├── src/
-│   │   ├── app/             # Next.js app router pages
-│   │   │   ├── (auth)/      # Authentication pages (login, register)
-│   │   │   └── (dashboard)/ # Protected dashboard pages (files, shared, activity, settings, admin)
-│   │   ├── components/      # React components
-│   │   │   └── ui/          # shadcn/ui components
-│   │   └── lib/             # Utilities, API client, types
+│   │   ├── app/            # Next.js app router pages
+│   │   │   ├── (auth)/     # Authentication pages (login, register)
+│   │   │   └── (dashboard)/# Protected dashboard pages (files, shared, activity, settings, admin)
+│   │   ├── components/     # React components
+│   │   │   └── ui/         # shadcn/ui components
+│   │   └── lib/            # Utilities, API client, types
 │   ├── public/              # Static assets
 │   ├── Dockerfile
 │   ├── package.json
@@ -164,62 +164,63 @@ docshare/
 ├── API.md                   # API reference documentation
 ├── CLI.md                   # CLI installation & command reference
 ├── DEPLOYMENT.md            # Deployment guide
-└── CONTRIBUTING.md           # Development guidelines
+└── CONTRIBUTING.md          # Development guidelines
 ```
 
-## Backend Architecture
+## API Architecture
 
 ### Layer Separation
 
-The backend follows a clean layered architecture:
+The API follows a clean layered architecture:
 
 ```
-cmd/
-  server/main.go          # Entry point, dependency injection
+api/
+  cmd/
+    server/main.go          # Entry point, dependency injection
 
-internal/
-  handlers/               # HTTP request handlers (Presentation Layer)
-    ├── auth.go          # Authentication endpoints
-    ├── api_tokens.go    # API token management
-    ├── device_auth.go   # Device flow endpoints
-    ├── files.go         # File management endpoints
-    ├── shares.go        # Sharing endpoints
-    ├── groups.go        # Group management endpoints
-    ├── users.go         # User management endpoints
-    ├── activities.go    # Activity feed endpoints
-    └── audit.go         # Audit log endpoints
+  internal/
+    handlers/               # HTTP request handlers (Presentation Layer)
+      ├── auth.go          # Authentication endpoints
+      ├── api_tokens.go    # API token management
+      ├── device_auth.go   # Device flow endpoints
+      ├── files.go         # File management endpoints
+      ├── shares.go        # Sharing endpoints
+      ├── groups.go        # Group management endpoints
+      ├── users.go         # User management endpoints
+      ├── activities.go    # Activity feed endpoints
+      └── audit.go         # Audit log endpoints
 
-  services/              # Business logic (Service Layer)
-    ├── access.go        # Permission checking service
-    ├── preview.go       # Preview generation service
-    └── audit.go         # Audit logging and activity service
+    services/              # Business logic (Service Layer)
+      ├── access.go        # Permission checking service
+      ├── preview.go       # Preview generation service
+      └── audit.go         # Audit logging and activity service
 
-  models/                # Domain entities (Domain Layer)
-    ├── user.go
-    ├── file.go
-    ├── share.go
-    ├── group.go
-    ├── group_membership.go
-    ├── audit_log.go
-    └── activity.go
+    models/                # Domain entities (Domain Layer)
+      ├── user.go
+      ├── file.go
+      ├── share.go
+      ├── group.go
+      ├── group_membership.go
+      ├── audit_log.go
+      └── activity.go
 
-  storage/               # Storage abstraction (Infrastructure Layer)
-    └── s3.go            # S3 client wrapper
+    storage/               # Storage abstraction (Infrastructure Layer)
+      └── s3.go            # S3 client wrapper
 
-  database/              # Database management (Infrastructure Layer)
-    └── database.go      # Connection, migrations
+    database/              # Database management (Infrastructure Layer)
+      └── database.go      # Connection, migrations
 
-  middleware/            # HTTP middleware
-    ├── auth.go          # JWT authentication
-    └── logging.go       # Request logging
+    middleware/            # HTTP middleware
+      ├── auth.go          # JWT authentication
+      └── logging.go       # Request logging
 
-  config/                # Configuration management
-    └── config.go        # Environment variable loading (includes AuditConfig)
+    config/                # Configuration management
+      └── config.go        # Environment variable loading (includes AuditConfig)
 
-pkg/                     # Shared utilities
-  ├── logger/            # Structured logging
-  ├── utils/             # JWT, validation helpers
-  └── previewtoken/      # Preview token generation
+  pkg/                     # Shared utilities
+    ├── logger/            # Structured logging
+    ├── utils/             # JWT, validation helpers
+    └── previewtoken/      # Preview token generation
 ```
 
 ### Request Flow
@@ -258,14 +259,14 @@ This approach:
 - Reduces coupling between layers
 - Improves code organization
 
-## Frontend Architecture
+## Web Application Architecture
 
 ### App Router Structure
 
-Next.js 14+ App Router with route groups:
+Next.js App Router with route groups:
 
 ```
-src/app/
+web/src/app/
   layout.tsx              # Root layout (providers, metadata)
   page.tsx                # Landing page
   
@@ -802,7 +803,7 @@ For security, preview URLs include time-limited tokens:
 
 ```
 GET /api/files/{id}/preview
-→ { url: "http://backend/api/files/{id}/proxy?token=..." }
+→ { url: "http://api/api/files/{id}/proxy?token=..." }
 ```
 
 **Token Generation**:

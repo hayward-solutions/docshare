@@ -6,7 +6,7 @@
 #     --namespace docshare --create-namespace \
 #     -f caddy.yaml
 
-backend:
+api:
   replicaCount: 2
   resources:
     requests:
@@ -20,7 +20,7 @@ backend:
     jwtExpirationHours: "24"
     s3Bucket: "docshare-prod"
 
-frontend:
+web:
   replicaCount: 2
   resources:
     requests:
@@ -53,10 +53,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
   tls:
     - secretName: docshare-caddy-tls
       hosts:

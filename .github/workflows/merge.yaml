@@ -30,8 +30,8 @@ jobs:
             workflow:
               - '.github/workflows/merge.yaml'
             docker:
-              - 'frontend/**'
-              - 'backend/**'
+              - 'web/**'
+              - 'api/**'
             cli:
               - 'cli/**'
             helm:
@@ -45,8 +45,8 @@ jobs:
     strategy:
       matrix:
         container:
-          - frontend
-          - backend
+          - web
+          - api
         arch:
           - amd64
           - arm64
@@ -106,7 +106,7 @@ jobs:
       - name: Create and push manifests
         run: |
           set -euo pipefail
-          for img in frontend backend; do
+          for img in web api; do
             repo="${{ env.REGISTRY }}/${{ github.repository }}/${img}"
 
             # main tag (multi-arch)

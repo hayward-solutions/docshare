@@ -5,9 +5,9 @@
 	# Automatic HTTPS via Let's Encrypt
 	# Requires EMAIL environment variable for registration
 	
-	# Backend API
+	# API
 	handle /api/* {
-		reverse_proxy backend:8080 {
+		reverse_proxy api:8080 {
 			# Increase timeout for file uploads
 			transport http {
 				read_timeout 120s
@@ -16,9 +16,9 @@
 		}
 	}
 	
-	# Frontend
+	# Web
 	handle {
-		reverse_proxy frontend:3000
+		reverse_proxy web:3000
 	}
 	
 	# Logging

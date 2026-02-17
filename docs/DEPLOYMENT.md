@@ -100,8 +100,8 @@ That's it! The application is now running with:
 docker-compose -f docker-compose.dev.yml up -d
 
 # View logs
-docker-compose -f docker-compose.dev.yml logs -f backend
-docker-compose -f docker-compose.dev.yml logs -f frontend
+docker-compose -f docker-compose.dev.yml logs -f api
+docker-compose -f docker-compose.dev.yml logs -f web
 
 # Stop all services
 docker-compose -f docker-compose.dev.yml down
@@ -115,9 +115,9 @@ docker-compose -f docker-compose.dev.yml up -d --build
 
 ### Option 2: Hybrid Development
 
-**Best for:** Backend or frontend development with live reload
+**Best for:** API or web development with live reload
 
-#### Backend Development (Local)
+#### API Development (Local)
 
 ```bash
 # Start dependencies only
@@ -138,23 +138,23 @@ export JWT_SECRET=dev-secret-change-in-production
 export GOTENBERG_URL=http://localhost:3000
 export SERVER_PORT=8080
 
-# Run backend
-cd backend
+# Run api
+cd api
 go run cmd/server/main.go
 ```
 
-#### Frontend Development (Local)
+#### Web Development (Local)
 
 ```bash
-# Start backend services
-docker-compose up -d postgres backend gotenberg
+# Start api services
+docker-compose up -d postgres api gotenberg
 
-# Build args (defaults to /api for reverse proxy, use explicit URL for direct backend access)
+# Build args (defaults to /api for reverse proxy, use explicit URL for direct api access)
 export BACKEND_URL=http://localhost:8080/api
 export FRONTEND_URL=http://localhost:3001
 
 # Install dependencies
-cd frontend
+cd web
 npm install
 
 # Run development server
@@ -191,7 +191,7 @@ docker run -d -p 3000:3000 gotenberg/gotenberg:8
 
 #### 2. Configure & Run
 
-Follow the same environment variable setup as Option 2, then run backend and frontend as described above.
+Follow the same environment variable setup as Option 2, then run api and web as described above.
 
 ---
 
@@ -269,7 +269,7 @@ Follow the same environment variable setup as Option 2, then run backend and fro
         environment:
           POSTGRES_PASSWORD: ${DB_PASSWORD}  # Use strong password
     
-      backend:
+      api:
         restart: always
         environment:
           JWT_SECRET: ${JWT_SECRET}  # Use long random string (32+ chars)
@@ -277,7 +277,7 @@ Follow the same environment variable setup as Option 2, then run backend and fro
           S3_ACCESS_KEY: ${S3_ACCESS_KEY}
           S3_SECRET_KEY: ${S3_SECRET_KEY}
     
-      frontend:
+      web:
         restart: always
     ```
 
@@ -359,7 +359,7 @@ helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 ```
 
 The chart includes:
-- Deployments for backend, frontend, and Gotenberg
+- Deployments for api, web, and Gotenberg
 - Bundled PostgreSQL via Bitnami subchart (or bring your own)
 - Ingress with TLS support
 - Configurable replicas, resources, and environment
@@ -520,7 +520,7 @@ For EKS deployments, use IAM roles for service accounts (IRSA):
 3. **Create IAM role for service account:**
    ```bash
    eksctl create iamserviceaccount \
-     --name docshare-backend \
+     --name docshare-api \
      --namespace docshare \
      --cluster your-cluster \
      --attach-policy-arn arn:aws:iam::<account-id>:policy/DocShareS3Access \
@@ -562,7 +562,7 @@ For EKS deployments, use IAM roles for service accounts (IRSA):
 
 ### Frontend Environment Variables
 
-The frontend uses `BACKEND_URL` (mapped to `NEXT_PUBLIC_BACKEND_URL` at build time) to construct API calls. Set these at build time:
+The web uses `BACKEND_URL` (mapped to `NEXT_PUBLIC_BACKEND_URL` at build time) to construct API calls. Set these at build time:
 
 | Variable    | Required | Default      | Description                                                      |
 |-------------|----------|--------------|------------------------------------------------------------------|
@@ -576,19 +576,19 @@ docker build --build-arg BACKEND_URL=http://localhost:8080/api --build-arg FRONT
 
 Or set in docker-compose:
 ```yaml
-frontend:
+web:
   build:
     args:
       BACKEND_URL: http://localhost:8080/api
       FRONTEND_URL: http://localhost:3001
 ```
 
-The default `/api` works when the frontend is served behind a reverse proxy that routes `/api` to the backend.
+The default `/api` works when the web is served behind a reverse proxy that routes `/api` to the api.
 
 ### Production Environment Variable Recommendations
 
 ```bash
-# Backend (.env.backend.prod)
+# Backend (.env.api.prod)
 DB_HOST=postgres-prod.example.com
 DB_PORT=5432
 DB_USER=docshare_prod
@@ -612,7 +612,7 @@ AUDIT_EXPORT_INTERVAL=1h
 ```
 
 ```bash
-# Frontend (.env.frontend.prod)
+# Frontend (.env.web.prod)
 # Build with BACKEND_URL set to your API base URL
 ARG BACKEND_URL=https://docshare.example.com/api
 ARG FRONTEND_URL=https://docshare.example.com
@@ -696,14 +696,14 @@ crontab -e
 
 ```bash
 # Stop application
-docker-compose down backend
+docker-compose down api
 
 # Restore database
 gunzip -c /backups/docshare/docshare_20240211_020000.sql.gz | \
   docker exec -i docshare-postgres psql -U docshare docshare
 
 # Restart application
-docker-compose up -d backend
+docker-compose up -d api
 ```
 
 ### Database Maintenance
@@ -858,7 +858,7 @@ docker-compose up -d
    docker-compose ps
    
    # Check logs
-   docker-compose logs -f backend
+   docker-compose logs -f api
    
    # Test login
    curl https://your-domain.com/api/health
@@ -892,14 +892,14 @@ docker-compose ps
 docker-compose logs -f
 
 # Specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f api
+docker-compose logs -f web
 
 # Last 100 lines
-docker-compose logs --tail=100 backend
+docker-compose logs --tail=100 api
 
 # With timestamps
-docker-compose logs -f -t backend
+docker-compose logs -f -t api
 ```
 
 **Centralized logging (production):**
@@ -914,7 +914,7 @@ Use a log aggregation solution:
 ```yaml
 # docker-compose.yml
 services:
-  backend:
+  api:
     logging:
       driver: loki
       options:
@@ -1038,22 +1038,22 @@ sudo ufw deny 8080   # Backend (use reverse proxy)
 ```yaml
 # docker-compose.yml
 services:
-  backend:
+  api:
     networks:
-      - frontend
-      - backend
+      - web
+      - api
   
   postgres:
     networks:
-      - backend  # Not accessible from frontend network
+      - api  # Not accessible from web network
   
-  frontend:
+  web:
     networks:
-      - frontend
+      - web
 
 networks:
-  frontend:
-  backend:
+  web:
+  api:
     internal: true  # No external access
 ```
 
@@ -1115,19 +1115,19 @@ server {
     # Auth endpoints (strict)
     location /api/auth {
         limit_req zone=auth burst=5 nodelay;
-        proxy_pass http://backend;
+        proxy_pass http://api;
     }
     
     # Upload endpoints
     location /api/files/upload {
         limit_req zone=upload burst=3 nodelay;
-        proxy_pass http://backend;
+        proxy_pass http://api;
     }
     
     # General API
     location /api {
         limit_req zone=api burst=20 nodelay;
-        proxy_pass http://backend;
+        proxy_pass http://api;
     }
 }
 ```
@@ -1173,11 +1173,11 @@ For debugging, use the `:debug` variants:
 ```bash
 # Development docker-compose.yml
 services:
-  backend:
+  api:
     image: gcr.io/distroless/static-debian12:debug
 
 # Then you can exec into the container
-docker exec -it docshare-backend sh
+docker exec -it docshare-api sh
 ```
 
 **Note:** Distroless images run as non-root by default. If you need root access for debugging, use the debug variants.
@@ -1193,7 +1193,7 @@ docker exec -it docshare-backend sh
 ```yaml
 # docker-compose.yml
 services:
-  backend:
+  api:
     deploy:
       resources:
         limits:
@@ -1217,16 +1217,16 @@ services:
 
 **Nginx upstream configuration:**
 ```nginx
-upstream backend {
+upstream api {
     least_conn;
-    server backend1:8080;
-    server backend2:8080;
-    server backend3:8080;
+    server api1:8080;
+    server api2:8080;
+    server api3:8080;
 }
 
 server {
     location /api {
-        proxy_pass http://backend;
+        proxy_pass http://api;
     }
 }
 ```
@@ -1234,8 +1234,8 @@ server {
 **Docker Compose with replicas:**
 ```yaml
 services:
-  backend:
-    image: docshare-backend
+  api:
+    image: docshare-api
     deploy:
       replicas: 3
     environment:
@@ -1263,7 +1263,7 @@ services:
       POSTGRES_REPLICATION_PASSWORD: replication_pass
 ```
 
-**Configure backend to use read replicas:**
+**Configure api to use read replicas:**
 ```go
 // Separate read/write connections
 dbWrite := ConnectPostgres(primaryHost)
@@ -1316,7 +1316,7 @@ services:
 **Solution:**
 ```bash
 # Check logs
-docker-compose logs backend
+docker-compose logs api
 
 # Common causes:
 # - Environment variable missing
@@ -1343,7 +1343,7 @@ docker-compose logs postgres
 docker exec -it docshare-postgres psql -U docshare -d docshare
 
 # Verify environment variables match
-docker-compose exec backend env | grep DB_
+docker-compose exec api env | grep DB_
 ```
 
 #### 3. File upload fails
@@ -1358,10 +1358,10 @@ aws s3 ls s3://docshare-prod
 # Check IAM permissions
 aws sts get-caller-identity
 
-# Check backend can reach S3
-docker-compose exec backend curl https://s3.amazonaws.com
+# Check api can reach S3
+docker-compose exec api curl https://s3.amazonaws.com
 
-# Check file size limit (backend)
+# Check file size limit (api)
 # Default: 100MB in cmd/server/main.go
 
 # Check Nginx file size limit
@@ -1382,8 +1382,8 @@ curl -X POST http://localhost:3000/forms/libreoffice/convert \
   -F file=@test.docx \
   -o test.pdf
 
-# Check backend can reach Gotenberg
-docker-compose exec backend curl http://gotenberg:3000/health
+# Check api can reach Gotenberg
+docker-compose exec api curl http://gotenberg:3000/health
 ```
 
 #### 5. High memory usage

@@ -48,8 +48,8 @@ For production with automatic TLS:
 
 ```yaml
 labels:
-  - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-  - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+  - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+  - "traefik.http.routers.api.tls.certresolver=letsencrypt"
 ```
 
 ## Dashboard
@@ -91,7 +91,7 @@ The routing is configured via labels:
 labels:
   # Rate limiting
   - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
-  - "traefik.http.routers.backend.middlewares=rate-limit"
+  - "traefik.http.routers.api.middlewares=rate-limit"
   
   # Custom headers
   - "traefik.http.middlewares.security.headers.frameDeny=true"
@@ -100,4 +100,4 @@ labels:
 
 ### File Upload Size
 
-Traefik doesn't limit body size by default. Configure via backend middleware if needed.
+Traefik doesn't limit body size by default. Configure via API middleware if needed.

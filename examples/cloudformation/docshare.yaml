@@ -49,45 +49,45 @@ Parameters:
     Default: ''
     Description: S3 bucket name (auto-generated if empty)
 
-  BackendCpu:
+  ApiCpu:
     Type: Number
     Default: 256
-    Description: CPU units for backend task (256 = 0.25 vCPU)
+    Description: CPU units for Api task (256 = 0.25 vCPU)
 
-  BackendMemory:
+  ApiMemory:
     Type: Number
     Default: 512
-    Description: Memory (MB) for backend task
+    Description: Memory (MB) for Api task
 
-  BackendMinCount:
+  ApiMinCount:
     Type: Number
     Default: 1
-    Description: Minimum backend task count
+    Description: Minimum Api task count
 
-  BackendMaxCount:
+  ApiMaxCount:
     Type: Number
     Default: 4
-    Description: Maximum backend task count
+    Description: Maximum Api task count
 
-  FrontendCpu:
+  WebCpu:
     Type: Number
     Default: 256
-    Description: CPU units for frontend task
+    Description: CPU units for Web task
 
-  FrontendMemory:
+  WebMemory:
     Type: Number
     Default: 512
-    Description: Memory (MB) for frontend task
+    Description: Memory (MB) for Web task
 
-  FrontendMinCount:
+  WebMinCount:
     Type: Number
     Default: 1
-    Description: Minimum frontend task count
+    Description: Minimum Web task count
 
-  FrontendMaxCount:
+  WebMaxCount:
     Type: Number
     Default: 4
-    Description: Maximum frontend task count
+    Description: Maximum Web task count
 
   GotenbergCpu:
     Type: Number
@@ -147,10 +147,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  BackendSecurityGroup:
+  ApiSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for backend ECS service
+      GroupDescription: Security group for Api ECS service
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -159,14 +159,14 @@ Resources:
           SourceSecurityGroupId: !Ref AlbSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-backend-sg'
+          Value: !Sub '${AWS::StackName}-sg'
         - Key: Environment
           Value: !Ref Environment
 
   FrontendSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for frontend ECS service
+      GroupDescription: Security group for Web ECS service
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -175,7 +175,7 @@ Resources:
           SourceSecurityGroupId: !Ref AlbSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-frontend-sg'
+          Value: !Sub '${AWS::StackName}-sg'
         - Key: Environment
           Value: !Ref Environment
 
@@ -188,7 +188,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3000
           ToPort: 3000
-          SourceSecurityGroupId: !Ref BackendSecurityGroup
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-gotenberg-sg'
@@ -204,7 +204,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          SourceSecurityGroupId: !Ref BackendSecurityGroup
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-database-sg'
@@ -416,7 +416,7 @@ Resources:
   FrontendTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-frontend-tg'
+      Name: !Sub '${AWS::StackName}-tg'
       Port: 3000
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -433,10 +433,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  BackendTargetGroup:
+  ApiTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-backend-tg'
+      Name: !Sub '${AWS::StackName}-tg'
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -497,7 +497,7 @@ Resources:
           TargetGroupArn: !Ref FrontendTargetGroup
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 
-  BackendListenerRule:
+  ApiListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       ListenerArn: !Ref AlbHttpsListener
@@ -509,16 +509,16 @@ Resources:
               - /api/*
       Actions:
         - Type: forward
-          TargetGroupArn: !Ref BackendTargetGroup
+          TargetGroupArn: !Ref ApiTargetGroup
 
   # ============================================================================
   # CloudWatch Log Groups
   # ============================================================================
 
-  BackendLogGroup:
+  ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ecs/${AWS::StackName}/backend'
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/api'
       RetentionInDays: 30
       Tags:
         - Key: Environment
@@ -527,7 +527,7 @@ Resources:
   FrontendLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ecs/${AWS::StackName}/frontend'
+      LogGroupName: !Sub '/ecs/${AWS::StackName}/web'
       RetentionInDays: 30
       Tags:
         - Key: Environment
@@ -583,10 +583,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  BackendTaskRole:
+  ApiTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-backend-task-role'
+      RoleName: !Sub '${AWS::StackName}-task-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -641,20 +641,20 @@ Resources:
   # Task Definitions
   # ============================================================================
 
-  BackendTaskDefinition:
+  ApiTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub '${AWS::StackName}-backend'
+      Family: !Sub '${AWS::StackName}-api'
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: !Ref BackendCpu
-      Memory: !Ref BackendMemory
+      Cpu: !Ref ApiCpu
+      Memory: !Ref ApiMemory
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt BackendTaskRole.Arn
+      TaskRoleArn: !GetAtt ApiTaskRole.Arn
       ContainerDefinitions:
-        - Name: backend
-          Image: ghcr.io/hayward-solutions/docshare/backend:latest
+        - Name: api
+          Image: ghcr.io/hayward-solutions/docshare/api:latest
           Essential: true
           PortMappings:
             - ContainerPort: 8080
@@ -692,23 +692,23 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref BackendLogGroup
+              awslogs-group: !Ref ApiLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: backend
+              awslogs-stream-prefix: api
 
   FrontendTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub '${AWS::StackName}-frontend'
+      Family: !Sub '${AWS::StackName}-web'
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: !Ref FrontendCpu
-      Memory: !Ref FrontendMemory
+      Cpu: !Ref WebCpu
+      Memory: !Ref WebMemory
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       ContainerDefinitions:
-        - Name: frontend
-          Image: ghcr.io/hayward-solutions/docshare/frontend:latest
+        - Name: web
+          Image: ghcr.io/hayward-solutions/docshare/web:latest
           Essential: true
           PortMappings:
             - ContainerPort: 3000
@@ -723,7 +723,7 @@ Resources:
             Options:
               awslogs-group: !Ref FrontendLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: frontend
+              awslogs-stream-prefix: web
 
   GotenbergTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -757,25 +757,25 @@ Resources:
   # ECS Services
   # ============================================================================
 
-  BackendService:
+  ApiService:
     Type: AWS::ECS::Service
     DependsOn:
       - AlbHttpsListener
       - DbInstance
     Properties:
-      ServiceName: backend
+      ServiceName: api
       Cluster: !Ref EcsCluster
-      TaskDefinition: !Ref BackendTaskDefinition
-      DesiredCount: !Ref BackendMinCount
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: !Ref ApiMinCount
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets: !Ref PrivateSubnetIds
           SecurityGroups:
-            - !Ref BackendSecurityGroup
+            - !Ref ApiSecurityGroup
       LoadBalancers:
-        - TargetGroupArn: !Ref BackendTargetGroup
-          ContainerName: backend
+        - TargetGroupArn: !Ref ApiTargetGroup
+          ContainerName: api
           ContainerPort: 8080
       HealthCheckGracePeriodSeconds: 30
       Tags:
@@ -787,10 +787,10 @@ Resources:
     DependsOn:
       - AlbHttpsListener
     Properties:
-      ServiceName: frontend
+      ServiceName: web
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref FrontendTaskDefinition
-      DesiredCount: !Ref FrontendMinCount
+      DesiredCount: !Ref WebMinCount
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -799,7 +799,7 @@ Resources:
             - !Ref FrontendSecurityGroup
       LoadBalancers:
         - TargetGroupArn: !Ref FrontendTargetGroup
-          ContainerName: frontend
+          ContainerName: web
           ContainerPort: 3000
       HealthCheckGracePeriodSeconds: 30
       Tags:
@@ -836,22 +836,22 @@ Resources:
   # Auto Scaling
   # ============================================================================
 
-  BackendScalableTarget:
+  ApiScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MaxCapacity: !Ref BackendMaxCount
-      MinCapacity: !Ref BackendMinCount
-      ResourceId: !Sub 'service/${EcsCluster}/${BackendService.Name}'
+      MaxCapacity: !Ref ApiMaxCount
+      MinCapacity: !Ref ApiMinCount
+      ResourceId: !Sub 'service/${EcsCluster}/${ApiService.Name}'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
-  BackendCpuScalingPolicy:
+  ApiCpuScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-backend-cpu-scaling'
+      PolicyName: !Sub '${AWS::StackName}-cpu-scaling'
       PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref BackendScalableTarget
+      ScalingTargetId: !Ref ApiScalableTarget
       TargetTrackingScalingPolicyConfiguration:
         TargetValue: 70
         PredefinedMetricSpecification:
@@ -862,17 +862,17 @@ Resources:
   FrontendScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MaxCapacity: !Ref FrontendMaxCount
-      MinCapacity: !Ref FrontendMinCount
+      MaxCapacity: !Ref WebMaxCount
+      MinCapacity: !Ref WebMinCount
       ResourceId: !Sub 'service/${EcsCluster}/${FrontendService.Name}'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
-  FrontendCpuScalingPolicy:
+  WebCpuScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-frontend-cpu-scaling'
+      PolicyName: !Sub '${AWS::StackName}-cpu-scaling'
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref FrontendScalableTarget
       TargetTrackingScalingPolicyConfiguration:
@@ -954,9 +954,9 @@ Outputs:
     Description: ECS cluster name
     Value: !Ref EcsCluster
 
-  BackendServiceName:
-    Description: Backend ECS service name
-    Value: !GetAtt BackendService.Name
+  ApiServiceName:
+    Description: Api ECS service name
+    Value: !GetAtt ApiService.Name
 
   FrontendServiceName:
     Description: Frontend ECS service name
