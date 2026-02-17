@@ -16,6 +16,6 @@ Web:
   kubectl port-forward svc/{{ include "docshare.fullname" . }}-web 3000:{{ .Values.web.service.port }}
 
 Then open:
-  Web: http://127.0.0.1:3000
+  Web: http://127.0.0.1:3001
   API: http://127.0.0.1:8080
 {{- end }}
