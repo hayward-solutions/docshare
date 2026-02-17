@@ -149,17 +149,18 @@ go run cmd/server/main.go
 # Start backend services
 docker-compose up -d postgres backend gotenberg
 
-# Set environment variables (optional, defaults to http://localhost:8080)
-export NEXT_PUBLIC_API_URL=http://localhost:8080
+# Build args (defaults to /api for reverse proxy, use explicit URL for direct backend access)
+export BACKEND_URL=http://localhost:8080/api
+export FRONTEND_URL=http://localhost:3001
 
 # Install dependencies
 cd frontend
 npm install
 
 # Run development server
-npm run dev
+BACKEND_URL=http://localhost:8080/api npm run dev
 
-# Access at http://localhost:3000 (not 3001!)
+# Access at http://localhost:3001
 ```
 
 ### Option 3: Fully Local Development
@@ -555,13 +556,34 @@ For EKS deployments, use IAM roles for service accounts (IRSA):
 | `JWT_EXPIRATION_HOURS`  | No       | `24`                      | JWT token lifetime in hours                                                          |
 | `GOTENBERG_URL`         | Yes      | `http://localhost:3000`   | Gotenberg service URL                                                                |
 | `SERVER_PORT`           | No       | `8080`                    | Backend server port                                                                  |
+| `FRONTEND_URL`         | No       | `http://localhost:3001`   | Frontend URL for CORS and device flow                                               |
+| `BACKEND_URL`          | No       | `http://localhost:8080/api` | Backend API URL (include `/api` path). Auto-derives OAuth redirect URLs if not set |
 | `AUDIT_EXPORT_INTERVAL` | No       | `1h`                      | Interval for exporting audit logs to S3 (Go duration format, e.g. `30m`, `2h`)       |
 
 ### Frontend Environment Variables
 
-No environment variables required. `NEXT_PUBLIC_API_URL` is embedded at build time (empty string for production), making all API calls relative (`/api/...`). The reverse proxy routes `/api` to the backend.
+The frontend uses `BACKEND_URL` (mapped to `NEXT_PUBLIC_BACKEND_URL` at build time) to construct API calls. Set these at build time:
 
-For local development, set via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`.
+| Variable    | Required | Default      | Description                                                      |
+|-------------|----------|--------------|------------------------------------------------------------------|
+| `BACKEND_URL` | No       | `/api`       | Backend API URL (include `/api` path). Defaults to `/api` for reverse proxy setups. |
+| `FRONTEND_URL` | No       | (empty)      | Frontend URL for redirects                                       |
+
+For local development, pass as build args:
+```bash
+docker build --build-arg BACKEND_URL=http://localhost:8080/api --build-arg FRONTEND_URL=http://localhost:3001
+```
+
+Or set in docker-compose:
+```yaml
+frontend:
+  build:
+    args:
+      BACKEND_URL: http://localhost:8080/api
+      FRONTEND_URL: http://localhost:3001
+```
+
+The default `/api` works when the frontend is served behind a reverse proxy that routes `/api` to the backend.
 
 ### Production Environment Variable Recommendations
 
@@ -584,13 +606,16 @@ JWT_EXPIRATION_HOURS=24
 
 GOTENBERG_URL=http://gotenberg:3000
 SERVER_PORT=8080
+FRONTEND_URL=https://docshare.example.com
+BACKEND_URL=https://docshare.example.com/api
 AUDIT_EXPORT_INTERVAL=1h
 ```
 
 ```bash
 # Frontend (.env.frontend.prod)
-# NEXT_PUBLIC_API_URL is set to empty at build time for relative API paths
-# No environment variables needed - reverse proxy handles routing
+# Build with BACKEND_URL set to your API base URL
+ARG BACKEND_URL=https://docshare.example.com/api
+ARG FRONTEND_URL=https://docshare.example.com
 ```
 
 ### Generating Secrets

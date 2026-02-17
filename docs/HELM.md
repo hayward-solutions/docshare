@@ -224,7 +224,7 @@ gotenberg:
 | `frontend.service.port`         | int    | `3000`                                        | Service port                                                    |
 | `frontend.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
 
-**Note:** The frontend does not require environment variables for API routing. `NEXT_PUBLIC_API_URL` is embedded at build time (set to empty string), making all API calls relative (`/api/...`). The ingress configuration routes `/api` requests to the backend service.
+**Note:** The frontend receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart's URL helpers (auto-derived from ingress config), which are baked in at build time. The defaults work for reverse proxy setups where `/api` routes to the backend.
 
 ### Gotenberg
 

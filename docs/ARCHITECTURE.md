@@ -348,19 +348,20 @@ export const apiMethods = {
 
 ### API URL Strategy
 
-`NEXT_PUBLIC_API_URL` is embedded at build time, not runtime:
+`BACKEND_URL` is embedded at build time via `next.config.ts` (mapped to `NEXT_PUBLIC_BACKEND_URL`), not runtime:
 
-- **Production build**: Set to empty string, making all API calls relative (`/api/...`)
-- **Development**: Set via shell: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`
+- **Production build**: Set via build arg `BACKEND_URL=https://docshare.example.com/api`
+- **Development**: Set via `BACKEND_URL=http://localhost:8080/api npm run dev`
+- **Reverse proxy (default)**: Leave `BACKEND_URL` unset or set to `/api` — frontend uses relative paths
 
 **Production architecture**:
 - Reverse proxy (Nginx/Traefik/Ingress) routes `/api` to backend
 - Frontend and backend appear as a single origin (no CORS issues)
-- No environment-specific API URL configuration needed
+- Set `FRONTEND_URL` and `BACKEND_URL` in backend config for CORS and OAuth redirect auto-derivation
 
 **Development architecture**:
-- Frontend dev server proxies API calls to backend
-- Or set `NEXT_PUBLIC_API_URL` to bypass proxy for direct backend access
+- Set `BACKEND_URL=http://localhost:8080/api` for direct backend access
+- Or use reverse proxy with domain-based routing
 
 ## Data Models
 
