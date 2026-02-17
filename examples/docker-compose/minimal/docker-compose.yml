@@ -60,6 +60,9 @@ services:
   frontend:
     image: ghcr.io/hayward-solutions/docshare/frontend:latest
     container_name: docshare-frontend
+    environment:
+      BACKEND_URL: http://localhost:8080/api
+      FRONTEND_URL: http://localhost:3001
     ports:
       - "3001:3000"
     depends_on:

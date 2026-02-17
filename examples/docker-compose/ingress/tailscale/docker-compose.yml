@@ -77,6 +77,9 @@ services:
   frontend:
     image: ghcr.io/hayward-solutions/docshare/frontend:latest
     network_mode: service:tailscale
+    environment:
+      BACKEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net/api"
+      FRONTEND_URL: "https://docshare.${TS_TAILNET:-example}.ts.net"
     depends_on:
       - backend
 

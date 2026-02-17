@@ -210,6 +210,8 @@ gotenberg:
 | `backend.env.jwtExpirationHours` | string | `"24"`                                       | JWT token lifetime                                   |
 | `backend.env.serverPort`         | string | `"8080"`                                     | Backend server port                                  |
 | `backend.env.gotenbergUrl`       | string | `""`                                         | Gotenberg URL (auto-configured if gotenberg.enabled) |
+| `backend.env.frontendUrl`         | string | `""`                                         | Frontend URL (auto-configured from ingress if empty) |
+| `backend.env.backendUrl`          | string | `""`                                         | Backend URL (auto-configured from ingress if empty)  |
 | `backend.existingSecret`         | string | `""`                                         | Use existing secret for sensitive values             |
 
 ### Frontend
@@ -224,7 +226,7 @@ gotenberg:
 | `frontend.service.port`         | int    | `3000`                                        | Service port                                                    |
 | `frontend.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
 
-**Note:** The frontend receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart's URL helpers (auto-derived from ingress config), which are baked in at build time. The defaults work for reverse proxy setups where `/api` routes to the backend.
+**Note:** The frontend receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart (auto-derived from ingress config or `backend.env` values), which are passed as environment variables at runtime.
 
 ### Gotenberg
 

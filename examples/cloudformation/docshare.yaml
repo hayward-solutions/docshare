@@ -682,6 +682,10 @@ Resources:
               Value: '8080'
             - Name: GOTENBERG_URL
               Value: !Sub 'http://${GotenbergService.Name}.${AWS::StackName}-cluster.local:3000'
+            - Name: FRONTEND_URL
+              Value: !Sub 'https://${DomainName}'
+            - Name: BACKEND_URL
+              Value: !Sub 'https://${DomainName}/api'
           Secrets:
             - Name: DB_PASSWORD
               ValueFrom: !Ref DbPassword
@@ -709,6 +713,11 @@ Resources:
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+          Environment:
+            - Name: BACKEND_URL
+              Value: !Sub 'https://${DomainName}/api'
+            - Name: FRONTEND_URL
+              Value: !Sub 'https://${DomainName}'
           LogConfiguration:
             LogDriver: awslogs
             Options:
