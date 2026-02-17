@@ -4,13 +4,13 @@
 #     --namespace docshare --create-namespace \
 #     -f minimal.yaml
 
-backend:
+api:
   replicaCount: 1
   env:
     jwtSecret: "change-me-in-production"
     s3Bucket: "docshare"
 
-frontend:
+web:
   replicaCount: 1
 
 gotenberg:

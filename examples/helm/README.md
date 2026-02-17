@@ -49,7 +49,7 @@ helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 ### Option 1: IAM Roles (EKS - Recommended)
 
 ```yaml
-backend:
+api:
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/docshare-s3-role

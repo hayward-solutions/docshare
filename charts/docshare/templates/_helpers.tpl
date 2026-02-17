@@ -26,8 +26,8 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
-{{- define "docshare.backendUrl" -}}
-{{- printf "http://%s-backend:%v" (include "docshare.fullname" .) .Values.backend.service.port -}}
+{{- define "docshare.apiUrl" -}}
+{{- printf "http://%s-api:%v" (include "docshare.fullname" .) .Values.api.service.port -}}
 {{- end -}}
 
 {{- define "docshare.postgresHost" -}}
@@ -61,8 +61,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{- define "docshare.externalFrontendUrl" -}}
-{{- if .Values.backend.env.frontendUrl -}}
-{{- .Values.backend.env.frontendUrl -}}
+{{- if .Values.api.env.frontendUrl -}}
+{{- .Values.api.env.frontendUrl -}}
 {{- else if .Values.ingress.enabled -}}
 {{- $host := (index .Values.ingress.hosts 0).host -}}
 {{- if .Values.ingress.tls -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
@@ -71,9 +71,9 @@ http://localhost:3001
 {{- end -}}
 {{- end -}}
 
-{{- define "docshare.externalBackendUrl" -}}
-{{- if .Values.backend.env.backendUrl -}}
-{{- .Values.backend.env.backendUrl -}}
+{{- define "docshare.externalApiUrl" -}}
+{{- if .Values.api.env.backendUrl -}}
+{{- .Values.api.env.backendUrl -}}
 {{- else if .Values.ingress.enabled -}}
 {{- $host := (index .Values.ingress.hosts 0).host -}}
 {{- if .Values.ingress.tls -}}https://{{ $host }}/api{{- else -}}http://{{ $host }}/api{{- end -}}
@@ -83,8 +83,8 @@ http://localhost:8080/api
 {{- end -}}
 
 {{- define "docshare.secretName" -}}
-{{- if .Values.backend.existingSecret -}}
-{{- .Values.backend.existingSecret -}}
+{{- if .Values.api.existingSecret -}}
+{{- .Values.api.existingSecret -}}
 {{- else -}}
 {{- printf "%s-secrets" (include "docshare.fullname" .) -}}
 {{- end -}}

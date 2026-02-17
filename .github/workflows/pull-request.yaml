@@ -23,8 +23,8 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
       cli: ${{ steps.filter.outputs.cli }}
       helm: ${{ steps.filter.outputs.helm }}
       workflow: ${{ steps.filter.outputs.workflow }}
@@ -35,23 +35,23 @@ jobs:
           filters: |
             workflow:
               - '.github/workflows/pull-request.yaml'
-            backend:
-              - 'backend/**'
-            frontend:
-              - 'frontend/**'
+            api:
+              - 'api/**'
+            web:
+              - 'web/**'
             cli:
               - 'cli/**'
             helm:
               - 'charts/**'
 
-  backend-ci:
-    name: Backend CI
+  api-ci:
+    name: API CI
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: api
 
     steps:
       - name: Checkout code
@@ -61,7 +61,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: api/go.sum
 
       - name: Download dependencies
         run: go mod download
@@ -70,7 +70,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          working-directory: backend
+          working-directory: api
 
       - name: Run tests
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
@@ -84,8 +84,8 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          files: backend/coverage.out
-          flags: backend
+          files: api/coverage.out
+          flags: api
           fail_ci_if_error: false
 
   cli-ci:
@@ -141,14 +141,14 @@ jobs:
           flags: cli
           fail_ci_if_error: false
 
-  frontend-ci:
-    name: Frontend CI
+  web-ci:
+    name: Web CI
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: web
 
     steps:
       - name: Checkout code
@@ -159,7 +159,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -195,13 +195,13 @@ jobs:
   docker-build:
     name: Docker Build (${{ matrix.container }}/${{ matrix.arch }})
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.workflow == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true' || needs.changes.outputs.workflow == 'true'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     strategy:
       matrix:
         container:
-          - frontend
-          - backend
+          - web
+          - api
         arch:
           - amd64
           - arm64
@@ -258,4 +258,4 @@ jobs:
         uses: golang/govulncheck-action@v1
         with:
           go-version-input: ${{ env.GO_VERSION }}
-          work-dir: ./backend
+          work-dir: ./api

@@ -7,7 +7,7 @@
 #
 # This file configures SSO with Google, GitHub, OIDC (Keycloak/Authentik), SAML, and LDAP
 
-backend:
+api:
   replicaCount: 2
   env:
     jwtSecret: "generate-with-openssl-rand-hex-32"
@@ -55,11 +55,11 @@ backend:
     ldapEmailField: "mail"
     ldapNameFields: "cn"
 
-frontend:
+web:
   replicaCount: 2
   env:
     nextPublicApiUrl: "https://docshare.example.com"
-    apiUrl: "http://docshare-backend:8080"
+    apiUrl: "http://docshare-api:8080"
 
 ingress:
   enabled: true
@@ -72,10 +72,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
   tls:
     - secretName: docshare-tls
       hosts:

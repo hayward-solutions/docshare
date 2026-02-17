@@ -35,8 +35,8 @@ services:
     labels:
       - "traefik.enable=false"
 
-  backend:
-    image: ghcr.io/hayward-solutions/docshare/backend:latest
+  api:
+    image: ghcr.io/hayward-solutions/docshare/api:latest
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -58,23 +58,23 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.services.backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.backend-timeout.forwardingtimeouts.readtimeout=120s"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.api-timeout.forwardingtimeouts.readtimeout=120s"
 
-  frontend:
-    image: ghcr.io/hayward-solutions/docshare/frontend:latest
+  web:
+    image: ghcr.io/hayward-solutions/docshare/web:latest
     environment:
       BACKEND_URL: "https://${DOMAIN:-localhost}/api"
       FRONTEND_URL: "https://${DOMAIN:-localhost}"
     depends_on:
-      - backend
+      - api
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.web.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
 
   traefik:
     image: traefik:v3

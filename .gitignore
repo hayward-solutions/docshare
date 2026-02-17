@@ -385,8 +385,8 @@ postgres_data/
 # Go specific
 # Binary files
 /server
-/backend/server
-/backend/bin/
+/api/server
+/api/bin/
 /cli/docshare
 
 # Test coverage
@@ -396,23 +396,23 @@ coverage.html
 # Air live reload
 .air.toml
 
-# Frontend specific
+# Web specific
 # Next.js
-/frontend/.next/
-/frontend/out/
-/frontend/build/
+/web/.next/
+/web/out/
+/web/build/
 
 # Storybook
-/frontend/storybook-static/
+/web/storybook-static/
 
 # Test coverage
-/frontend/coverage/
+/web/coverage/
 
 # ESLint cache
-/frontend/.eslintcache
+/web/.eslintcache
 
 # TypeScript build cache
-/frontend/*.tsbuildinfo
+/web/*.tsbuildinfo
 
 # Environment variables
 .env
@@ -475,7 +475,7 @@ pids
 *.so
 *.dylib
 /test
-/backend/test
+/api/test
 /cmd/*/test
 
 # Build outputs

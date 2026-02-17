@@ -33,20 +33,20 @@ This example configures DocShare with Keycloak for enterprise SSO using OpenID C
 
 ## Usage
 
-The docker-compose file automatically configures the backend with the Keycloak OIDC settings. No additional environment variables needed.
+The docker-compose file automatically configures the API with the Keycloak OIDC settings. No additional environment variables needed.
 
 ## Services
 
 | Service | URL | Description |
 |---------|-----|-------------|
 | Keycloak | http://localhost:8180 | Identity Provider |
-| DocShare Backend | http://localhost:8080 | API Server |
-| DocShare Frontend | http://localhost:3001 | Web Application |
+| DocShare API | http://localhost:8080 | API Server |
+| DocShare Web | http://localhost:3001 | Web Application |
 
 ## Testing
 
 1. Access the DocShare login page at http://localhost:3001
-2. Click "Sign in with OpenID Connect" (or configure frontend to show Keycloak option)
+2. Click "Sign in with OpenID Connect" (or configure web to show Keycloak option)
 3. Complete the Keycloak authentication flow
 4. You'll be redirected back to DocShare with an authenticated session
 

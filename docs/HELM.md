@@ -38,18 +38,18 @@ Install with default settings (bundled PostgreSQL and Gotenberg, AWS S3 for stor
 helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
   --namespace docshare \
   --create-namespace \
-  --set backend.env.jwtSecret=my-secret-change-me \
+  --set api.env.jwtSecret=my-secret-change-me \
   --set s3.bucket=your-s3-bucket-name
 ```
 
 Access the application:
 
 ```bash
-# Port-forward the frontend
-kubectl port-forward svc/docshare-frontend 3001:3000 -n docshare
+# Port-forward the web
+kubectl port-forward svc/docshare-web 3001:3000 -n docshare
 
-# Port-forward the backend API
-kubectl port-forward svc/docshare-backend 8080:8080 -n docshare
+# Port-forward the API
+kubectl port-forward svc/docshare-api 8080:8080 -n docshare
 ```
 
 Then open http://localhost:3001 and create your first account.
@@ -60,12 +60,12 @@ Then open http://localhost:3001 and create your first account.
 
 ```yaml
 # production-values.yaml
-backend:
+api:
   replicaCount: 2
   env:
     jwtSecret: "generate-with-openssl-rand-hex-32"
 
-frontend:
+web:
   replicaCount: 2
 
 ingress:
@@ -79,10 +79,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
   tls:
     - secretName: docshare-tls
       hosts:
@@ -144,7 +144,7 @@ externalDatabase:
 For EKS with IRSA (IAM Roles for Service Accounts):
 
 ```yaml
-backend:
+api:
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/docshare-s3-role
@@ -196,37 +196,37 @@ gotenberg:
 
 | Key                              | Type   | Default                                      | Description                                          |
 |----------------------------------|--------|----------------------------------------------|------------------------------------------------------|
-| `backend.replicaCount`           | int    | `1`                                          | Number of backend replicas                           |
-| `backend.image.repository`       | string | `ghcr.io/hayward-solutions/docshare/backend` | Backend image repository                             |
-| `backend.image.tag`              | string | `latest`                                     | Backend image tag                                    |
-| `backend.image.pullPolicy`       | string | `IfNotPresent`                               | Image pull policy                                    |
-| `backend.service.type`           | string | `ClusterIP`                                  | Service type                                         |
-| `backend.service.port`           | int    | `8080`                                       | Service port                                         |
-| `backend.resources`              | object | `{}`                                         | CPU/memory resource requests/limits                  |
-| `backend.env.dbSslmode`          | string | `disable`                                    | PostgreSQL SSL mode                                  |
-| `backend.env.s3Bucket`           | string | `docshare`                                   | S3 bucket name                                       |
-| `backend.env.s3UseSsl`           | string | `"true"`                                     | Use SSL for S3 connection                            |
-| `backend.env.jwtSecret`          | string | `""`                                         | JWT signing secret (auto-generated if empty)         |
-| `backend.env.jwtExpirationHours` | string | `"24"`                                       | JWT token lifetime                                   |
-| `backend.env.serverPort`         | string | `"8080"`                                     | Backend server port                                  |
-| `backend.env.gotenbergUrl`       | string | `""`                                         | Gotenberg URL (auto-configured if gotenberg.enabled) |
-| `backend.env.frontendUrl`         | string | `""`                                         | Frontend URL (auto-configured from ingress if empty) |
-| `backend.env.backendUrl`          | string | `""`                                         | Backend URL (auto-configured from ingress if empty)  |
-| `backend.existingSecret`         | string | `""`                                         | Use existing secret for sensitive values             |
+| `api.replicaCount`           | int    | `1`                                          | Number of api replicas                           |
+| `api.image.repository`       | string | `ghcr.io/hayward-solutions/docshare/api` | Backend image repository                             |
+| `api.image.tag`              | string | `latest`                                     | Backend image tag                                    |
+| `api.image.pullPolicy`       | string | `IfNotPresent`                               | Image pull policy                                    |
+| `api.service.type`           | string | `ClusterIP`                                  | Service type                                         |
+| `api.service.port`           | int    | `8080`                                       | Service port                                         |
+| `api.resources`              | object | `{}`                                         | CPU/memory resource requests/limits                  |
+| `api.env.dbSslmode`          | string | `disable`                                    | PostgreSQL SSL mode                                  |
+| `api.env.s3Bucket`           | string | `docshare`                                   | S3 bucket name                                       |
+| `api.env.s3UseSsl`           | string | `"true"`                                     | Use SSL for S3 connection                            |
+| `api.env.jwtSecret`          | string | `""`                                         | JWT signing secret (auto-generated if empty)         |
+| `api.env.jwtExpirationHours` | string | `"24"`                                       | JWT token lifetime                                   |
+| `api.env.serverPort`         | string | `"8080"`                                     | Backend server port                                  |
+| `api.env.gotenbergUrl`       | string | `""`                                         | Gotenberg URL (auto-configured if gotenberg.enabled) |
+| `api.env.webUrl`         | string | `""`                                         | Frontend URL (auto-configured from ingress if empty) |
+| `api.env.apiUrl`          | string | `""`                                         | Backend URL (auto-configured from ingress if empty)  |
+| `api.existingSecret`         | string | `""`                                         | Use existing secret for sensitive values             |
 
 ### Frontend
 
 | Key                             | Type   | Default                                       | Description                                                     |
 |---------------------------------|--------|-----------------------------------------------|-----------------------------------------------------------------|
-| `frontend.replicaCount`         | int    | `1`                                           | Number of frontend replicas                                     |
-| `frontend.image.repository`     | string | `ghcr.io/hayward-solutions/docshare/frontend` | Frontend image repository                                       |
-| `frontend.image.tag`            | string | `latest`                                      | Frontend image tag                                              |
-| `frontend.image.pullPolicy`     | string | `IfNotPresent`                                | Image pull policy                                               |
-| `frontend.service.type`         | string | `ClusterIP`                                   | Service type                                                    |
-| `frontend.service.port`         | int    | `3000`                                        | Service port                                                    |
-| `frontend.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
+| `web.replicaCount`         | int    | `1`                                           | Number of web replicas                                     |
+| `web.image.repository`     | string | `ghcr.io/hayward-solutions/docshare/web` | Frontend image repository                                       |
+| `web.image.tag`            | string | `latest`                                      | Frontend image tag                                              |
+| `web.image.pullPolicy`     | string | `IfNotPresent`                                | Image pull policy                                               |
+| `web.service.type`         | string | `ClusterIP`                                   | Service type                                                    |
+| `web.service.port`         | int    | `3000`                                        | Service port                                                    |
+| `web.resources`            | object | `{}`                                          | CPU/memory resource requests/limits                             |
 
-**Note:** The frontend receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart (auto-derived from ingress config or `backend.env` values), which are passed as environment variables at runtime.
+**Note:** The web receives `BACKEND_URL` and `FRONTEND_URL` from the Helm chart (auto-derived from ingress config or `api.env` values), which are passed as environment variables at runtime.
 
 ### Gotenberg
 

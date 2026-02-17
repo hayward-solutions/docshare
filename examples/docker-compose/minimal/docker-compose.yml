@@ -32,9 +32,9 @@ services:
       - "--api-timeout=120s"
       - "--libreoffice-restart-after=10"
 
-  backend:
-    image: ghcr.io/hayward-solutions/docshare/backend:latest
-    container_name: docshare-backend
+  api:
+    image: ghcr.io/hayward-solutions/docshare/api:latest
+    container_name: docshare-api
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -57,16 +57,16 @@ services:
       postgres:
         condition: service_healthy
 
-  frontend:
-    image: ghcr.io/hayward-solutions/docshare/frontend:latest
-    container_name: docshare-frontend
+  web:
+    image: ghcr.io/hayward-solutions/docshare/web:latest
+    container_name: docshare-web
     environment:
       BACKEND_URL: http://localhost:8080/api
       FRONTEND_URL: http://localhost:3001
     ports:
       - "3001:3000"
     depends_on:
-      - backend
+      - api
 
 volumes:
   postgres_data:

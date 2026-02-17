@@ -61,16 +61,16 @@ Thank you for your interest in contributing to DocShare! This document provides 
 
 ### Testing
 
-#### Backend Tests
+#### API Tests
 ```bash
-cd backend
+cd api
 go test ./...
 go test -v -race ./...  # Run with race detection
 ```
 
-#### Frontend Tests
+#### Web Tests
 ```bash
-cd frontend
+cd web
 npm run lint
 npm run build
 ```
@@ -104,11 +104,11 @@ docs: update API documentation
 
 2. **Run tests**
    ```bash
-   # Backend tests
-   cd backend && go test ./...
+   # API tests
+   cd api && go test ./...
    
-   # Frontend tests
-   cd frontend && npm run lint && npm run build
+   # Web tests
+   cd web && npm run lint && npm run build
    ```
 
 3. **Create a pull request**
@@ -148,10 +148,10 @@ When requesting a feature, please include:
 
 ## Development Workflow
 
-### Backend Development
+### API Development
 
 ```bash
-cd backend
+cd api
 
 # Install dependencies
 go mod download
@@ -166,10 +166,10 @@ go test ./...
 air
 ```
 
-### Frontend Development
+### Web Development
 
 ```bash
-cd frontend
+cd web
 
 # Install dependencies
 npm install

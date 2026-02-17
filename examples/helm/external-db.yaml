@@ -4,12 +4,12 @@
 #     --namespace docshare --create-namespace \
 #     -f external-db.yaml
 
-backend:
+api:
   replicaCount: 2
   env:
     jwtSecret: ""  # Set via --set
 
-frontend:
+web:
   replicaCount: 2
 
 gotenberg:
@@ -36,10 +36,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-          service: frontend
+          service: web
         - path: /api
           pathType: Prefix
-          service: backend
+          service: api
 
 s3:
   region: "us-east-1"

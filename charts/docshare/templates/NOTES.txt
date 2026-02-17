@@ -9,13 +9,13 @@ DocShare is exposed via ingress.
 {{- else }}
 DocShare services are ClusterIP. Use port-forward to access them locally:
 
-Backend API:
-  kubectl port-forward svc/{{ include "docshare.fullname" . }}-backend 8080:{{ .Values.backend.service.port }}
+API:
+  kubectl port-forward svc/{{ include "docshare.fullname" . }}-api 8080:{{ .Values.api.service.port }}
 
-Frontend:
-  kubectl port-forward svc/{{ include "docshare.fullname" . }}-frontend 3000:{{ .Values.frontend.service.port }}
+Web:
+  kubectl port-forward svc/{{ include "docshare.fullname" . }}-web 3000:{{ .Values.web.service.port }}
 
 Then open:
-  Frontend: http://127.0.0.1:3000
-  API:      http://127.0.0.1:8080
+  Web: http://127.0.0.1:3000
+  API: http://127.0.0.1:8080
 {{- end }}

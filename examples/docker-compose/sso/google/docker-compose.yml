@@ -15,7 +15,7 @@
 # To override, set OAUTH_GOOGLE_REDIRECT_URL explicitly.
 
 services:
-  backend:
+  api:
     environment:
       OAUTH_GOOGLE_ENABLED: "true"
       OAUTH_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"

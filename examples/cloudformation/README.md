@@ -111,7 +111,7 @@ aws cloudformation describe-stacks --stack-name docshare --query 'Stacks[0].Outp
 | Application Load Balancer | AWS::ElasticLoadBalancingV2::LoadBalancer | Public ALB with HTTPS |
 | ACM Certificate | AWS::CertificateManager::Certificate | SSL/TLS certificate with DNS validation |
 | ECS Cluster | AWS::ECS::Cluster | Fargate cluster with Container Insights |
-| ECS Services | AWS::ECS::Service | 3 services (frontend, backend, gotenberg) |
+| ECS Services | AWS::ECS::Service | 3 services (web, api, gotenberg) |
 | Auto Scaling | AWS::ApplicationAutoScaling::ScalableTarget | CPU-based scaling policies |
 | Route53 Record | AWS::Route53::RecordSetGroup | Alias record to ALB |
 
@@ -119,8 +119,8 @@ aws cloudformation describe-stacks --stack-name docshare --query 'Stacks[0].Outp
 
 | Service   | Min | Max | Scale Trigger |
 |-----------|-----|-----|---------------|
-| Backend   | 1   | 4   | CPU > 70%     |
-| Frontend  | 1   | 4   | CPU > 70%     |
+| API       | 1   | 4   | CPU > 70%     |
+| Web       | 1   | 4   | CPU > 70%     |
 | Gotenberg | 1   | 2   | CPU > 80%     |
 
 ## Updating
@@ -179,7 +179,7 @@ aws acm describe-certificate --certificate-arn <arn> --query 'Certificate.Status
 Check CloudWatch logs and task events:
 
 ```bash
-aws ecs describe-services --cluster docshare-cluster --services backend --query 'services[0].events[0:5]'
+aws ecs describe-services --cluster docshare-cluster --services api --query 'services[0].events[0:5]'
 ```
 
 ### Database Connection Issues

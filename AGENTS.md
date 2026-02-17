@@ -5,23 +5,23 @@
 
 ## OVERVIEW
 
-DocShare: document sharing platform with file storage, sharing, groups, previews. Monorepo (Go backend + Next.js frontend + Go CLI).
+DocShare: document sharing platform with file storage, sharing, groups, previews. Monorepo (Go API + Next.js web + Go CLI).
 
 ## BUILD / LINT / TEST COMMANDS
 
 ```bash
-# Backend
-cd backend && go build ./...                          # Build all packages
-cd backend && go test ./...                           # Run all tests
-cd backend && go test -v ./internal/handlers          # Run specific package tests
-cd backend && go test -v -run TestAuthHandler ./...   # Run single test by name
-cd backend && go vet ./...                            # Static analysis
-cd backend && go mod tidy                             # Clean dependencies
+# API
+cd api && go build ./...                          # Build all packages
+cd api && go test ./...                           # Run all tests
+cd api && go test -v ./internal/handlers          # Run specific package tests
+cd api && go test -v -run TestAuthHandler ./...   # Run single test by name
+cd api && go vet ./...                            # Static analysis
+cd api && go mod tidy                             # Clean dependencies
 
-# Frontend
-cd frontend && npm run dev                            # Development server
-cd frontend && npm run build                          # Production build
-cd frontend && npm run lint                           # ESLint
+# Web
+cd web && npm run dev                            # Development server
+cd web && npm run build                          # Production build
+cd web && npm run lint                           # ESLint
 
 # CLI
 cd cli && go build -o docshare .                      # Build binary
@@ -29,7 +29,7 @@ cd cli && go test ./...                               # Run all tests
 
 # Docker Development
 docker-compose -f docker-compose.dev.yml up -d        # Full dev stack (includes MinIO)
-docker-compose -f docker-compose.dev.yml up -d backend postgres  # Minimal dev
+docker-compose -f docker-compose.dev.yml up -d api postgres  # Minimal dev
 
 # Helm
 helm dependency update charts/docshare                # Update chart deps
@@ -40,22 +40,22 @@ helm template release charts/docshare                 # Render templates locally
 
 ```
 ./
-├── backend/              # Go Fiber REST API
-│   ├── cmd/server/       # Entry point
-│   ├── internal/         # Handlers, models, services, middleware
-│   └── pkg/              # Public utilities (logger, utils)
-├── frontend/             # Next.js 16 App
+├── api/                # Go Fiber REST API
+│   ├── cmd/server/     # Entry point
+│   ├── internal/       # Handlers, models, services, middleware
+│   └── pkg/           # Public utilities (logger, utils)
+├── web/                # Next.js 16 App
 │   └── src/
-│       ├── app/          # Routes (App Router)
-│       ├── components/   # Feature + UI components
-│       ├── lib/          # API client, types, utilities
-│       └── hooks/        # React hooks
-├── cli/                  # Go CLI (docshare)
-│   ├── cmd/              # Cobra commands
-│   └── internal/         # API client, config, output
-├── docs/                 # API, CLI, deployment docs
-├── examples/             # Docker Compose + Helm examples
-└── charts/               # Helm charts
+│       ├── app/       # Routes (App Router)
+│       ├── components/ # Feature + UI components
+│       ├── lib/       # API client, types, utilities
+│       └── hooks/     # React hooks
+├── cli/                # Go CLI (docshare)
+│   ├── cmd/           # Cobra commands
+│   └── internal/       # API client, config, output
+├── docs/               # API, CLI, deployment docs
+├── examples/           # Docker Compose + Helm examples
+└── charts/            # Helm charts
 ```
 
 ## GO CODE STYLE
@@ -73,8 +73,8 @@ import (
     "gorm.io/gorm"
     
     // Internal packages (blank line separator)
-    "github.com/docshare/backend/internal/models"
-    "github.com/docshare/backend/pkg/logger"
+    "github.com/docshare/api/internal/models"
+    "github.com/docshare/api/pkg/logger"
 )
 ```
 
@@ -198,8 +198,8 @@ if (res.success) {
 
 | Service | Port | Note |
 |---------|------|------|
-| Frontend | 3001 | Not 3000 |
-| Backend | 8080 | - |
+| Web | 3001 | Not 3000 |
+| API | 8080 | - |
 | MinIO (dev) | 9000/9001 | Console at 9001 |
 | PostgreSQL | 5432 | - |
 | Gotenberg | 3000 | Document preview |

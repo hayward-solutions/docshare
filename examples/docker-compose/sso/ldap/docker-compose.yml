@@ -38,7 +38,7 @@ services:
     depends_on:
       - ldap
 
-  backend:
+  api:
     environment:
       LDAP_ENABLED: "true"
       LDAP_URL: "ldap://ldap:389"

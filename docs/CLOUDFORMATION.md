@@ -221,12 +221,12 @@ aws cloudformation describe-stacks \
 | `S3BucketName`      | String | `{Stack}-storage` | S3 bucket name (auto-generated if empty) |
 | `BackendCpu`        | Number | 256               | Backend task CPU units (256 = 0.25 vCPU) |
 | `BackendMemory`     | Number | 512               | Backend task memory in MB                |
-| `BackendMinCount`   | Number | 1                 | Minimum backend tasks                    |
-| `BackendMaxCount`   | Number | 4                 | Maximum backend tasks                    |
+| `BackendMinCount`   | Number | 1                 | Minimum api tasks                    |
+| `BackendMaxCount`   | Number | 4                 | Maximum api tasks                    |
 | `FrontendCpu`       | Number | 256               | Frontend task CPU units                  |
 | `FrontendMemory`    | Number | 512               | Frontend task memory in MB               |
-| `FrontendMinCount`  | Number | 1                 | Minimum frontend tasks                   |
-| `FrontendMaxCount`  | Number | 4                 | Maximum frontend tasks                   |
+| `FrontendMinCount`  | Number | 1                 | Minimum web tasks                   |
+| `FrontendMaxCount`  | Number | 4                 | Maximum web tasks                   |
 | `GotenbergCpu`      | Number | 512               | Gotenberg task CPU units                 |
 | `GotenbergMemory`   | Number | 1024              | Gotenberg task memory in MB              |
 | `GotenbergMinCount` | Number | 1                 | Minimum Gotenberg tasks                  |
@@ -351,7 +351,7 @@ The KMS key is configured with:
     {
       "Sid": "AllowECSTaskRole",
       "Effect": "Allow",
-      "Principal": {"AWS": "<backend-task-role-arn>"},
+      "Principal": {"AWS": "<api-task-role-arn>"},
       "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
       "Resource": "*"
     }
@@ -403,7 +403,7 @@ Backend-specific permissions:
 # Update desired count
 aws ecs update-service \
   --cluster docshare-cluster \
-  --service backend \
+  --service api \
   --desired-count 3
 
 # Update scaling limits (requires stack update)
@@ -518,7 +518,7 @@ aws cloudformation describe-stack-resource \
 # Force new deployment with same task definition
 aws ecs update-service \
   --cluster docshare-cluster \
-  --service backend \
+  --service api \
   --force-new-deployment
 
 # Or update to new image version (requires stack update)
@@ -540,14 +540,14 @@ Update the template and redeploy, or use AWS CLI:
 ```bash
 # Register new task definition with updated env vars
 aws ecs register-task-definition \
-  --family docshare-backend \
+  --family docshare-api \
   --container-definitions '[...]'
 
 # Update service to use new task definition
 aws ecs update-service \
   --cluster docshare-cluster \
-  --service backend \
-  --task-definition docshare-backend:N
+  --service api \
+  --task-definition docshare-api:N
 ```
 
 ### Upgrade RDS Instance
@@ -637,7 +637,7 @@ aws ecs describe-tasks \
 # Check service events
 aws ecs describe-services \
   --cluster docshare-cluster \
-  --services backend \
+  --services api \
   --query 'services[0].events[0:5]'
 ```
 
@@ -781,8 +781,8 @@ For private ECR repositories, add:
 BackendTaskDefinition:
   Properties:
     ContainerDefinitions:
-      - Name: backend
-        Image: <account-id>.dkr.ecr.<region>.amazonaws.com/docshare/backend:latest
+      - Name: api
+        Image: <account-id>.dkr.ecr.<region>.amazonaws.com/docshare/api:latest
 ```
 
 Update TaskExecutionRole to include:
