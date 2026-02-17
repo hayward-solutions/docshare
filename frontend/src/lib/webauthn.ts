@@ -51,12 +51,17 @@ export function decodePublicKeyCredentialCreationOptions(
   options: Record<string, unknown>
 ): PublicKeyCredentialCreationOptions {
   const opts = options as Record<string, unknown>;
-  const challenge = opts.challenge as string;
-  const userObj = opts.user as Record<string, unknown>;
-  const excludeCredentials = (opts.excludeCredentials as Array<Record<string, unknown>>) || [];
+  
+  // The go-webauthn library returns options wrapped in a "publicKey" property
+  // This is standard WebAuthn format (protocol.CredentialCreation)
+  const pk = (opts.publicKey ?? opts) as Record<string, unknown>;
+  
+  const challenge = pk.challenge as string;
+  const userObj = pk.user as Record<string, unknown>;
+  const excludeCredentials = (pk.excludeCredentials as Array<Record<string, unknown>>) || [];
 
   return {
-    ...opts,
+    ...pk,
     challenge: base64urlToBuffer(challenge),
     user: {
       ...userObj,
@@ -73,11 +78,15 @@ export function decodePublicKeyCredentialRequestOptions(
   options: Record<string, unknown>
 ): PublicKeyCredentialRequestOptions {
   const opts = options as Record<string, unknown>;
-  const challenge = opts.challenge as string;
-  const allowCredentials = (opts.allowCredentials as Array<Record<string, unknown>>) || [];
+  
+  // The go-webauthn library returns options wrapped in a "publicKey" property
+  const pk = (opts.publicKey ?? opts) as Record<string, unknown>;
+  
+  const challenge = pk.challenge as string;
+  const allowCredentials = (pk.allowCredentials as Array<Record<string, unknown>>) || [];
 
   return {
-    ...opts,
+    ...pk,
     challenge: base64urlToBuffer(challenge),
     allowCredentials: allowCredentials.map((cred) => ({
       ...cred,

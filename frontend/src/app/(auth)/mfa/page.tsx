@@ -10,11 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KeyRound, Fingerprint, ShieldAlert } from 'lucide-react';
+import { useWebAuthnSupport } from '@/hooks/use-webauthn-support';
 
 export default function MFAChallengePage() {
   const router = useRouter();
   const { mfaToken, mfaMethods, mfaPending, completeMFALogin, clearMFA } = useAuth();
+  const { isSupported: webauthnSupported } = useWebAuthnSupport();
   const [totpCode, setTotpCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
   const [error, setError] = useState('');
@@ -54,7 +57,7 @@ export default function MFAChallengePage() {
       if (!beginRes.success) throw new Error('Failed to start verification');
 
       const options = decodePublicKeyCredentialRequestOptions(
-        beginRes.data.options as unknown as Record<string, unknown>
+        beginRes.data.options as Record<string, unknown>
       );
 
       const credential = await navigator.credentials.get({
@@ -95,7 +98,7 @@ export default function MFAChallengePage() {
   }, [mfaToken, recoveryCode, completeMFALogin, router]);
 
   const hasTOTP = mfaMethods.includes('totp');
-  const hasWebAuthn = mfaMethods.includes('webauthn');
+  const hasWebAuthn = mfaMethods.includes('webauthn') && webauthnSupported;
   const defaultTab = hasTOTP ? 'totp' : 'webauthn';
 
   if (!mfaPending || !mfaToken) {
@@ -112,9 +115,9 @@ export default function MFAChallengePage() {
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-600">
-            {error}
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {showRecovery ? (

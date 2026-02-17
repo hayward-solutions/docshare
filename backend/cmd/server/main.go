@@ -20,6 +20,7 @@ import (
 	"github.com/docshare/backend/pkg/utils"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
@@ -28,6 +29,7 @@ func main() {
 
 	cfg := config.Load()
 	utils.ConfigureJWT(cfg.JWT.Secret, cfg.JWT.ExpirationHours)
+	utils.ConfigureEncryption(cfg.JWT.Secret)
 	previewtoken.SetSecret(cfg.JWT.Secret)
 
 	db, err := database.Connect(cfg.DB)
@@ -42,6 +44,7 @@ func main() {
 			handlers.CleanupExpiredDeviceCodes(db)
 			handlers.CleanupExpiredTransfers(db)
 			handlers.CleanupExpiredMFAChallenges(db)
+			utils.CleanupExpiredJTIs()
 		}
 	}()
 
@@ -191,17 +194,36 @@ func main() {
 	mfaRoutes.Post("/totp/setup", authMiddleware.RequireAuth, mfaHandler.TOTPSetup)
 	mfaRoutes.Post("/totp/verify-setup", authMiddleware.RequireAuth, mfaHandler.TOTPVerifySetup)
 	mfaRoutes.Post("/totp/disable", authMiddleware.RequireAuth, mfaHandler.TOTPDisable)
-	mfaRoutes.Post("/verify/totp", mfaHandler.VerifyTOTP)
-	mfaRoutes.Post("/verify/recovery", mfaHandler.VerifyRecovery)
-	mfaRoutes.Post("/verify/webauthn/begin", webAuthnHandler.VerifyBegin)
-	mfaRoutes.Post("/verify/webauthn/finish", webAuthnHandler.VerifyFinish)
 	mfaRoutes.Post("/recovery/regenerate", authMiddleware.RequireAuth, mfaHandler.RegenerateRecovery)
 
 	passkeyRoutes := api.Group("/auth/passkey")
 	passkeyRoutes.Post("/register/begin", authMiddleware.RequireAuth, webAuthnHandler.RegisterBegin)
 	passkeyRoutes.Post("/register/finish", authMiddleware.RequireAuth, webAuthnHandler.RegisterFinish)
-	passkeyRoutes.Post("/login/begin", webAuthnHandler.LoginBegin)
-	passkeyRoutes.Post("/login/finish", webAuthnHandler.LoginFinish)
+
+	mfaVerifyLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 5 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "too many attempts, please try again later",
+			})
+		},
+	})
+
+	mfaVerifyRoutes := api.Group("/auth/mfa/verify")
+	mfaVerifyRoutes.Use(mfaVerifyLimiter)
+	mfaVerifyRoutes.Post("/totp", mfaHandler.VerifyTOTP)
+	mfaVerifyRoutes.Post("/recovery", mfaHandler.VerifyRecovery)
+	mfaVerifyRoutes.Post("/webauthn/begin", webAuthnHandler.VerifyBegin)
+	mfaVerifyRoutes.Post("/webauthn/finish", webAuthnHandler.VerifyFinish)
+
+	passkeyLoginRoutes := api.Group("/auth/passkey/login")
+	passkeyLoginRoutes.Use(mfaVerifyLimiter)
+	passkeyLoginRoutes.Post("/begin", webAuthnHandler.LoginBegin)
+	passkeyLoginRoutes.Post("/finish", webAuthnHandler.LoginFinish)
 
 	passkeysRoutes := api.Group("/auth/passkeys", authMiddleware.RequireAuth)
 	passkeysRoutes.Get("/", webAuthnHandler.List)

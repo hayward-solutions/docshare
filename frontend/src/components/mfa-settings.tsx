@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { mfaAPI, passkeyAPI } from '@/lib/api';
 import { MFAStatus, WebAuthnCredentialInfo } from '@/lib/types';
 import { decodePublicKeyCredentialCreationOptions, encodeCredentialCreationResponse } from '@/lib/webauthn';
+import { useWebAuthnSupport } from '@/hooks/use-webauthn-support';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Shield, KeyRound, Fingerprint, Plus, Trash2, Copy, AlertTriangle, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Dialog,
@@ -32,8 +34,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function MFASettings() {
   const [status, setStatus] = useState<MFAStatus | null>(null);
-  const [passkeys, setPasskeys] = useState<WebAuthnCredentialInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [passkeys, setPasskeys] = useState<WebAuthnCredentialInfo[]>([]);
+  const { isSupported: webauthnSupported } = useWebAuthnSupport();
 
   const [totpSetupOpen, setTotpSetupOpen] = useState(false);
   const [totpSecret, setTotpSecret] = useState('');
@@ -50,6 +53,9 @@ export function MFASettings() {
   const [passkeyNameDialogOpen, setPasskeyNameDialogOpen] = useState(false);
   const [newPasskeyName, setNewPasskeyName] = useState('');
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+
+  const [deletePasskeyDialogOpen, setDeletePasskeyDialogOpen] = useState(false);
+  const [passkeyToDelete, setPasskeyToDelete] = useState<string | null>(null);
 
   const [regenDialogOpen, setRegenDialogOpen] = useState(false);
   const [regenPassword, setRegenPassword] = useState('');
@@ -126,7 +132,7 @@ export function MFASettings() {
       if (!beginRes.success) throw new Error('Failed to start registration');
 
       const options = decodePublicKeyCredentialCreationOptions(
-        beginRes.data.options as unknown as Record<string, unknown>
+        beginRes.data.options as Record<string, unknown>
       );
 
       const credential = await navigator.credentials.create({
@@ -154,15 +160,24 @@ export function MFASettings() {
     }
   };
 
-  const handlePasskeyDelete = async (id: string) => {
+  const handlePasskeyDeleteClick = (id: string) => {
+    setPasskeyToDelete(id);
+    setDeletePasskeyDialogOpen(true);
+  };
+
+  const confirmPasskeyDelete = async () => {
+    if (!passkeyToDelete) return;
     try {
-      const res = await passkeyAPI.delete(id);
+      const res = await passkeyAPI.delete(passkeyToDelete);
       if (res.success) {
         toast.success('Passkey removed');
         fetchStatus();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove passkey');
+    } finally {
+      setDeletePasskeyDialogOpen(false);
+      setPasskeyToDelete(null);
     }
   };
 
@@ -260,16 +275,18 @@ export function MFASettings() {
                   <Badge variant="secondary">None</Badge>
                 )}
               </div>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setNewPasskeyName('');
-                  setPasskeyNameDialogOpen(true);
-                }}
-              >
-                <Plus className="mr-1 h-3 w-3" />
-                Add Passkey
-              </Button>
+              {webauthnSupported && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setNewPasskeyName('');
+                    setPasskeyNameDialogOpen(true);
+                  }}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Passkey
+                </Button>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               Use biometrics, security keys, or your device to sign in without a password.
@@ -302,7 +319,7 @@ export function MFASettings() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => handlePasskeyDelete(pk.id)}
+                          onClick={() => handlePasskeyDeleteClick(pk.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -361,13 +378,7 @@ export function MFASettings() {
           <div className="space-y-4">
             {totpQrUri && (
               <div className="flex justify-center p-4 bg-white rounded-lg">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpQrUri)}`}
-                  alt="TOTP QR Code"
-                  width={200}
-                  height={200}
-                />
+                <QRCodeSVG value={totpQrUri} size={200} />
               </div>
             )}
             <div className="space-y-2">
@@ -465,6 +476,24 @@ export function MFASettings() {
             <Button variant="outline" onClick={() => setPasskeyNameDialogOpen(false)}>Cancel</Button>
             <Button onClick={handlePasskeyRegister} disabled={passkeyLoading}>
               {passkeyLoading ? 'Waiting...' : 'Continue'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Passkey Dialog */}
+      <Dialog open={deletePasskeyDialogOpen} onOpenChange={setDeletePasskeyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Passkey</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this passkey? You will no longer be able to use it to sign in.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePasskeyDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmPasskeyDelete}>
+              Remove Passkey
             </Button>
           </DialogFooter>
         </DialogContent>

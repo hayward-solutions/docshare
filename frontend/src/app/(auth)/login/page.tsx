@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Loader2, Fingerprint } from 'lucide-react';
 import { decodePublicKeyCredentialRequestOptions, encodeCredentialRequestResponse } from '@/lib/webauthn';
+import { useWebAuthnSupport } from '@/hooks/use-webauthn-support';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -27,6 +28,7 @@ function LoginForm() {
   const { login, ldapLogin, mfaPending, loginWithToken, isAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isSupported: webauthnSupported } = useWebAuthnSupport();
 
   useEffect(() => {
     const error = searchParams.get('error');
@@ -90,7 +92,7 @@ function LoginForm() {
       if (!beginRes.success) throw new Error('Failed to start passkey login');
 
       const options = decodePublicKeyCredentialRequestOptions(
-        beginRes.data.options as unknown as Record<string, unknown>
+        beginRes.data.options as Record<string, unknown>
       );
 
       const credential = await navigator.credentials.get({
@@ -237,20 +239,22 @@ function LoginForm() {
             Sign In
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={handlePasskeyLogin}
-            disabled={passkeyLoading || isLoading}
-          >
-            {passkeyLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Fingerprint className="mr-2 h-4 w-4" />
-            )}
-            Sign in with passkey
-          </Button>
+          {webauthnSupported && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading || isLoading}
+            >
+              {passkeyLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Fingerprint className="mr-2 h-4 w-4" />
+              )}
+              Sign in with passkey
+            </Button>
+          )}
 
           {showDividerBeforeProviders && (
             <>

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,18 +15,22 @@ type MFAClaims struct {
 	UserID    uuid.UUID `json:"userID"`
 	Email     string    `json:"email"`
 	TokenType string    `json:"tokenType"`
+	JTI       string    `json:"jti"`
 	jwt.RegisteredClaims
 }
 
 func GenerateMFAToken(userID uuid.UUID, email string) (string, error) {
 	expiresAt := time.Now().Add(mfaTokenExpiry)
+	jti := uuid.New().String()
 	claims := MFAClaims{
 		UserID:    userID,
 		Email:     email,
 		TokenType: "mfa_challenge",
+		JTI:       jti,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        jti,
 			Subject:   userID.String(),
 		},
 	}
@@ -54,5 +59,36 @@ func ValidateMFAToken(tokenString string) (*MFAClaims, error) {
 		return nil, fmt.Errorf("invalid token type")
 	}
 
+	if claims.JTI == "" {
+		return nil, fmt.Errorf("missing token ID")
+	}
+
 	return claims, nil
+}
+
+var consumedJTIs = make(map[string]time.Time)
+var jtiMu sync.Mutex
+
+func IsJTIValid(jti string) bool {
+	jtiMu.Lock()
+	defer jtiMu.Unlock()
+	_, exists := consumedJTIs[jti]
+	return !exists
+}
+
+func ConsumeJTI(jti string) {
+	jtiMu.Lock()
+	defer jtiMu.Unlock()
+	consumedJTIs[jti] = time.Now()
+}
+
+func CleanupExpiredJTIs() {
+	jtiMu.Lock()
+	defer jtiMu.Unlock()
+	now := time.Now()
+	for jti, consumedAt := range consumedJTIs {
+		if now.Sub(consumedAt) > mfaTokenExpiry {
+			delete(consumedJTIs, jti)
+		}
+	}
 }

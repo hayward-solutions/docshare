@@ -176,7 +176,7 @@ export const mfaAPI = {
   verifyRecovery: async (mfaToken: string, code: string) =>
     apiMethods.post<{ token: string; user: User }>('/auth/mfa/verify/recovery', { mfaToken, code }),
   verifyWebAuthnBegin: async (mfaToken: string) =>
-    apiMethods.post<{ options: PublicKeyCredentialRequestOptions }>('/auth/mfa/verify/webauthn/begin', { mfaToken }),
+    apiMethods.post<{ options: Record<string, unknown> }>('/auth/mfa/verify/webauthn/begin', { mfaToken }),
   verifyWebAuthnFinish: async (mfaToken: string, response: Record<string, unknown>) =>
     apiMethods.post<{ token: string; user: User }>('/auth/mfa/verify/webauthn/finish', { mfaToken, response }),
   regenerateRecovery: async (password: string) =>
@@ -185,11 +185,11 @@ export const mfaAPI = {
 
 export const passkeyAPI = {
   registerBegin: async () =>
-    apiMethods.post<{ options: PublicKeyCredentialCreationOptions }>('/auth/passkey/register/begin', {}),
+    apiMethods.post<{ options: Record<string, unknown> }>('/auth/passkey/register/begin', {}),
   registerFinish: async (name: string, response: Record<string, unknown>) =>
     apiMethods.post<PasskeyRegisterResponse>('/auth/passkey/register/finish', { name, response }),
   loginBegin: async () =>
-    apiMethods.post<{ options: PublicKeyCredentialRequestOptions; challengeID: string }>('/auth/passkey/login/begin', {}),
+    apiMethods.post<{ options: Record<string, unknown>; challengeID: string }>('/auth/passkey/login/begin', {}),
   loginFinish: async (challengeID: string, response: Record<string, unknown>) =>
     apiMethods.post<{ token: string; user: User }>('/auth/passkey/login/finish', { challengeID, response }),
   list: async () =>

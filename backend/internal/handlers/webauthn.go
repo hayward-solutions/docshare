@@ -63,7 +63,12 @@ func (h *WebAuthnHandler) loadWebAuthnUser(userID uuid.UUID) (*webAuthnUser, err
 		var transports []protocol.AuthenticatorTransport
 		if dc.Transports != "" {
 			var ts []string
-			json.Unmarshal([]byte(dc.Transports), &ts)
+			if err := json.Unmarshal([]byte(dc.Transports), &ts); err != nil {
+				logger.Warn("failed to parse transports", map[string]interface{}{
+					"user_id": userID.String(),
+					"error":   err.Error(),
+				})
+			}
 			for _, t := range ts {
 				transports = append(transports, protocol.AuthenticatorTransport(t))
 			}
@@ -107,7 +112,10 @@ func (h *WebAuthnHandler) RegisterBegin(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to begin registration")
 	}
 
-	sessionJSON, _ := json.Marshal(session)
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize session")
+	}
 
 	h.DB.Where("user_id = ? AND type = ?", user.ID, models.MFAChallengeRegistration).
 		Delete(&models.MFAChallenge{})
@@ -268,7 +276,10 @@ func (h *WebAuthnHandler) VerifyBegin(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to begin authentication")
 	}
 
-	sessionJSON, _ := json.Marshal(session)
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize session")
+	}
 	challenge := models.MFAChallenge{
 		UserID:      &claims.UserID,
 		Challenge:   []byte(session.Challenge),
@@ -297,6 +308,10 @@ func (h *WebAuthnHandler) VerifyFinish(c *fiber.Ctx) error {
 	claims, err := utils.ValidateMFAToken(req.MFAToken)
 	if err != nil {
 		return utils.Error(c, fiber.StatusUnauthorized, "invalid or expired MFA token")
+	}
+
+	if !utils.IsJTIValid(claims.JTI) {
+		return utils.Error(c, fiber.StatusUnauthorized, "MFA token already used")
 	}
 
 	waUser, err := h.loadWebAuthnUser(claims.UserID)
@@ -336,6 +351,8 @@ func (h *WebAuthnHandler) VerifyFinish(c *fiber.Ctx) error {
 			"last_used_at": now,
 		})
 
+	utils.ConsumeJTI(claims.JTI)
+
 	token, err := utils.GenerateToken(&waUser.user)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed generating token")
@@ -366,7 +383,10 @@ func (h *WebAuthnHandler) LoginBegin(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to begin passkey login")
 	}
 
-	sessionJSON, _ := json.Marshal(session)
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize session")
+	}
 	challenge := models.MFAChallenge{
 		Challenge:   []byte(session.Challenge),
 		Type:        models.MFAChallengeAuthentication,

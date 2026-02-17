@@ -26,7 +26,10 @@ function CallbackHandler() {
       let methods: ('totp' | 'webauthn')[] = [];
       if (methodsParam) {
         try {
-          methods = JSON.parse(methodsParam);
+          const parsed = JSON.parse(methodsParam);
+          if (Array.isArray(parsed) && parsed.every((m) => m === 'totp' || m === 'webauthn')) {
+            methods = parsed;
+          }
         } catch {
           methods = [];
         }

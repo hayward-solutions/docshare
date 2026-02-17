@@ -80,16 +80,23 @@ func (h *MFAHandler) TOTPSetup(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to generate TOTP secret")
 	}
 
+	encryptedSecret, err := utils.EncryptAESGCM(key.Secret())
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to encrypt TOTP secret")
+	}
+
 	if existing.ID != [16]byte{} {
-		h.DB.Model(&existing).Updates(map[string]interface{}{
-			"totp_secret":      key.Secret(),
+		if err := h.DB.Model(&existing).Updates(map[string]interface{}{
+			"totp_secret":      encryptedSecret,
 			"totp_enabled":     false,
 			"totp_verified_at": nil,
-		})
+		}).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "failed to update TOTP config")
+		}
 	} else {
 		mfaCfg := models.MFAConfig{
 			UserID:     user.ID,
-			TOTPSecret: key.Secret(),
+			TOTPSecret: encryptedSecret,
 		}
 		if err := h.DB.Create(&mfaCfg).Error; err != nil {
 			return utils.Error(c, fiber.StatusInternalServerError, "failed to save TOTP config")
@@ -130,7 +137,8 @@ func (h *MFAHandler) TOTPVerifySetup(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusConflict, "TOTP is already enabled")
 	}
 
-	if !totp.Validate(req.Code, mfaCfg.TOTPSecret) {
+	totpSecret := utils.DecryptOrPlaintext(mfaCfg.TOTPSecret)
+	if !totp.Validate(req.Code, totpSecret) {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid TOTP code")
 	}
 
@@ -139,14 +147,19 @@ func (h *MFAHandler) TOTPVerifySetup(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to generate recovery codes")
 	}
 
-	codesJSON, _ := json.Marshal(hashedCodes)
+	codesJSON, err := json.Marshal(hashedCodes)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize recovery codes")
+	}
 	now := time.Now()
-	h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
+	if err := h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
 		"totp_enabled":     true,
 		"totp_verified_at": now,
 		"recovery_codes":   string(codesJSON),
 		"recovery_count":   len(codes),
-	})
+	}).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to enable TOTP")
+	}
 
 	logger.Info("mfa_totp_enabled", map[string]interface{}{
 		"user_id": user.ID.String(),
@@ -168,6 +181,7 @@ func (h *MFAHandler) TOTPVerifySetup(c *fiber.Ctx) error {
 
 type disableTOTPRequest struct {
 	Password string `json:"password"`
+	TOTPCode string `json:"totpCode"`
 }
 
 func (h *MFAHandler) TOTPDisable(c *fiber.Ctx) error {
@@ -186,30 +200,48 @@ func (h *MFAHandler) TOTPDisable(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to load user")
 	}
 
-	if dbUser.AuthProvider == nil || *dbUser.AuthProvider == "" {
-		if !utils.CheckPassword(req.Password, dbUser.PasswordHash) {
-			return utils.Error(c, fiber.StatusBadRequest, "invalid password")
-		}
-	}
-
 	var mfaCfg models.MFAConfig
 	if err := h.DB.First(&mfaCfg, "user_id = ?", user.ID).Error; err != nil {
 		return utils.Error(c, fiber.StatusBadRequest, "MFA is not configured")
 	}
 
-	h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
+	isSSOUser := dbUser.AuthProvider != nil && *dbUser.AuthProvider != ""
+	hasTOTP := mfaCfg.TOTPEnabled
+
+	if isSSOUser {
+		if !hasTOTP || req.TOTPCode == "" {
+			return utils.Error(c, fiber.StatusBadRequest, "TOTP code required for SSO users")
+		}
+		totpSecret := utils.DecryptOrPlaintext(mfaCfg.TOTPSecret)
+		if !totp.Validate(req.TOTPCode, totpSecret) {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid TOTP code")
+		}
+	} else {
+		if req.Password == "" {
+			return utils.Error(c, fiber.StatusBadRequest, "password is required")
+		}
+		if !utils.CheckPassword(req.Password, dbUser.PasswordHash) {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid password")
+		}
+	}
+
+	if err := h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
 		"totp_enabled":     false,
 		"totp_secret":      "",
 		"totp_verified_at": nil,
-	})
+	}).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to disable TOTP")
+	}
 
 	var credCount int64
 	h.DB.Model(&models.WebAuthnCredential{}).Where("user_id = ?", user.ID).Count(&credCount)
 	if credCount == 0 {
-		h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
+		if err := h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
 			"recovery_codes": "",
 			"recovery_count": 0,
-		})
+		}).Error; err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "failed to clear recovery codes")
+		}
 	}
 
 	logger.Info("mfa_totp_disabled", map[string]interface{}{
@@ -248,6 +280,10 @@ func (h *MFAHandler) VerifyTOTP(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "invalid or expired MFA token")
 	}
 
+	if !utils.IsJTIValid(claims.JTI) {
+		return utils.Error(c, fiber.StatusUnauthorized, "MFA token already used")
+	}
+
 	var user models.User
 	if err := h.DB.First(&user, "id = ?", claims.UserID).Error; err != nil {
 		return utils.Error(c, fiber.StatusUnauthorized, "user not found")
@@ -258,9 +294,12 @@ func (h *MFAHandler) VerifyTOTP(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "TOTP is not enabled")
 	}
 
-	if !totp.Validate(req.Code, mfaCfg.TOTPSecret) {
+	totpSecret := utils.DecryptOrPlaintext(mfaCfg.TOTPSecret)
+	if !totp.Validate(req.Code, totpSecret) {
 		return utils.Error(c, fiber.StatusUnauthorized, "invalid TOTP code")
 	}
+
+	utils.ConsumeJTI(claims.JTI)
 
 	token, err := utils.GenerateToken(&user)
 	if err != nil {
@@ -306,6 +345,10 @@ func (h *MFAHandler) VerifyRecovery(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "invalid or expired MFA token")
 	}
 
+	if !utils.IsJTIValid(claims.JTI) {
+		return utils.Error(c, fiber.StatusUnauthorized, "MFA token already used")
+	}
+
 	var user models.User
 	if err := h.DB.First(&user, "id = ?", claims.UserID).Error; err != nil {
 		return utils.Error(c, fiber.StatusUnauthorized, "user not found")
@@ -334,11 +377,18 @@ func (h *MFAHandler) VerifyRecovery(c *fiber.Ctx) error {
 	}
 
 	storedCodes = append(storedCodes[:matchIndex], storedCodes[matchIndex+1:]...)
-	updatedJSON, _ := json.Marshal(storedCodes)
-	h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
+	updatedJSON, err := json.Marshal(storedCodes)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize recovery codes")
+	}
+	if err := h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
 		"recovery_codes": string(updatedJSON),
 		"recovery_count": len(storedCodes),
-	})
+	}).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to update recovery codes")
+	}
+
+	utils.ConsumeJTI(claims.JTI)
 
 	token, err := utils.GenerateToken(&user)
 	if err != nil {
@@ -367,6 +417,7 @@ func (h *MFAHandler) VerifyRecovery(c *fiber.Ctx) error {
 
 type regenerateRecoveryRequest struct {
 	Password string `json:"password"`
+	TOTPCode string `json:"totpCode"`
 }
 
 func (h *MFAHandler) RegenerateRecovery(c *fiber.Ctx) error {
@@ -385,15 +436,29 @@ func (h *MFAHandler) RegenerateRecovery(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to load user")
 	}
 
-	if dbUser.AuthProvider == nil || *dbUser.AuthProvider == "" {
-		if !utils.CheckPassword(req.Password, dbUser.PasswordHash) {
-			return utils.Error(c, fiber.StatusBadRequest, "invalid password")
-		}
-	}
-
 	var mfaCfg models.MFAConfig
 	if err := h.DB.First(&mfaCfg, "user_id = ?", user.ID).Error; err != nil {
 		return utils.Error(c, fiber.StatusBadRequest, "MFA is not configured")
+	}
+
+	isSSOUser := dbUser.AuthProvider != nil && *dbUser.AuthProvider != ""
+	hasTOTP := mfaCfg.TOTPEnabled
+
+	if isSSOUser {
+		if !hasTOTP || req.TOTPCode == "" {
+			return utils.Error(c, fiber.StatusBadRequest, "TOTP code required for SSO users")
+		}
+		totpSecret := utils.DecryptOrPlaintext(mfaCfg.TOTPSecret)
+		if !totp.Validate(req.TOTPCode, totpSecret) {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid TOTP code")
+		}
+	} else {
+		if req.Password == "" {
+			return utils.Error(c, fiber.StatusBadRequest, "password is required")
+		}
+		if !utils.CheckPassword(req.Password, dbUser.PasswordHash) {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid password")
+		}
 	}
 
 	codes, hashedCodes, err := generateRecoveryCodes(10)
@@ -401,11 +466,16 @@ func (h *MFAHandler) RegenerateRecovery(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed to generate recovery codes")
 	}
 
-	codesJSON, _ := json.Marshal(hashedCodes)
-	h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
+	codesJSON, err := json.Marshal(hashedCodes)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to serialize recovery codes")
+	}
+	if err := h.DB.Model(&mfaCfg).Updates(map[string]interface{}{
 		"recovery_codes": string(codesJSON),
 		"recovery_count": len(codes),
-	})
+	}).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed to update recovery codes")
+	}
 
 	logger.Info("mfa_recovery_regenerated", map[string]interface{}{
 		"user_id": user.ID.String(),
