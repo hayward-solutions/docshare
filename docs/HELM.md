@@ -221,7 +221,7 @@ gotenberg:
 | `globals.webUrl`           | string | `""`                                         | Public frontend URL (e.g., https://docshare.example.com). Auto-configured from ingress if enabled. |
 | `globals.apiUrl`           | string | `""`                                         | Public API URL (e.g., https://docshare.example.com/api). Auto-configured from ingress if enabled. |
 
-**Note:** Use `globals.webUrl` and `globals.apiUrl` when using an external ingress. These values are automatically passed to both the API and web containers.
+**Note:** Use `globals.webUrl` and `globals.apiUrl` when using an external ingress. These values are automatically passed to both the API and web containers. See [external ingress example](../../examples/helm/ingress/external.yaml) for a complete configuration.
 
 ### Frontend
 
