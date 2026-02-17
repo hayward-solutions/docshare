@@ -61,8 +61,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{- define "docshare.externalFrontendUrl" -}}
-{{- if .Values.api.env.frontendUrl -}}
-{{- .Values.api.env.frontendUrl -}}
+{{- if .Values.api.env.webUrl -}}
+{{- .Values.api.env.webUrl -}}
 {{- else if .Values.ingress.enabled -}}
 {{- $host := (index .Values.ingress.hosts 0).host -}}
 {{- if .Values.ingress.tls -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
@@ -72,8 +72,8 @@ http://localhost:3001
 {{- end -}}
 
 {{- define "docshare.externalApiUrl" -}}
-{{- if .Values.api.env.backendUrl -}}
-{{- .Values.api.env.backendUrl -}}
+{{- if .Values.api.env.apiUrl -}}
+{{- .Values.api.env.apiUrl -}}
 {{- else if .Values.ingress.enabled -}}
 {{- $host := (index .Values.ingress.hosts 0).host -}}
 {{- if .Values.ingress.tls -}}https://{{ $host }}/api{{- else -}}http://{{ $host }}/api{{- end -}}
