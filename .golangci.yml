@@ -1,0 +1,23 @@
+version: "2"
+
+# Match the linter behaviour we had under golangci-lint v1 (errcheck,
+# govet, ineffassign, staticcheck, unused with v1 default exclusions).
+# v2's stock defaults are stricter than v1's, so we opt back into the
+# `legacy` preset to avoid churning unrelated files on the Go 1.25 bump.
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      # v2 folded gosimple + stylecheck into staticcheck. stylecheck (ST*)
+      # was opt-in under v1, and the QF* quick-fix checks are new in v2.
+      # Keep parity with the v1 default set: SA* and S*.
+      checks:
+        - all
+        - -ST*
+        - -QF*
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
