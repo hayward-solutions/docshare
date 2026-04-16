@@ -56,7 +56,7 @@ func (h *SSOHandler) GetLoginRedirect(c *fiber.Ctx) error {
 }
 
 func (h *SSOHandler) getAuthorizationURL(ctx context.Context, provider string) (string, error) {
-	oauthCfg, providerName, err := h.OAuthService.GetOAuthConfig(provider)
+	_, providerName, err := h.OAuthService.GetOAuthConfig(provider)
 	if err != nil {
 		return "", err
 	}
@@ -66,10 +66,22 @@ func (h *SSOHandler) getAuthorizationURL(ctx context.Context, provider string) (
 		return "", err
 	}
 
-	stateJSON, _ := json.Marshal(state)
-	stateEncoded := base64.URLEncoding.EncodeToString(stateJSON)
+	return h.OAuthService.AuthCodeURL(ctx, providerName, state)
+}
 
-	return oauthCfg.AuthCodeURL(stateEncoded), nil
+func decodeOAuthState(encoded string) (*services.OAuthState, error) {
+	if encoded == "" {
+		return nil, nil
+	}
+	raw, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+	var state services.OAuthState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
 }
 
 type OAuthCallbackRequest struct {
@@ -128,7 +140,12 @@ func (h *SSOHandler) processOAuthCallback(ctx context.Context, provider, code, s
 		return nil, err
 	}
 
-	profile, err := h.OAuthService.GetUserInfo(ctx, provider, token)
+	decodedState, err := decodeOAuthState(state)
+	if err != nil {
+		return nil, err
+	}
+
+	profile, err := h.OAuthService.GetUserInfoWithState(ctx, provider, token, decodedState)
 	if err != nil {
 		return nil, err
 	}

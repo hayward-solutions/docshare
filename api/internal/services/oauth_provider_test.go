@@ -2,6 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	neturl "net/url"
 	"testing"
 	"time"
 
@@ -143,4 +147,89 @@ func TestOAuthProviderService_GetUserInfo(t *testing.T) {
 			t.Fatal("expected error for unknown provider")
 		}
 	})
+}
+
+func TestOAuthProviderService_OIDCDiscovery(t *testing.T) {
+	var issuer string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"issuer":                 issuer,
+			"authorization_endpoint": issuer + "/protocol/openid-connect/auth",
+			"token_endpoint":         issuer + "/protocol/openid-connect/token",
+			"userinfo_endpoint":      issuer + "/protocol/openid-connect/userinfo",
+			"jwks_uri":               issuer + "/protocol/openid-connect/certs",
+			"id_token_signing_alg_values_supported": []string{"RS256"},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	issuer = srv.URL
+
+	cfg := &config.Config{
+		SSO: config.SSOConfig{
+			OIDC: config.OIDCProviderConfig{
+				Enabled:      true,
+				ClientID:     "docshare",
+				ClientSecret: "secret",
+				RedirectURL:  "http://app.example.com/callback",
+				Scopes:       "openid,email,profile",
+				IssuerURL:    issuer,
+			},
+		},
+	}
+	svc := NewOAuthProviderService(cfg)
+
+	oauthCfg, name, err := svc.GetOAuthConfig("oidc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "oidc" {
+		t.Fatalf("expected provider 'oidc', got %s", name)
+	}
+	wantAuth := issuer + "/protocol/openid-connect/auth"
+	if oauthCfg.Endpoint.AuthURL != wantAuth {
+		t.Errorf("expected discovered AuthURL %q, got %q", wantAuth, oauthCfg.Endpoint.AuthURL)
+	}
+	wantToken := issuer + "/protocol/openid-connect/token"
+	if oauthCfg.Endpoint.TokenURL != wantToken {
+		t.Errorf("expected discovered TokenURL %q, got %q", wantToken, oauthCfg.Endpoint.TokenURL)
+	}
+
+	state, err := svc.GenerateState("oidc")
+	if err != nil {
+		t.Fatalf("GenerateState: %v", err)
+	}
+	authURL, err := svc.AuthCodeURL(context.Background(), "oidc", state)
+	if err != nil {
+		t.Fatalf("AuthCodeURL: %v", err)
+	}
+	parsed, err := neturl.Parse(authURL)
+	if err != nil {
+		t.Fatalf("invalid AuthCodeURL: %v", err)
+	}
+	if got := parsed.Query().Get("nonce"); got != state.Nonce {
+		t.Errorf("expected auth URL nonce %q, got %q (full URL: %s)", state.Nonce, got, authURL)
+	}
+	if got := parsed.Query().Get("state"); got == "" {
+		t.Errorf("expected auth URL to carry state param, got: %s", authURL)
+	}
+}
+
+func TestOAuthProviderService_OIDCDiscoveryFailure(t *testing.T) {
+	cfg := &config.Config{
+		SSO: config.SSOConfig{
+			OIDC: config.OIDCProviderConfig{
+				Enabled:   true,
+				IssuerURL: "http://127.0.0.1:1/does-not-exist",
+			},
+		},
+	}
+	svc := NewOAuthProviderService(cfg)
+
+	_, _, err := svc.GetOAuthConfig("oidc")
+	if err == nil {
+		t.Fatal("expected discovery to fail for unreachable issuer")
+	}
 }

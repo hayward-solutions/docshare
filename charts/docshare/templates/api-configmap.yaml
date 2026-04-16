@@ -21,3 +21,42 @@ data:
   JWT_EXPIRATION_HOURS: {{ .Values.api.env.jwtExpirationHours | quote }}
   WEB_URL: {{ include "docshare.externalFrontendUrl" . | quote }}
   API_URL: {{ include "docshare.externalApiUrl" . | quote }}
+  {{- with .Values.sso }}
+  SSO_AUTO_REGISTER: {{ .autoRegister | quote }}
+  SSO_DEFAULT_ROLE: {{ .defaultRole | quote }}
+  {{- if .google.enabled }}
+  OAUTH_GOOGLE_ENABLED: "true"
+  OAUTH_GOOGLE_CLIENT_ID: {{ .google.clientId | quote }}
+  OAUTH_GOOGLE_REDIRECT_URL: {{ default (printf "%s/auth/sso/oauth/google/callback" (include "docshare.externalApiUrl" $)) .google.redirectUrl | quote }}
+  OAUTH_GOOGLE_SCOPES: {{ .google.scopes | quote }}
+  {{- end }}
+  {{- if .github.enabled }}
+  OAUTH_GITHUB_ENABLED: "true"
+  OAUTH_GITHUB_CLIENT_ID: {{ .github.clientId | quote }}
+  OAUTH_GITHUB_REDIRECT_URL: {{ default (printf "%s/auth/sso/oauth/github/callback" (include "docshare.externalApiUrl" $)) .github.redirectUrl | quote }}
+  OAUTH_GITHUB_SCOPES: {{ .github.scopes | quote }}
+  {{- end }}
+  {{- if .oidc.enabled }}
+  OAUTH_OIDC_ENABLED: "true"
+  OAUTH_OIDC_CLIENT_ID: {{ .oidc.clientId | quote }}
+  OAUTH_OIDC_ISSUER_URL: {{ required "sso.oidc.issuerUrl is required when sso.oidc.enabled is true" .oidc.issuerUrl | quote }}
+  OAUTH_OIDC_REDIRECT_URL: {{ default (printf "%s/auth/sso/oauth/oidc/callback" (include "docshare.externalApiUrl" $)) .oidc.redirectUrl | quote }}
+  OAUTH_OIDC_SCOPES: {{ .oidc.scopes | quote }}
+  OAUTH_OIDC_SKIP_ISSUER_VERIFICATION: {{ .oidc.skipIssuerVerification | quote }}
+  {{- end }}
+  {{- if .saml.enabled }}
+  SAML_ENABLED: "true"
+  SAML_IDP_METADATA_URL: {{ .saml.idpMetadataUrl | quote }}
+  SAML_SP_ENTITY_ID: {{ default (include "docshare.externalApiUrl" $) .saml.spEntityId | quote }}
+  SAML_SP_ACS_URL: {{ default (printf "%s/auth/sso/saml/acs" (include "docshare.externalApiUrl" $)) .saml.spAcsUrl | quote }}
+  {{- end }}
+  {{- if .ldap.enabled }}
+  LDAP_ENABLED: "true"
+  LDAP_URL: {{ .ldap.url | quote }}
+  LDAP_BIND_DN: {{ .ldap.bindDn | quote }}
+  LDAP_SEARCH_BASE: {{ .ldap.searchBase | quote }}
+  LDAP_USER_FILTER: {{ .ldap.userFilter | quote }}
+  LDAP_EMAIL_FIELD: {{ .ldap.emailField | quote }}
+  LDAP_NAME_FIELDS: {{ .ldap.nameFields | quote }}
+  {{- end }}
+  {{- end }}

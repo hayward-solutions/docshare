@@ -102,26 +102,13 @@ func (c OAuthProviderConfig) ClientConfig(ctx context.Context) *oauth2.Config {
 }
 
 type OIDCProviderConfig struct {
-	Enabled      bool
-	ClientID     string
-	ClientSecret string
-	RedirectURL  string
-	Scopes       string
-	IssuerURL    string
-}
-
-func (c OIDCProviderConfig) ClientConfig(ctx context.Context) *oauth2.Config {
-	endpoint := oauth2.Endpoint{
-		AuthURL:  c.IssuerURL + "/authorize",
-		TokenURL: c.IssuerURL + "/token",
-	}
-	return &oauth2.Config{
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		RedirectURL:  c.RedirectURL,
-		Scopes:       strings.Split(c.Scopes, ","),
-		Endpoint:     endpoint,
-	}
+	Enabled                bool
+	ClientID               string
+	ClientSecret           string
+	RedirectURL            string
+	Scopes                 string
+	IssuerURL              string
+	SkipIssuerVerification bool
 }
 
 type SAMLConfig struct {
@@ -201,12 +188,13 @@ func Load() *Config {
 				Scopes:       getEnv("OAUTH_GITHUB_SCOPES", "read:user,user:email"),
 			},
 			OIDC: OIDCProviderConfig{
-				Enabled:      getEnvAsBool("OAUTH_OIDC_ENABLED", false),
-				ClientID:     getEnv("OAUTH_OIDC_CLIENT_ID", ""),
-				ClientSecret: getEnv("OAUTH_OIDC_CLIENT_SECRET", ""),
-				RedirectURL:  getEnv("OAUTH_OIDC_REDIRECT_URL", ""),
-				Scopes:       getEnv("OAUTH_OIDC_SCOPES", "openid,profile,email"),
-				IssuerURL:    getEnv("OAUTH_OIDC_ISSUER_URL", ""),
+				Enabled:                getEnvAsBool("OAUTH_OIDC_ENABLED", false),
+				ClientID:               getEnv("OAUTH_OIDC_CLIENT_ID", ""),
+				ClientSecret:           getEnv("OAUTH_OIDC_CLIENT_SECRET", ""),
+				RedirectURL:            getEnv("OAUTH_OIDC_REDIRECT_URL", ""),
+				Scopes:                 getEnv("OAUTH_OIDC_SCOPES", "openid,profile,email"),
+				IssuerURL:              getEnv("OAUTH_OIDC_ISSUER_URL", ""),
+				SkipIssuerVerification: getEnvAsBool("OAUTH_OIDC_SKIP_ISSUER_VERIFICATION", false),
 			},
 		},
 		SAML: SAMLConfig{
