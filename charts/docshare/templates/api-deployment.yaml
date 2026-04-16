@@ -30,6 +30,10 @@ spec:
                 name: {{ include "docshare.fullname" . }}-api
             - secretRef:
                 name: {{ include "docshare.secretName" . }}
+            {{- if and .Values.sso .Values.sso.existingSecret }}
+            - secretRef:
+                name: {{ .Values.sso.existingSecret }}
+            {{- end }}
           startupProbe:
             httpGet:
               path: /health

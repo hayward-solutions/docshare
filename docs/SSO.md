@@ -24,16 +24,16 @@ Enable SSO by adding an override file:
 
 ```bash
 # Google OAuth2
-docker-compose -f docker-compose.yml -f docker-compose.sso-google.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/google/docker-compose.yml up -d
 
 # GitHub OAuth2  
-docker-compose -f docker-compose.yml -f docker-compose.sso-github.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/github/docker-compose.yml up -d
 
 # Keycloak OIDC
-docker-compose -f docker-compose.yml -f docker-compose.sso-keycloak.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/keycloak/docker-compose.yml up -d
 
 # LDAP
-docker-compose -f docker-compose.yml -f docker-compose.sso-ldap.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/ldap/docker-compose.yml up -d
 ```
 
 ### Helm
@@ -41,7 +41,33 @@ docker-compose -f docker-compose.yml -f docker-compose.sso-ldap.yml up -d
 ```bash
 helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
   --namespace docshare \
-  -f values-sso.yaml
+  -f examples/helm/sso.yaml \
+  --set sso.oidc.clientSecret=$OIDC_CLIENT_SECRET
+```
+
+The Helm chart exposes every provider under `sso.*`. For OIDC, the only
+required field is `sso.oidc.issuerUrl`; DocShare discovers the authorization,
+token, userinfo, and JWKS endpoints automatically.
+
+```yaml
+sso:
+  oidc:
+    enabled: true
+    clientId: docshare
+    clientSecret: ""          # prefer --set or sso.existingSecret
+    issuerUrl: https://keycloak.example.com/realms/docshare
+    scopes: "openid,profile,email"
+```
+
+Secrets can also be supplied via an existing Kubernetes Secret:
+
+```yaml
+sso:
+  existingSecret: docshare-sso   # keys: OAUTH_OIDC_CLIENT_SECRET, OAUTH_GOOGLE_CLIENT_SECRET, ...
+  oidc:
+    enabled: true
+    clientId: docshare
+    issuerUrl: https://keycloak.example.com/realms/docshare
 ```
 
 ---
@@ -68,7 +94,7 @@ helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 ```bash
 export GOOGLE_CLIENT_ID="your-client-id"
 export GOOGLE_CLIENT_SECRET="your-client-secret"
-docker-compose -f docker-compose.yml -f docker-compose.sso-google.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/google/docker-compose.yml up -d
 ```
 
 **Environment Variables:**
@@ -95,7 +121,7 @@ OAUTH_GOOGLE_SCOPES=openid,email,profile
 ```bash
 export GITHUB_CLIENT_ID="your-client-id"
 export GITHUB_CLIENT_SECRET="your-client-secret"
-docker-compose -f docker-compose.yml -f docker-compose.sso-github.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/github/docker-compose.yml up -d
 ```
 
 **Environment Variables:**
@@ -107,56 +133,82 @@ OAUTH_GITHUB_REDIRECT_URL=http://localhost:8080/api/auth/sso/oauth/github/callba
 OAUTH_GITHUB_SCOPES=read:user,user:email
 ```
 
-### OIDC (Keycloak, Authentik)
+### OIDC (Keycloak, Authentik, Auth0, Okta, Azure AD, …)
 
-#### Keycloak Setup
+DocShare speaks standard OpenID Connect. Endpoints are resolved from the IdP's
+discovery document at `{issuerUrl}/.well-known/openid-configuration`, and every
+login verifies the `id_token` signature, issuer, audience, expiration, and nonce
+against the IdP's JWKS. You only need to supply the **issuer URL**, client ID,
+and client secret — DocShare figures out the rest.
 
-1. Start Keycloak:
-   ```bash
-   docker-compose -f docker-compose.yml -f docker-compose.sso-keycloak.yml up -d
-   ```
+**Callback URL to register with your IdP:**
+```
+{API_URL}/auth/sso/oauth/oidc/callback
+```
+(e.g. `http://localhost:8080/api/auth/sso/oauth/oidc/callback` for local dev.)
 
-2. Access Keycloak admin console at http://localhost:8180
-   - Username: `admin`
-   - Password: `admin`
-
-3. Create a new Realm named `docshare`
-
-4. Create an OIDC Client:
-   - Client ID: `docshare`
-   - Client Protocol: `openid-connect`
-   - Access Type: `confidential`
-   - Valid Redirect URIs: `http://localhost:8080/*`
-   - Web Origins: `http://localhost:8080`
-
-5. Get the Client Secret from the **Credentials** tab
-
-6. Note the Issuer URL: `http://localhost:8180/realms/docshare`
-
-**Environment Variables:**
+**Common Environment Variables:**
 ```bash
 OAUTH_OIDC_ENABLED=true
 OAUTH_OIDC_CLIENT_ID=docshare
 OAUTH_OIDC_CLIENT_SECRET=your-client-secret
-OAUTH_OIDC_ISSUER_URL=http://localhost:8180/realms/docshare
+OAUTH_OIDC_ISSUER_URL=https://your-idp.example.com/realms/docshare
 OAUTH_OIDC_REDIRECT_URL=http://localhost:8080/api/auth/sso/oauth/oidc/callback
 OAUTH_OIDC_SCOPES=openid,profile,email
+# OAUTH_OIDC_SKIP_ISSUER_VERIFICATION=true  # only if your IdP returns a mismatched `iss`
 ```
 
-#### Authentik Setup
+#### Keycloak
 
-1. Deploy Authentik (see [Authentik documentation](https://docs.goauthentik.io))
+1. Start Keycloak:
+   ```bash
+   docker-compose -f docker-compose.yml -f examples/docker-compose/sso/keycloak/docker-compose.yml up -d
+   ```
 
-2. Create an OAuth2/OpenID Provider:
-   - Name: DocShare
-   - Client ID: Generate or specify
-   - Client Secret: Generate
-   - Authorization flow: Default
-   - Redirect URIs: `http://localhost:8080/api/auth/sso/oauth/oidc/callback`
+2. Access the Keycloak admin console at http://localhost:8180 (`admin` / `admin`).
 
-3. Create an Application pointing to the Provider
+3. Create a realm named `docshare`.
 
-4. Note the Issuer URL (usually `https://your-authentik.com/application/o`)
+4. Create a Client:
+   - Client ID: `docshare`
+   - Client Protocol: `openid-connect`
+   - Access Type: `confidential`
+   - Valid Redirect URIs: `http://localhost:8080/api/auth/sso/oauth/oidc/callback`
+   - Web Origins: `http://localhost:8080`
+
+5. Copy the client secret from the **Credentials** tab.
+
+6. Issuer URL: `http://localhost:8180/realms/docshare`
+
+#### Authentik
+
+1. Create an **OAuth2/OpenID Provider**:
+   - Client type: Confidential
+   - Redirect URIs: `{API_URL}/auth/sso/oauth/oidc/callback`
+   - Signing key: any RSA key
+2. Attach it to an Application.
+3. Issuer URL: `https://authentik.example.com/application/o/<app-slug>/`
+   (note the trailing slash — Authentik includes it in the `iss` claim).
+
+#### Auth0
+
+1. Create a **Regular Web Application**.
+2. Allowed Callback URLs: `{API_URL}/auth/sso/oauth/oidc/callback`
+3. Issuer URL: `https://YOUR_TENANT.auth0.com/` (trailing slash required).
+
+#### Okta
+
+1. Create a new **OIDC Web App**.
+2. Sign-in redirect URI: `{API_URL}/auth/sso/oauth/oidc/callback`
+3. Issuer URL: `https://YOUR_ORG.okta.com/oauth2/default`
+   (or the custom authorization server issuer you use).
+
+#### Azure AD (Microsoft Entra ID)
+
+1. App registrations → New registration.
+2. Redirect URI (Web): `{API_URL}/auth/sso/oauth/oidc/callback`
+3. Certificates & secrets → New client secret.
+4. Issuer URL: `https://login.microsoftonline.com/{tenant-id}/v2.0`
 
 ---
 
@@ -216,7 +268,7 @@ SAML_SP_ACS_URL=http://localhost:8080/api/auth/sso/saml/acs
 Start with the LDAP compose file:
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.sso-ldap.yml up -d
+docker-compose -f docker-compose.yml -f examples/docker-compose/sso/ldap/docker-compose.yml up -d
 ```
 
 Access phpLDAPadmin at http://localhost:8081
@@ -268,7 +320,10 @@ LDAP_NAME_FIELDS=givenName,sn
 | `OAUTH_OIDC_ENABLED` | Enable OIDC | `true` |
 | `OAUTH_OIDC_CLIENT_ID` | OIDC Client ID | `docshare` |
 | `OAUTH_OIDC_CLIENT_SECRET` | OIDC Client Secret | `xxx` |
-| `OAUTH_OIDC_ISSUER_URL` | OIDC Issuer URL | `https://keycloak.example.com/realms/docshare` |
+| `OAUTH_OIDC_ISSUER_URL` | OIDC Issuer URL (endpoints auto-discovered) | `https://keycloak.example.com/realms/docshare` |
+| `OAUTH_OIDC_REDIRECT_URL` | Callback URL (auto-derived from `API_URL`) | `https://docshare.example.com/api/auth/sso/oauth/oidc/callback` |
+| `OAUTH_OIDC_SCOPES` | Scopes to request | `openid,profile,email` |
+| `OAUTH_OIDC_SKIP_ISSUER_VERIFICATION` | Skip `iss` claim verification (for non-compliant IdPs) | `false` |
 | **SAML** | | |
 | `SAML_ENABLED` | Enable SAML | `true` |
 | `SAML_IDP_METADATA_URL` | IdP Metadata URL | `https://idp.example.com/metadata` |

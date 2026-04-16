@@ -329,26 +329,3 @@ func TestOAuthProviderConfig_ClientConfig(t *testing.T) {
 	}
 }
 
-func TestOIDCProviderConfig_ClientConfig(t *testing.T) {
-	cfg := OIDCProviderConfig{
-		ClientID:     "oidc-client-id",
-		ClientSecret: "oidc-client-secret",
-		RedirectURL:  "https://example.com/oidc/callback",
-		Scopes:       "openid,profile",
-		IssuerURL:    "https://idp.example.com",
-	}
-
-	oauthConfig := cfg.ClientConfig(context.TODO())
-	if oauthConfig.ClientID != "oidc-client-id" {
-		t.Errorf("expected ClientID 'oidc-client-id', got %s", oauthConfig.ClientID)
-	}
-	if oauthConfig.Endpoint.AuthURL != "https://idp.example.com/authorize" {
-		t.Errorf("expected AuthURL 'https://idp.example.com/authorize', got %s", oauthConfig.Endpoint.AuthURL)
-	}
-	if oauthConfig.Endpoint.TokenURL != "https://idp.example.com/token" {
-		t.Errorf("expected TokenURL 'https://idp.example.com/token', got %s", oauthConfig.Endpoint.TokenURL)
-	}
-	if len(oauthConfig.Scopes) != 2 {
-		t.Errorf("expected 2 scopes, got %d", len(oauthConfig.Scopes))
-	}
-}

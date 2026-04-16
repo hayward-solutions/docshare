@@ -3,62 +3,67 @@
 # Usage:
 #   helm install docshare oci://ghcr.io/hayward-solutions/charts/docshare \
 #     --namespace docshare \
-#     -f examples/helm/sso.yaml
+#     -f examples/helm/sso.yaml \
+#     --set sso.google.clientSecret=$GOOGLE_CLIENT_SECRET \
+#     --set sso.oidc.clientSecret=$OIDC_CLIENT_SECRET
 #
-# This file configures SSO with Google, GitHub, OIDC (Keycloak/Authentik), SAML, and LDAP
+# This file configures SSO with Google, GitHub, and OIDC (Keycloak/Authentik/Auth0/Okta/Azure AD).
+# SAML and LDAP blocks are included but disabled — enable the ones you need.
+#
+# For OIDC, the chart only needs the issuer URL — endpoints are auto-discovered from
+# {issuerUrl}/.well-known/openid-configuration and id_tokens are verified via the IdP's JWKS.
 
-# Set URLs via globals - applies to both API and web
 globals:
   webUrl: https://docshare.example.com
   apiUrl: https://docshare.example.com/api
 
 api:
   replicaCount: 2
-  env:
-    jwtSecret: ""  # Set via --set or let auto-generate
-    jwtExpirationHours: "24"
-    
-    # SSO General Settings
-    ssoAutoRegister: "true"
-    ssoDefaultRole: "user"
-    
-    # Google OAuth2
-    oauthGoogleEnabled: "true"
-    oauthGoogleClientId: "${GOOGLE_CLIENT_ID}"
-    oauthGoogleClientSecret: "${GOOGLE_CLIENT_SECRET}"
-    oauthGoogleRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/google/callback"
-    oauthGoogleScopes: "openid,email,profile"
-    
-    # GitHub OAuth2
-    oauthGithubEnabled: "true"
-    oauthGithubClientId: "${GITHUB_CLIENT_ID}"
-    oauthGithubClientSecret: "${GITHUB_CLIENT_SECRET}"
-    oauthGithubRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/github/callback"
-    oauthGithubScopes: "read:user,user:email"
-    
-    # OIDC (Keycloak/Authentik)
-    oauthOidcEnabled: "true"
-    oauthOidcClientId: "docshare"
-    oauthOidcClientSecret: "${OIDC_CLIENT_SECRET}"
-    oauthOidcIssuerUrl: "https://keycloak.example.com/realms/docshare"
-    oauthOidcRedirectUrl: "https://docshare.example.com/api/auth/sso/oauth/oidc/callback"
-    oauthOidcScopes: "openid,profile,email"
-    
-    # SAML (Okta, Azure AD, etc.)
-    samlEnabled: "false"
-    samlIdpMetadataUrl: "https://idp.example.com/metadata.xml"
-    samlSpEntityId: "https://docshare.example.com"
-    samlSpAcsUrl: "https://docshare.example.com/api/auth/sso/saml/acs"
-    
-    # LDAP/Active Directory
-    ldapEnabled: "false"
-    ldapUrl: "ldap://ldap.example.com:389"
-    ldapBindDn: "cn=admin,dc=example,dc=com"
-    ldapBindPassword: "${LDAP_PASSWORD}"
-    ldapSearchBase: "dc=example,dc=com"
-    ldapUserFilter: "(uid=%s)"
-    ldapEmailField: "mail"
-    ldapNameFields: "cn"
+
+sso:
+  autoRegister: true
+  defaultRole: "user"
+
+  google:
+    enabled: true
+    clientId: ""              # required when enabled
+    clientSecret: ""          # pass via --set or sso.existingSecret
+    scopes: "openid,email,profile"
+
+  github:
+    enabled: true
+    clientId: ""
+    clientSecret: ""
+    scopes: "read:user,user:email"
+
+  # Generic OIDC — works with Keycloak, Authentik, Auth0, Okta, Azure AD, Google Workspace, etc.
+  oidc:
+    enabled: true
+    clientId: "docshare"
+    clientSecret: ""
+    issuerUrl: "https://keycloak.example.com/realms/docshare"
+    scopes: "openid,profile,email"
+    # skipIssuerVerification: true  # only if your IdP serves a mismatched `iss` claim
+
+  saml:
+    enabled: false
+    idpMetadataUrl: "https://idp.example.com/metadata.xml"
+    # spEntityId and spAcsUrl default to {globals.apiUrl} and {globals.apiUrl}/auth/sso/saml/acs
+
+  ldap:
+    enabled: false
+    url: "ldap://ldap.example.com:389"
+    bindDn: "cn=admin,dc=example,dc=com"
+    bindPassword: ""
+    searchBase: "dc=example,dc=com"
+    userFilter: "(uid=%s)"
+    emailField: "mail"
+    nameFields: "givenName,sn"
+
+  # Optional: reference an existing Secret containing client secrets / bind passwords.
+  # Supported keys: OAUTH_GOOGLE_CLIENT_SECRET, OAUTH_GITHUB_CLIENT_SECRET,
+  # OAUTH_OIDC_CLIENT_SECRET, LDAP_BIND_PASSWORD.
+  # existingSecret: "docshare-sso"
 
 web:
   replicaCount: 2
@@ -87,7 +92,7 @@ postgresql:
   enabled: true
   auth:
     username: docshare
-    password: ""  # Set via --set
+    password: ""              # Set via --set
     database: docshare
 
 s3:

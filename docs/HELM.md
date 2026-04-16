@@ -190,6 +190,33 @@ gotenberg:
   enabled: false
 ```
 
+### Single Sign-On (SSO)
+
+The chart can configure OIDC, Google OAuth, GitHub OAuth, SAML, and LDAP
+via the `sso.*` values. For OIDC, only `issuerUrl` is required — endpoints are
+auto-discovered from `{issuerUrl}/.well-known/openid-configuration` and id_tokens
+are verified against the IdP's JWKS.
+
+```yaml
+sso:
+  oidc:
+    enabled: true
+    clientId: docshare
+    clientSecret: ""          # prefer --set or sso.existingSecret
+    issuerUrl: https://keycloak.example.com/realms/docshare
+    scopes: "openid,profile,email"
+```
+
+Register this callback URL with your IdP (the chart derives it from
+`globals.apiUrl` or the ingress host):
+
+```
+{API_URL}/auth/sso/oauth/oidc/callback
+```
+
+See [docs/SSO.md](SSO.md) and [examples/helm/sso.yaml](../examples/helm/sso.yaml)
+for full provider coverage.
+
 ## Values Reference
 
 ### Backend
@@ -296,6 +323,46 @@ Uses the [Bitnami PostgreSQL chart](https://github.com/bitnami/charts/tree/main/
 | `externalDatabase.sslmode`                   | string | `disable`  | SSL mode                 |
 | `externalDatabase.existingSecret`            | string | `""`       | Existing secret name     |
 | `externalDatabase.existingSecretPasswordKey` | string | `password` | Key in existing secret   |
+
+### SSO
+
+All providers are disabled by default. Redirect URLs default to
+`{API_URL}/auth/sso/oauth/{provider}/callback`.
+
+| Key                                    | Type    | Default                  | Description                                                           |
+|----------------------------------------|---------|--------------------------|-----------------------------------------------------------------------|
+| `sso.autoRegister`                     | bool    | `true`                   | Auto-create users on first SSO login                                  |
+| `sso.defaultRole`                      | string  | `"user"`                 | Role assigned to auto-created users                                   |
+| `sso.existingSecret`                   | string  | `""`                     | Existing Secret with SSO credentials (overrides chart-managed Secret) |
+| `sso.google.enabled`                   | bool    | `false`                  | Enable Google OAuth                                                   |
+| `sso.google.clientId`                  | string  | `""`                     | Google OAuth client ID                                                |
+| `sso.google.clientSecret`              | string  | `""`                     | Google OAuth client secret                                            |
+| `sso.google.redirectUrl`               | string  | `""`                     | Override redirect URL (defaults to derived)                           |
+| `sso.google.scopes`                    | string  | `"openid,email,profile"` | Requested scopes                                                      |
+| `sso.github.enabled`                   | bool    | `false`                  | Enable GitHub OAuth                                                   |
+| `sso.github.clientId`                  | string  | `""`                     | GitHub OAuth client ID                                                |
+| `sso.github.clientSecret`              | string  | `""`                     | GitHub OAuth client secret                                            |
+| `sso.github.redirectUrl`               | string  | `""`                     | Override redirect URL                                                 |
+| `sso.github.scopes`                    | string  | `"read:user,user:email"` | Requested scopes                                                      |
+| `sso.oidc.enabled`                     | bool    | `false`                  | Enable generic OIDC                                                   |
+| `sso.oidc.clientId`                    | string  | `""`                     | OIDC client ID                                                        |
+| `sso.oidc.clientSecret`                | string  | `""`                     | OIDC client secret                                                    |
+| `sso.oidc.issuerUrl`                   | string  | `""`                     | **Required when enabled.** IdP issuer URL — endpoints auto-discovered |
+| `sso.oidc.redirectUrl`                 | string  | `""`                     | Override redirect URL                                                 |
+| `sso.oidc.scopes`                      | string  | `"openid,profile,email"` | Requested scopes                                                      |
+| `sso.oidc.skipIssuerVerification`      | bool    | `false`                  | Skip `iss` claim verification (only for non-compliant IdPs)           |
+| `sso.saml.enabled`                     | bool    | `false`                  | Enable SAML                                                           |
+| `sso.saml.idpMetadataUrl`              | string  | `""`                     | IdP metadata XML URL                                                  |
+| `sso.saml.spEntityId`                  | string  | `""`                     | SP entity ID (defaults to API URL)                                    |
+| `sso.saml.spAcsUrl`                    | string  | `""`                     | SP ACS URL (defaults to derived)                                      |
+| `sso.ldap.enabled`                     | bool    | `false`                  | Enable LDAP                                                           |
+| `sso.ldap.url`                         | string  | `ldap://localhost:389`   | LDAP server URL                                                       |
+| `sso.ldap.bindDn`                      | string  | `""`                     | LDAP bind DN                                                          |
+| `sso.ldap.bindPassword`                | string  | `""`                     | LDAP bind password                                                    |
+| `sso.ldap.searchBase`                  | string  | `""`                     | LDAP search base                                                      |
+| `sso.ldap.userFilter`                  | string  | `"(uid=%s)"`             | User search filter                                                    |
+| `sso.ldap.emailField`                  | string  | `"mail"`                 | Email attribute                                                       |
+| `sso.ldap.nameFields`                  | string  | `"givenName,sn"`         | Name attributes                                                       |
 
 ## Upgrading
 

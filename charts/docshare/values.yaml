@@ -92,3 +92,56 @@ externalDatabase:
   sslmode: disable
   existingSecret: ""
   existingSecretPasswordKey: password
+
+# Single sign-on configuration. All providers are disabled by default.
+# Redirect URLs default to {globals.apiUrl}/auth/sso/oauth/{provider}/callback when omitted.
+sso:
+  autoRegister: true        # Auto-create users on first SSO login
+  defaultRole: "user"       # Role assigned to auto-created users
+
+  google:
+    enabled: false
+    clientId: ""
+    clientSecret: ""        # Stored in the chart-managed Secret unless existingSecret is set
+    redirectUrl: ""         # Optional override; default derived from globals.apiUrl
+    scopes: "openid,email,profile"
+
+  github:
+    enabled: false
+    clientId: ""
+    clientSecret: ""
+    redirectUrl: ""
+    scopes: "read:user,user:email"
+
+  # Generic OpenID Connect provider (Keycloak, Authentik, Auth0, Okta, Azure AD, etc.)
+  # IssuerURL must point to the IdP base URL — endpoints are auto-discovered from
+  # {issuerUrl}/.well-known/openid-configuration. The id_token is verified against the IdP's JWKS.
+  oidc:
+    enabled: false
+    clientId: ""
+    clientSecret: ""
+    issuerUrl: ""           # e.g. https://keycloak.example.com/realms/docshare
+    redirectUrl: ""
+    scopes: "openid,profile,email"
+    skipIssuerVerification: false  # Allow issuer mismatch (only for non-compliant IdPs)
+
+  saml:
+    enabled: false
+    idpMetadataUrl: ""
+    spEntityId: ""
+    spAcsUrl: ""
+
+  ldap:
+    enabled: false
+    url: "ldap://localhost:389"
+    bindDn: ""
+    bindPassword: ""
+    searchBase: ""
+    userFilter: "(uid=%s)"
+    emailField: "mail"
+    nameFields: "givenName,sn"
+
+  # Reference an existing Secret for SSO credentials instead of storing them in values.
+  # The Secret may contain any of: OAUTH_GOOGLE_CLIENT_SECRET, OAUTH_GITHUB_CLIENT_SECRET,
+  # OAUTH_OIDC_CLIENT_SECRET, LDAP_BIND_PASSWORD. Keys not present fall back to chart values.
+  existingSecret: ""

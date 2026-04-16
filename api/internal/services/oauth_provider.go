@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/docshare/api/internal/config"
 	"github.com/docshare/api/internal/models"
 	"github.com/docshare/api/pkg/logger"
@@ -22,6 +24,10 @@ import (
 
 type OAuthProviderService struct {
 	Cfg *config.Config
+
+	oidcMu       sync.Mutex
+	oidcProvider *oidc.Provider
+	oidcVerifier *oidc.IDTokenVerifier
 }
 
 func NewOAuthProviderService(cfg *config.Config) *OAuthProviderService {
@@ -65,21 +71,85 @@ func (s *OAuthProviderService) GetOAuthConfig(provider string) (*oauth2.Config, 
 		if !s.Cfg.SSO.OIDC.Enabled {
 			return nil, "", errors.New("oidc is not enabled")
 		}
-		endpoint := oauth2.Endpoint{
-			AuthURL:  s.Cfg.SSO.OIDC.IssuerURL + "/authorize",
-			TokenURL: s.Cfg.SSO.OIDC.IssuerURL + "/token",
+		provider, err := s.getOIDCProvider(context.Background())
+		if err != nil {
+			return nil, "", err
+		}
+		scopes := splitScopes(s.Cfg.SSO.OIDC.Scopes)
+		if !containsScope(scopes, oidc.ScopeOpenID) {
+			scopes = append([]string{oidc.ScopeOpenID}, scopes...)
 		}
 		return &oauth2.Config{
 			ClientID:     s.Cfg.SSO.OIDC.ClientID,
 			ClientSecret: s.Cfg.SSO.OIDC.ClientSecret,
 			RedirectURL:  s.Cfg.SSO.OIDC.RedirectURL,
-			Scopes:       strings.Split(s.Cfg.SSO.OIDC.Scopes, ","),
-			Endpoint:     endpoint,
+			Scopes:       scopes,
+			Endpoint:     provider.Endpoint(),
 		}, "oidc", nil
 
 	default:
 		return nil, "", errors.New("unknown oauth provider: " + provider)
 	}
+}
+
+func splitScopes(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func containsScope(scopes []string, target string) bool {
+	for _, s := range scopes {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *OAuthProviderService) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
+	s.oidcMu.Lock()
+	defer s.oidcMu.Unlock()
+
+	if s.oidcProvider != nil {
+		return s.oidcProvider, nil
+	}
+
+	issuer := strings.TrimRight(s.Cfg.SSO.OIDC.IssuerURL, "/")
+	if issuer == "" {
+		return nil, errors.New("oidc issuer URL is required")
+	}
+
+	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if s.Cfg.SSO.OIDC.SkipIssuerVerification {
+		discoveryCtx = oidc.InsecureIssuerURLContext(discoveryCtx, issuer)
+	}
+
+	provider, err := oidc.NewProvider(discoveryCtx, issuer)
+	if err != nil {
+		return nil, fmt.Errorf("oidc discovery failed for %s: %w", issuer, err)
+	}
+
+	s.oidcProvider = provider
+	s.oidcVerifier = provider.Verifier(&oidc.Config{
+		ClientID:        s.Cfg.SSO.OIDC.ClientID,
+		SkipIssuerCheck: s.Cfg.SSO.OIDC.SkipIssuerVerification,
+	})
+	return provider, nil
+}
+
+func (s *OAuthProviderService) getOIDCVerifier(ctx context.Context) (*oidc.IDTokenVerifier, error) {
+	if _, err := s.getOIDCProvider(ctx); err != nil {
+		return nil, err
+	}
+	return s.oidcVerifier, nil
 }
 
 func (s *OAuthProviderService) GenerateState(provider string) (*OAuthState, error) {
@@ -96,6 +166,26 @@ func (s *OAuthProviderService) GenerateState(provider string) (*OAuthState, erro
 	}
 
 	return state, nil
+}
+
+func (s *OAuthProviderService) AuthCodeURL(ctx context.Context, provider string, state *OAuthState) (string, error) {
+	oauthCfg, providerName, err := s.GetOAuthConfig(provider)
+	if err != nil {
+		return "", err
+	}
+
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return "", err
+	}
+	stateEncoded := base64.URLEncoding.EncodeToString(stateJSON)
+
+	opts := []oauth2.AuthCodeOption{}
+	if providerName == "oidc" {
+		opts = append(opts, oidc.Nonce(state.Nonce))
+	}
+
+	return oauthCfg.AuthCodeURL(stateEncoded, opts...), nil
 }
 
 func (s *OAuthProviderService) ExchangeCode(ctx context.Context, provider string, code string) (*oauth2.Token, error) {
@@ -117,13 +207,17 @@ func (s *OAuthProviderService) ExchangeCode(ctx context.Context, provider string
 }
 
 func (s *OAuthProviderService) GetUserInfo(ctx context.Context, provider string, token *oauth2.Token) (*SSOProfile, error) {
+	return s.GetUserInfoWithState(ctx, provider, token, nil)
+}
+
+func (s *OAuthProviderService) GetUserInfoWithState(ctx context.Context, provider string, token *oauth2.Token, state *OAuthState) (*SSOProfile, error) {
 	switch strings.ToLower(provider) {
 	case "google":
 		return s.getGoogleUserInfo(ctx, token)
 	case "github":
 		return s.getGitHubUserInfo(ctx, token)
 	case "oidc":
-		return s.getOIDCUserInfo(ctx, token)
+		return s.getOIDCUserInfo(ctx, token, state)
 	default:
 		return nil, errors.New("unknown provider: " + provider)
 	}
@@ -262,39 +356,64 @@ func (s *OAuthProviderService) getGitHubUserInfo(ctx context.Context, token *oau
 	}, nil
 }
 
-func (s *OAuthProviderService) getOIDCUserInfo(ctx context.Context, token *oauth2.Token) (*SSOProfile, error) {
-	client := s.Cfg.SSO.OIDC.ClientConfig(ctx).Client(ctx, token)
+func (s *OAuthProviderService) getOIDCUserInfo(ctx context.Context, token *oauth2.Token, state *OAuthState) (*SSOProfile, error) {
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok || rawIDToken == "" {
+		return nil, errors.New("oidc: id_token missing from token response")
+	}
 
-	userInfoURL := s.Cfg.SSO.OIDC.IssuerURL + "/userinfo"
-	resp, err := client.Get(userInfoURL)
+	verifier, err := s.getOIDCVerifier(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("oidc userinfo returned status %d: %s", resp.StatusCode, string(body))
+	idToken, err := verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: id_token verification failed: %w", err)
 	}
 
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, err
+	if state != nil && state.Nonce != "" && idToken.Nonce != state.Nonce {
+		return nil, errors.New("oidc: id_token nonce mismatch")
 	}
 
-	email, _ := data["email"].(string)
-	sub, _ := data["sub"].(string)
-	name, _ := data["name"].(string)
-	givenName, _ := data["given_name"].(string)
-	familyName, _ := data["family_name"].(string)
-	picture, _ := data["picture"].(string)
-
-	if email == "" {
-		email, _ = data["email"].(string)
+	claims := map[string]interface{}{}
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("oidc: failed to parse id_token claims: %w", err)
 	}
+
+	provider, err := s.getOIDCProvider(ctx)
+	if err == nil {
+		userInfo, uerr := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+		if uerr == nil {
+			extra := map[string]interface{}{}
+			if err := userInfo.Claims(&extra); err == nil {
+				for k, v := range extra {
+					if _, exists := claims[k]; !exists {
+						claims[k] = v
+					}
+				}
+			}
+		} else {
+			logger.Warn("oidc_userinfo_unavailable", map[string]interface{}{
+				"error": uerr.Error(),
+			})
+		}
+	}
+
+	sub, _ := claims["sub"].(string)
 	if sub == "" {
 		return nil, errors.New("oidc: subject claim is required")
 	}
+
+	email, _ := claims["email"].(string)
+	if email == "" {
+		return nil, errors.New("oidc: email claim is required (request 'email' scope)")
+	}
+
+	name, _ := claims["name"].(string)
+	givenName, _ := claims["given_name"].(string)
+	familyName, _ := claims["family_name"].(string)
+	picture, _ := claims["picture"].(string)
 
 	firstName := givenName
 	lastName := familyName
@@ -318,6 +437,6 @@ func (s *OAuthProviderService) getOIDCUserInfo(ctx context.Context, token *oauth
 			}
 			return nil
 		}(),
-		RawProfile: data,
+		RawProfile: claims,
 	}, nil
 }
