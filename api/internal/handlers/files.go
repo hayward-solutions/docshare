@@ -232,9 +232,12 @@ func (h *FilesHandler) PresignUpload(c *fiber.Ctx) error {
 	}
 
 	// Issue the URL against the staging prefix; finalize will copy the object
-	// out of staging so this URL no longer addresses live content.
+	// out of staging so this URL no longer addresses live content. Sign
+	// Content-Length into the URL so the holder can only PUT exactly the
+	// number of bytes they claimed — without this, a client could presign
+	// for 1 KB and upload 100 GB to staging.
 	objectName := fmt.Sprintf("%s%s/%s/%s", uploadStagingPrefix, currentUser.ID.String(), uuid.New().String(), filename)
-	uploadURL, presignErr := h.Storage.PresignedPutURL(c.Context(), objectName, presignedUploadTTL)
+	uploadURL, presignErr := h.Storage.PresignedPutURLWithLength(c.Context(), objectName, presignedUploadTTL, req.Size)
 	if presignErr != nil {
 		logger.Error("s3_presign_put_failed", presignErr, map[string]interface{}{
 			"object_name": objectName,
@@ -328,12 +331,10 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		parentID = &parent.ID
 	}
 
-	// Guard against replayed finalize calls: a prior finalize for the same
-	// staging key would have created a File row at `finalKey`. Without this
-	// we'd either insert a duplicate (no unique constraint on storage_path)
-	// or — worse — fall into the DB-create error path below and delete the
-	// legitimate object out from under the first row. Run this before any S3
-	// op so replays don't pay network round trips.
+	// Cheap fast-path for sequential replays: skip the S3 stat/copy work
+	// entirely if a (non-soft-deleted) row already references finalKey. The
+	// transactional Create below remains the source of truth for concurrent
+	// racers.
 	var existing int64
 	if err := h.DB.Model(&models.File{}).Where("storage_path = ?", finalKey).Count(&existing).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed checking file existence")
@@ -360,14 +361,6 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
 	}
 
-	// Server-side copy from staging → final. After this point, the presigned
-	// PUT URL still works but writes to a key nothing references. We leave
-	// staging in place on copy failure so the caller can retry finalize
-	// without re-uploading.
-	if err := h.Storage.CopyObject(c.Context(), finalKey, stagingKey); err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "failed promoting upload")
-	}
-
 	contentType := resolveMimeType(filename, req.MimeType)
 
 	entry := models.File{
@@ -380,20 +373,32 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		StoragePath: finalKey,
 	}
 
-	if err := h.DB.Create(&entry).Error; err != nil {
-		// The race-safe partial unique index on storage_path can fire if a
-		// concurrent finalize beat us to inserting; in that case the OTHER
-		// caller now owns the finalKey object — we must not delete it. The
-		// staging object will be cleaned up by the winning caller's
-		// best-effort delete (or by a lifecycle rule).
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
+	// Claim → copy → commit. Inserting the row first inside a transaction
+	// turns the storage_path unique index into a race-safe gate: a concurrent
+	// finalize attempting to insert the same finalKey blocks on the index
+	// until we commit (then fails with duplicate-key) or rolls back (then
+	// succeeds). This stops the loser from ever calling CopyObject — without
+	// this, both finalizers would race-copy and the second copy could write
+	// different bytes if the staging URL was used to overwrite between
+	// stats. The MatchETag pinned on the copy further guarantees that the
+	// bytes we land at finalKey are the ones we stat'd, even if the staging
+	// key is overwritten between stat and copy.
+	txErr := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&entry).Error; err != nil {
+			return err
+		}
+		return h.Storage.CopyObject(c.Context(), finalKey, stagingKey, info.ETag)
+	})
+	if txErr != nil {
+		if errors.Is(txErr, gorm.ErrDuplicatedKey) {
 			return utils.Error(c, fiber.StatusConflict, "upload already finalized")
 		}
-		// Genuine failure (e.g., DB down): we just promoted the object but
-		// have no row pointing at it. Clean up the orphan; leave staging so
-		// the caller can retry finalize without re-uploading.
+		// Either the copy failed or another DB error fired. The transaction
+		// rolled back the row, but the copy may have partially written to
+		// finalKey before failing — best-effort clean it up. Staging is left
+		// alone so the caller can retry finalize without re-uploading.
 		_ = h.Storage.Delete(c.Context(), finalKey)
-		return utils.Error(c, fiber.StatusInternalServerError, "failed creating file record")
+		return utils.Error(c, fiber.StatusInternalServerError, "failed promoting upload")
 	}
 
 	// Best-effort cleanup of the staging object. If this fails the file row

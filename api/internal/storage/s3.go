@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/docshare/api/internal/config"
@@ -121,6 +123,23 @@ func (s *S3Client) PresignedPutURL(ctx context.Context, objectName string, expir
 	return urlValue.String(), nil
 }
 
+// PresignedPutURLWithLength signs Content-Length into the URL so the holder
+// can only upload exactly contentLength bytes. S3 rejects a PUT whose
+// Content-Length header doesn't match the signed value with
+// SignatureDoesNotMatch, and rejects chunked uploads (which omit
+// Content-Length) for the same reason. This binds the URL to the size the
+// client declared at presign time and stops "presign tiny, upload huge"
+// abuse of the staging prefix.
+func (s *S3Client) PresignedPutURLWithLength(ctx context.Context, objectName string, expiry time.Duration, contentLength int64) (string, error) {
+	headers := make(http.Header)
+	headers.Set("Content-Length", strconv.FormatInt(contentLength, 10))
+	urlValue, err := s.client.PresignHeader(ctx, http.MethodPut, s.bucket, objectName, expiry, nil, headers)
+	if err != nil {
+		return "", err
+	}
+	return urlValue.String(), nil
+}
+
 func (s *S3Client) StatObject(ctx context.Context, objectName string) (minio.ObjectInfo, error) {
 	return s.client.StatObject(ctx, s.bucket, objectName, minio.StatObjectOptions{})
 }
@@ -128,8 +147,17 @@ func (s *S3Client) StatObject(ctx context.Context, objectName string) (minio.Obj
 // CopyObject performs a server-side copy from srcKey to dstKey within the
 // configured bucket. ComposeObject handles the >5GB multipart-copy case
 // transparently, so callers don't have to branch on size.
-func (s *S3Client) CopyObject(ctx context.Context, dstKey, srcKey string) error {
+//
+// When srcETag is non-empty it's set as the source If-Match condition: S3
+// returns PreconditionFailed if srcKey's current ETag no longer matches.
+// FinalizeUpload uses this to refuse a copy if the staging object was
+// overwritten between StatObject and CopyObject (i.e. the attacker mutated
+// staging through the still-valid presigned URL after we validated it).
+func (s *S3Client) CopyObject(ctx context.Context, dstKey, srcKey, srcETag string) error {
 	src := minio.CopySrcOptions{Bucket: s.bucket, Object: srcKey}
+	if srcETag != "" {
+		src.MatchETag = srcETag
+	}
 	dst := minio.CopyDestOptions{Bucket: s.bucket, Object: dstKey}
 	_, err := s.client.ComposeObject(ctx, dst, src)
 	if err != nil {

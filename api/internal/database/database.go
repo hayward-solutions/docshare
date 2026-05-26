@@ -104,16 +104,42 @@ END $$;`
 		return err
 	}
 
+	// Reconcile any pre-existing duplicate storage_path rows BEFORE adding
+	// the unique index — otherwise CREATE UNIQUE INDEX fails and the API
+	// won't start on environments that ran finalize concurrently before
+	// this guard existed. Soft-delete the later rows (keep the earliest
+	// per storage_path); the S3 object remains referenced by the survivor.
+	dedupeFiles := `
+UPDATE files
+SET deleted_at = NOW()
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (
+             PARTITION BY storage_path
+             ORDER BY created_at ASC, id ASC
+           ) AS rn
+    FROM files
+    WHERE storage_path <> ''
+      AND deleted_at IS NULL
+  ) ranked
+  WHERE rn > 1
+);`
+
+	if err := db.Exec(dedupeFiles).Error; err != nil {
+		return err
+	}
+
 	// Defends FinalizeUpload's replay check against concurrent racers: with
 	// only an application-level Count→Create gap, two parallel finalize calls
-	// could both observe no row and both insert. A partial unique index
-	// (excluding directories, which legitimately share storage_path = '')
-	// makes the second insert fail with 23505 → gorm.ErrDuplicatedKey →
-	// 409 Conflict.
+	// could both observe no row and both insert. The partial unique index
+	// excludes directories (which legitimately share storage_path = '')
+	// AND soft-deleted rows (so finalize's default-scoped pre-check stays
+	// consistent with the index — a deleted row's storage_path is freed).
 	storagePathUnique := `
 CREATE UNIQUE INDEX IF NOT EXISTS files_storage_path_unique
 ON files (storage_path)
-WHERE storage_path <> '';`
+WHERE storage_path <> '' AND deleted_at IS NULL;`
 
 	return db.Exec(storagePathUnique).Error
 }

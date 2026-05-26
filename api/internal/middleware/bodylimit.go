@@ -25,7 +25,23 @@ func SmallBodyLimitForNonUploadRoutes(maxBytes int) fiber.Handler {
 		if isLargeBodyRoute(c.Path()) {
 			return c.Next()
 		}
-		if length := c.Request().Header.ContentLength(); length > maxBytes {
+		// GET / HEAD / DELETE / OPTIONS legitimately omit Content-Length
+		// (fasthttp surfaces that as -1). Only enforce the body cap on
+		// methods that normally carry a request body.
+		switch c.Method() {
+		case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch:
+		default:
+			return c.Next()
+		}
+		length := c.Request().Header.ContentLength()
+		// A negative Content-Length means chunked transfer encoding (or no
+		// declared length). For non-upload body-bearing routes we expect
+		// JSON with a known length; refusing chunked here closes the bypass
+		// where an attacker could otherwise stream up to the global cap.
+		if length < 0 {
+			return utils.Error(c, fiber.StatusLengthRequired, "content-length required")
+		}
+		if length > maxBytes {
 			return utils.Error(c, fiber.StatusRequestEntityTooLarge, "request body too large")
 		}
 		return c.Next()

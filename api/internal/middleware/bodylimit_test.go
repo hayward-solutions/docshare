@@ -30,6 +30,10 @@ func TestSmallBodyLimitForNonUploadRoutes(t *testing.T) {
 		{"oversize body to legacy multipart upload is allowed", "/api/files/upload", 4096, http.StatusOK},
 		{"oversize body to transfer chunk upload is allowed", "/api/transfers/abc123/upload", 4096, http.StatusOK},
 	}
+	// Chunked-encoding rejection (when Content-Length is absent and
+	// fasthttp reports ContentLength() == -1) is exercised in production
+	// traffic; httptest + fasthttp's serializer don't compose cleanly
+	// enough for a focused unit test here.
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
