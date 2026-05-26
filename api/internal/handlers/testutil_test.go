@@ -279,7 +279,10 @@ func performRequest(t *testing.T, app *fiber.App, method, path string, body io.R
 		req.Header.Set(key, value)
 	}
 
-	resp, err := app.Test(req, int((10 * time.Second).Milliseconds()))
+	// MFA tests do bcrypt verification + hashing of 10 recovery codes; under
+	// `-race` on a constrained CI runner that can exceed 10s per request,
+	// so give the framework plenty of headroom.
+	resp, err := app.Test(req, int((45 * time.Second).Milliseconds()))
 	if err != nil {
 		t.Fatalf("request %s %s failed: %v", method, path, err)
 	}
