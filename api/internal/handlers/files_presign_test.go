@@ -125,4 +125,38 @@ func TestFinalizeUpload(t *testing.T) {
 		assertStatus(t, resp, http.StatusBadRequest)
 		assertEnvelopeError(t, body, "invalid filename")
 	})
+
+	t.Run("rejects key with path traversal that escapes user prefix", func(t *testing.T) {
+		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
+			"key":  owner.ID.String() + "/../00000000-0000-0000-0000-000000000000/abc/x.txt",
+			"name": "x.txt",
+		}, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusForbidden)
+		assertEnvelopeError(t, body, "key does not belong to authenticated user")
+	})
+
+	t.Run("rejects already-finalized key", func(t *testing.T) {
+		// Seed an existing file row at the storage path we'll attempt to finalize.
+		key := owner.ID.String() + "/already-here/x.txt"
+		seeded := models.File{
+			Name:        "x.txt",
+			MimeType:    "text/plain",
+			Size:        10,
+			IsDirectory: false,
+			OwnerID:     owner.ID,
+			StoragePath: key,
+		}
+		if err := env.db.Create(&seeded).Error; err != nil {
+			t.Fatalf("failed seeding file row: %v", err)
+		}
+
+		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
+			"key":  key,
+			"name": "x.txt",
+		}, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusConflict)
+		assertEnvelopeError(t, body, "upload already finalized")
+	})
 }

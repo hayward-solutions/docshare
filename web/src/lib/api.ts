@@ -82,9 +82,12 @@ export function putToPresignedURL(url: string, file: File, onProgress?: (loaded:
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
-    if (file.type) {
-      xhr.setRequestHeader('Content-Type', file.type);
-    }
+    // Intentionally do NOT set Content-Type. The pre-signed URL signs only the
+    // `host` header; on some S3 implementations a Content-Type the signer
+    // didn't include would risk SignatureDoesNotMatch. The server stores the
+    // client-declared MIME type in the DB at finalize time and uses that
+    // value when serving downloads, so S3's reported content-type doesn't
+    // need to be correct.
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
         onProgress(event.loaded, event.total);

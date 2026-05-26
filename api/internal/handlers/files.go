@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -265,13 +266,17 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
 	}
 
-	key := strings.TrimSpace(req.Key)
-	if key == "" {
+	rawKey := strings.TrimSpace(req.Key)
+	if rawKey == "" {
 		return utils.Error(c, fiber.StatusBadRequest, "key is required")
 	}
-	if !strings.HasPrefix(key, currentUser.ID.String()+"/") {
+	// path.Clean resolves any "../" segments so the prefix check below cannot
+	// be bypassed (e.g. "uA/../uB/...") and gives us a canonical storage key.
+	key := path.Clean(rawKey)
+	if key == "." || key == "/" || !strings.HasPrefix(key, currentUser.ID.String()+"/") {
 		logger.WarnWithUser(currentUser.ID.String(), "upload_finalize_foreign_key", map[string]interface{}{
-			"key": key,
+			"key":     rawKey,
+			"cleaned": key,
 		})
 		return utils.Error(c, fiber.StatusForbidden, "key does not belong to authenticated user")
 	}
@@ -306,6 +311,20 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 			return utils.Error(c, fiber.StatusForbidden, "no permission to upload to parent directory")
 		}
 		parentID = &parent.ID
+	}
+
+	// Guard against replayed finalize calls: a prior finalize for the same key
+	// would have created a File row. If we proceeded blindly we'd either insert
+	// a duplicate (no unique constraint on storage_path today) or — worse —
+	// fall into the DB-create error path below and delete the legitimate
+	// object out from under the first row. Run this before the S3 stat so a
+	// replayed request doesn't pay a network round trip.
+	var existing int64
+	if err := h.DB.Model(&models.File{}).Where("storage_path = ?", key).Count(&existing).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed checking file existence")
+	}
+	if existing > 0 {
+		return utils.Error(c, fiber.StatusConflict, "upload already finalized")
 	}
 
 	info, statErr := h.Storage.StatObject(c.Context(), key)
@@ -671,9 +690,12 @@ func (h *FilesHandler) Download(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
+	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
+	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
+	// so S3's reported content-type isn't authoritative.
+	contentType := file.MimeType
 	if contentType == "" {
-		contentType = file.MimeType
+		contentType = stat.ContentType
 	}
 
 	logger.InfoWithUser(currentUser.ID.String(), "file_downloaded", map[string]interface{}{
@@ -779,9 +801,12 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
+	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
+	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
+	// so S3's reported content-type isn't authoritative.
+	contentType := file.MimeType
 	if contentType == "" {
-		contentType = file.MimeType
+		contentType = stat.ContentType
 	}
 
 	c.Set("Content-Type", contentType)
@@ -1467,9 +1492,12 @@ func (h *FilesHandler) downloadFile(c *fiber.Ctx, fileID uuid.UUID) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
+	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
+	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
+	// so S3's reported content-type isn't authoritative.
+	contentType := file.MimeType
 	if contentType == "" {
-		contentType = file.MimeType
+		contentType = stat.ContentType
 	}
 
 	c.Set("Content-Type", contentType)
