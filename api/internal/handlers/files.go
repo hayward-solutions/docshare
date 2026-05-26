@@ -381,8 +381,17 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 	}
 
 	if err := h.DB.Create(&entry).Error; err != nil {
-		// Don't leave the promoted object orphaned. Staging is left alone in
-		// case the caller wants to retry finalize.
+		// The race-safe partial unique index on storage_path can fire if a
+		// concurrent finalize beat us to inserting; in that case the OTHER
+		// caller now owns the finalKey object — we must not delete it. The
+		// staging object will be cleaned up by the winning caller's
+		// best-effort delete (or by a lifecycle rule).
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return utils.Error(c, fiber.StatusConflict, "upload already finalized")
+		}
+		// Genuine failure (e.g., DB down): we just promoted the object but
+		// have no row pointing at it. Clean up the orphan; leave staging so
+		// the caller can retry finalize without re-uploading.
 		_ = h.Storage.Delete(c.Context(), finalKey)
 		return utils.Error(c, fiber.StatusInternalServerError, "failed creating file record")
 	}
@@ -823,8 +832,10 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 	}
 
 	storagePath := file.StoragePath
+	servingThumbnail := false
 	if file.ThumbnailPath != nil && *file.ThumbnailPath != "" {
 		storagePath = *file.ThumbnailPath
+		servingThumbnail = true
 	}
 
 	obj, err := h.Storage.Download(c.Context(), storagePath)
@@ -838,12 +849,22 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
-	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
-	// so S3's reported content-type isn't authoritative.
-	contentType := file.MimeType
-	if contentType == "" {
+	// When we're serving the thumbnail (a PDF rendering of the original) the
+	// DB's MimeType still reflects the original file (e.g. DOCX), so use S3's
+	// reported content-type — PreviewService uploaded the thumbnail with the
+	// correct one. For the original file, prefer DB MimeType, since
+	// pre-signed PUT uploads land in S3 as application/octet-stream.
+	var contentType string
+	if servingThumbnail {
 		contentType = stat.ContentType
+		if contentType == "" {
+			contentType = "application/pdf"
+		}
+	} else {
+		contentType = file.MimeType
+		if contentType == "" {
+			contentType = stat.ContentType
+		}
 	}
 
 	c.Set("Content-Type", contentType)

@@ -21,7 +21,7 @@ func Connect(cfg config.DBConfig) (*gorm.DB, error) {
 		cfg.SSLMode,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,22 @@ BEGIN
   END IF;
 END $$;`
 
-	return db.Exec(constraint).Error
+	if err := db.Exec(constraint).Error; err != nil {
+		return err
+	}
+
+	// Defends FinalizeUpload's replay check against concurrent racers: with
+	// only an application-level Count→Create gap, two parallel finalize calls
+	// could both observe no row and both insert. A partial unique index
+	// (excluding directories, which legitimately share storage_path = '')
+	// makes the second insert fail with 23505 → gorm.ErrDuplicatedKey →
+	// 409 Conflict.
+	storagePathUnique := `
+CREATE UNIQUE INDEX IF NOT EXISTS files_storage_path_unique
+ON files (storage_path)
+WHERE storage_path <> '';`
+
+	return db.Exec(storagePathUnique).Error
 }
 
 func seedAdminUser(db *gorm.DB) error {

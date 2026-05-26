@@ -120,6 +120,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	app.Use(middleware.CORS(cfg.Server.FrontendURL))
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.SecurityLogger())
+	app.Use(middleware.SmallBodyLimitForNonUploadRoutes(8 * 1024 * 1024))
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})

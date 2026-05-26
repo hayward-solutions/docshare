@@ -159,7 +159,7 @@ func Load() *Config {
 			Port:        getEnv("SERVER_PORT", "8080"),
 			FrontendURL: getEnv("WEB_URL", "http://localhost:3001"),
 			BackendURL:  getEnv("API_URL", "http://localhost:8080/api"),
-			MaxUploadMB: getEnvAsInt("MAX_UPLOAD_MB", 100),
+			MaxUploadMB: maxUploadMB(),
 		},
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),
@@ -281,6 +281,18 @@ func getEnvAsDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+// maxUploadMB resolves MAX_UPLOAD_MB and refuses zero/negative values so an
+// operator can't silently disable the upload-size guard by misconfiguring
+// the env var (handlers check `MaxUploadBytes > 0` as the enforcement gate).
+func maxUploadMB() int {
+	const fallback = 100
+	v := getEnvAsInt("MAX_UPLOAD_MB", fallback)
+	if v <= 0 {
+		return fallback
+	}
+	return v
 }
 
 func getEnvAsBool(key string, fallback bool) bool {
