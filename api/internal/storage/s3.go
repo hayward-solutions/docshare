@@ -125,6 +125,29 @@ func (s *S3Client) StatObject(ctx context.Context, objectName string) (minio.Obj
 	return s.client.StatObject(ctx, s.bucket, objectName, minio.StatObjectOptions{})
 }
 
+// CopyObject performs a server-side copy from srcKey to dstKey within the
+// configured bucket. ComposeObject handles the >5GB multipart-copy case
+// transparently, so callers don't have to branch on size.
+func (s *S3Client) CopyObject(ctx context.Context, dstKey, srcKey string) error {
+	src := minio.CopySrcOptions{Bucket: s.bucket, Object: srcKey}
+	dst := minio.CopyDestOptions{Bucket: s.bucket, Object: dstKey}
+	_, err := s.client.ComposeObject(ctx, dst, src)
+	if err != nil {
+		logger.Error("s3_copy_failed", err, map[string]interface{}{
+			"src_key": srcKey,
+			"dst_key": dstKey,
+			"bucket":  s.bucket,
+		})
+		return err
+	}
+	logger.Info("s3_copy_success", map[string]interface{}{
+		"src_key": srcKey,
+		"dst_key": dstKey,
+		"bucket":  s.bucket,
+	})
+	return nil
+}
+
 func (s *S3Client) PresignedGetURLWithResponse(ctx context.Context, objectName string, expiry time.Duration, contentType string, contentDisposition string) (string, error) {
 	query := make(url.Values)
 	if contentType != "" {

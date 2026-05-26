@@ -101,14 +101,25 @@ func TestFinalizeUpload(t *testing.T) {
 		assertEnvelopeError(t, body, "key is required")
 	})
 
-	t.Run("rejects key not prefixed with caller user ID", func(t *testing.T) {
-		// Use a UUID that is not the owner's ID
-		foreignPrefix := "00000000-0000-0000-0000-000000000000"
-		if foreignPrefix == owner.ID.String() {
-			foreignPrefix = "11111111-1111-1111-1111-111111111111"
+	t.Run("rejects key without uploads/ staging prefix", func(t *testing.T) {
+		// A key prefixed only with the caller's UUID (i.e. the legacy final
+		// shape) must be rejected — finalize accepts staging keys only.
+		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
+			"key":  owner.ID.String() + "/abc/x.txt",
+			"name": "x.txt",
+		}, authHeaders(ownerToken))
+		body := decodeJSONMap(t, resp)
+		assertStatus(t, resp, http.StatusForbidden)
+		assertEnvelopeError(t, body, "key does not belong to authenticated user")
+	})
+
+	t.Run("rejects staging key not prefixed with caller user ID", func(t *testing.T) {
+		foreignID := "00000000-0000-0000-0000-000000000000"
+		if foreignID == owner.ID.String() {
+			foreignID = "11111111-1111-1111-1111-111111111111"
 		}
 		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
-			"key":  foreignPrefix + "/abc/x.txt",
+			"key":  "uploads/" + foreignID + "/abc/x.txt",
 			"name": "x.txt",
 		}, authHeaders(ownerToken))
 		body := decodeJSONMap(t, resp)
@@ -118,7 +129,7 @@ func TestFinalizeUpload(t *testing.T) {
 
 	t.Run("rejects invalid filename", func(t *testing.T) {
 		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
-			"key":  owner.ID.String() + "/abc/x.txt",
+			"key":  "uploads/" + owner.ID.String() + "/abc/x.txt",
 			"name": "",
 		}, authHeaders(ownerToken))
 		body := decodeJSONMap(t, resp)
@@ -128,7 +139,7 @@ func TestFinalizeUpload(t *testing.T) {
 
 	t.Run("rejects key with path traversal that escapes user prefix", func(t *testing.T) {
 		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
-			"key":  owner.ID.String() + "/../00000000-0000-0000-0000-000000000000/abc/x.txt",
+			"key":  "uploads/" + owner.ID.String() + "/../00000000-0000-0000-0000-000000000000/abc/x.txt",
 			"name": "x.txt",
 		}, authHeaders(ownerToken))
 		body := decodeJSONMap(t, resp)
@@ -137,22 +148,24 @@ func TestFinalizeUpload(t *testing.T) {
 	})
 
 	t.Run("rejects already-finalized key", func(t *testing.T) {
-		// Seed an existing file row at the storage path we'll attempt to finalize.
-		key := owner.ID.String() + "/already-here/x.txt"
+		// Storage paths in the DB are the FINAL form (without the uploads/
+		// prefix). The finalize request supplies the matching STAGING key;
+		// the handler derives the final key and looks it up.
+		finalKey := owner.ID.String() + "/already-here/x.txt"
 		seeded := models.File{
 			Name:        "x.txt",
 			MimeType:    "text/plain",
 			Size:        10,
 			IsDirectory: false,
 			OwnerID:     owner.ID,
-			StoragePath: key,
+			StoragePath: finalKey,
 		}
 		if err := env.db.Create(&seeded).Error; err != nil {
 			t.Fatalf("failed seeding file row: %v", err)
 		}
 
 		resp := performJSONRequest(t, env.app, http.MethodPost, "/api/files/upload/finalize", map[string]any{
-			"key":  key,
+			"key":  "uploads/" + finalKey,
 			"name": "x.txt",
 		}, authHeaders(ownerToken))
 		body := decodeJSONMap(t, resp)

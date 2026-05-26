@@ -25,6 +25,13 @@ import (
 
 const presignedUploadTTL = 30 * time.Minute
 
+// uploadStagingPrefix scopes keys handed out by the presign endpoint. After
+// finalize, the object is moved out of this prefix (to its final
+// storage_path), so any later writes through the still-valid presigned URL
+// land at a key that nothing references — isolating finalized files from
+// post-finalize overwrites.
+const uploadStagingPrefix = "uploads/"
+
 type FilesHandler struct {
 	DB             *gorm.DB
 	Storage        *storage.S3Client
@@ -224,7 +231,9 @@ func (h *FilesHandler) PresignUpload(c *fiber.Ctx) error {
 		parentID = &parent.ID
 	}
 
-	objectName := fmt.Sprintf("%s/%s/%s", currentUser.ID.String(), uuid.New().String(), filename)
+	// Issue the URL against the staging prefix; finalize will copy the object
+	// out of staging so this URL no longer addresses live content.
+	objectName := fmt.Sprintf("%s%s/%s/%s", uploadStagingPrefix, currentUser.ID.String(), uuid.New().String(), filename)
 	uploadURL, presignErr := h.Storage.PresignedPutURL(c.Context(), objectName, presignedUploadTTL)
 	if presignErr != nil {
 		logger.Error("s3_presign_put_failed", presignErr, map[string]interface{}{
@@ -271,15 +280,21 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "key is required")
 	}
 	// path.Clean resolves any "../" segments so the prefix check below cannot
-	// be bypassed (e.g. "uA/../uB/...") and gives us a canonical storage key.
-	key := path.Clean(rawKey)
-	if key == "." || key == "/" || !strings.HasPrefix(key, currentUser.ID.String()+"/") {
+	// be bypassed (e.g. "uploads/uA/../uB/...") and gives us a canonical key.
+	stagingKey := path.Clean(rawKey)
+	expectedStagingPrefix := uploadStagingPrefix + currentUser.ID.String() + "/"
+	if !strings.HasPrefix(stagingKey, expectedStagingPrefix) {
 		logger.WarnWithUser(currentUser.ID.String(), "upload_finalize_foreign_key", map[string]interface{}{
 			"key":     rawKey,
-			"cleaned": key,
+			"cleaned": stagingKey,
 		})
 		return utils.Error(c, fiber.StatusForbidden, "key does not belong to authenticated user")
 	}
+	// finalKey is what we persist as storage_path. Stripping the staging
+	// prefix gives `{userID}/{uuid}/{filename}` — the same shape used by the
+	// legacy multipart upload path, so downstream code (downloads, previews,
+	// audit) doesn't need to change.
+	finalKey := strings.TrimPrefix(stagingKey, uploadStagingPrefix)
 
 	filename := filepath.Base(strings.TrimSpace(req.Name))
 	if filename == "" || filename == "." || filename == "/" {
@@ -313,36 +328,44 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		parentID = &parent.ID
 	}
 
-	// Guard against replayed finalize calls: a prior finalize for the same key
-	// would have created a File row. If we proceeded blindly we'd either insert
-	// a duplicate (no unique constraint on storage_path today) or — worse —
-	// fall into the DB-create error path below and delete the legitimate
-	// object out from under the first row. Run this before the S3 stat so a
-	// replayed request doesn't pay a network round trip.
+	// Guard against replayed finalize calls: a prior finalize for the same
+	// staging key would have created a File row at `finalKey`. Without this
+	// we'd either insert a duplicate (no unique constraint on storage_path)
+	// or — worse — fall into the DB-create error path below and delete the
+	// legitimate object out from under the first row. Run this before any S3
+	// op so replays don't pay network round trips.
 	var existing int64
-	if err := h.DB.Model(&models.File{}).Where("storage_path = ?", key).Count(&existing).Error; err != nil {
+	if err := h.DB.Model(&models.File{}).Where("storage_path = ?", finalKey).Count(&existing).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed checking file existence")
 	}
 	if existing > 0 {
 		return utils.Error(c, fiber.StatusConflict, "upload already finalized")
 	}
 
-	info, statErr := h.Storage.StatObject(c.Context(), key)
+	info, statErr := h.Storage.StatObject(c.Context(), stagingKey)
 	if statErr != nil {
 		errResp := minio.ToErrorResponse(statErr)
 		if errResp.Code == "NoSuchKey" || errResp.StatusCode == fiber.StatusNotFound {
 			return utils.Error(c, fiber.StatusNotFound, "uploaded object not found")
 		}
 		logger.Error("s3_stat_failed", statErr, map[string]interface{}{
-			"object_name": key,
+			"object_name": stagingKey,
 			"user_id":     currentUser.ID.String(),
 		})
 		return utils.Error(c, fiber.StatusInternalServerError, "failed verifying uploaded object")
 	}
 
 	if h.MaxUploadBytes > 0 && info.Size > h.MaxUploadBytes {
-		_ = h.Storage.Delete(c.Context(), key)
+		_ = h.Storage.Delete(c.Context(), stagingKey)
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+
+	// Server-side copy from staging → final. After this point, the presigned
+	// PUT URL still works but writes to a key nothing references. We leave
+	// staging in place on copy failure so the caller can retry finalize
+	// without re-uploading.
+	if err := h.Storage.CopyObject(c.Context(), finalKey, stagingKey); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed promoting upload")
 	}
 
 	contentType := resolveMimeType(filename, req.MimeType)
@@ -354,12 +377,25 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		IsDirectory: false,
 		ParentID:    parentID,
 		OwnerID:     currentUser.ID,
-		StoragePath: key,
+		StoragePath: finalKey,
 	}
 
 	if err := h.DB.Create(&entry).Error; err != nil {
-		_ = h.Storage.Delete(c.Context(), key)
+		// Don't leave the promoted object orphaned. Staging is left alone in
+		// case the caller wants to retry finalize.
+		_ = h.Storage.Delete(c.Context(), finalKey)
 		return utils.Error(c, fiber.StatusInternalServerError, "failed creating file record")
+	}
+
+	// Best-effort cleanup of the staging object. If this fails the file row
+	// is already pointing at finalKey, so the failure only leaves an orphan
+	// in staging — addressable later via a lifecycle rule or sweeper.
+	if err := h.Storage.Delete(c.Context(), stagingKey); err != nil {
+		logger.Error("s3_staging_cleanup_failed", err, map[string]interface{}{
+			"staging_key": stagingKey,
+			"final_key":   finalKey,
+			"file_id":     entry.ID.String(),
+		})
 	}
 
 	logger.InfoWithUser(currentUser.ID.String(), "file_uploaded", map[string]interface{}{
@@ -367,7 +403,8 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		"file_name":    filename,
 		"file_size":    info.Size,
 		"mime_type":    contentType,
-		"storage_path": key,
+		"storage_path": finalKey,
+		"staging_key":  stagingKey,
 		"parent_id":    parentID,
 		"upload_mode":  "presigned",
 	})
