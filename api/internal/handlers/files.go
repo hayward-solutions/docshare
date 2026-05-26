@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docshare/api/internal/middleware"
 	"github.com/docshare/api/internal/models"
@@ -16,8 +18,11 @@ import (
 	"github.com/docshare/api/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 	"gorm.io/gorm"
 )
+
+const presignedUploadTTL = 30 * time.Minute
 
 type FilesHandler struct {
 	DB             *gorm.DB
@@ -26,10 +31,30 @@ type FilesHandler struct {
 	PreviewService *services.PreviewService
 	PreviewQueue   *services.PreviewQueueService
 	Audit          *services.AuditService
+	MaxUploadBytes int64
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService) *FilesHandler {
-	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit}
+func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService, maxUploadBytes int64) *FilesHandler {
+	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit, MaxUploadBytes: maxUploadBytes}
+}
+
+func resolveMimeType(filename, declared string) string {
+	contentType := declared
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(filename))
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".md", ".markdown":
+		contentType = "text/markdown"
+	case ".ts":
+		contentType = "text/typescript"
+	case ".tsx":
+		contentType = "text/tsx"
+	}
+	return contentType
 }
 
 func (h *FilesHandler) Upload(c *fiber.Ctx) error {
@@ -83,21 +108,7 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
 	}
 
-	contentType := fileHeader.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
-	}
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	switch strings.ToLower(filepath.Ext(filename)) {
-	case ".md", ".markdown":
-		contentType = "text/markdown"
-	case ".ts":
-		contentType = "text/typescript"
-	case ".tsx":
-		contentType = "text/tsx"
-	}
+	contentType := resolveMimeType(filename, fileHeader.Header.Get("Content-Type"))
 
 	objectName := fmt.Sprintf("%s/%s/%s", currentUser.ID.String(), uuid.New().String(), filename)
 	if err := h.Storage.Upload(c.Context(), objectName, stream, fileHeader.Size, contentType); err != nil {
@@ -148,6 +159,222 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
+
+type presignUploadRequest struct {
+	Name     string  `json:"name"`
+	Size     int64   `json:"size"`
+	MimeType string  `json:"mimeType"`
+	ParentID *string `json:"parentID"`
+}
+
+type presignUploadResponse struct {
+	UploadURL string    `json:"uploadURL"`
+	Key       string    `json:"key"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+func (h *FilesHandler) PresignUpload(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	var req presignUploadRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	filename := filepath.Base(strings.TrimSpace(req.Name))
+	if filename == "" || filename == "." || filename == "/" {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
+	}
+
+	if req.Size <= 0 {
+		return utils.Error(c, fiber.StatusBadRequest, "size must be positive")
+	}
+	if h.MaxUploadBytes > 0 && req.Size > h.MaxUploadBytes {
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+
+	var parentID *uuid.UUID
+	if req.ParentID != nil && strings.TrimSpace(*req.ParentID) != "" {
+		parsed, parseErr := parseUUID(strings.TrimSpace(*req.ParentID))
+		if parseErr != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid parentID")
+		}
+		var parent models.File
+		if err := h.DB.First(&parent, "id = ?", parsed).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return utils.Error(c, fiber.StatusNotFound, "parent folder not found")
+			}
+			return utils.Error(c, fiber.StatusInternalServerError, "failed validating parent folder")
+		}
+		if !parent.IsDirectory {
+			return utils.Error(c, fiber.StatusBadRequest, "parentID must be a directory")
+		}
+		if !h.Access.HasAccess(c.Context(), currentUser.ID, parent.ID, models.SharePermissionEdit) {
+			logger.WarnWithUser(currentUser.ID.String(), "permission_denied", map[string]interface{}{
+				"action":              "file_upload",
+				"target_id":           parent.ID.String(),
+				"required_permission": "edit",
+			})
+			return utils.Error(c, fiber.StatusForbidden, "no permission to upload to parent directory")
+		}
+		parentID = &parent.ID
+	}
+
+	objectName := fmt.Sprintf("%s/%s/%s", currentUser.ID.String(), uuid.New().String(), filename)
+	uploadURL, presignErr := h.Storage.PresignedPutURL(c.Context(), objectName, presignedUploadTTL)
+	if presignErr != nil {
+		logger.Error("s3_presign_put_failed", presignErr, map[string]interface{}{
+			"object_name": objectName,
+			"user_id":     currentUser.ID.String(),
+		})
+		return utils.Error(c, fiber.StatusInternalServerError, "failed generating upload URL")
+	}
+
+	logger.InfoWithUser(currentUser.ID.String(), "upload_presigned", map[string]interface{}{
+		"object_name": objectName,
+		"file_name":   filename,
+		"size":        req.Size,
+		"parent_id":   parentID,
+	})
+
+	return utils.Success(c, fiber.StatusOK, presignUploadResponse{
+		UploadURL: uploadURL,
+		Key:       objectName,
+		ExpiresAt: time.Now().Add(presignedUploadTTL),
+	})
+}
+
+type finalizeUploadRequest struct {
+	Key      string  `json:"key"`
+	Name     string  `json:"name"`
+	MimeType string  `json:"mimeType"`
+	ParentID *string `json:"parentID"`
+}
+
+func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	var req finalizeUploadRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	key := strings.TrimSpace(req.Key)
+	if key == "" {
+		return utils.Error(c, fiber.StatusBadRequest, "key is required")
+	}
+	if !strings.HasPrefix(key, currentUser.ID.String()+"/") {
+		logger.WarnWithUser(currentUser.ID.String(), "upload_finalize_foreign_key", map[string]interface{}{
+			"key": key,
+		})
+		return utils.Error(c, fiber.StatusForbidden, "key does not belong to authenticated user")
+	}
+
+	filename := filepath.Base(strings.TrimSpace(req.Name))
+	if filename == "" || filename == "." || filename == "/" {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
+	}
+
+	var parentID *uuid.UUID
+	if req.ParentID != nil && strings.TrimSpace(*req.ParentID) != "" {
+		parsed, parseErr := parseUUID(strings.TrimSpace(*req.ParentID))
+		if parseErr != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid parentID")
+		}
+		var parent models.File
+		if err := h.DB.First(&parent, "id = ?", parsed).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return utils.Error(c, fiber.StatusNotFound, "parent folder not found")
+			}
+			return utils.Error(c, fiber.StatusInternalServerError, "failed validating parent folder")
+		}
+		if !parent.IsDirectory {
+			return utils.Error(c, fiber.StatusBadRequest, "parentID must be a directory")
+		}
+		if !h.Access.HasAccess(c.Context(), currentUser.ID, parent.ID, models.SharePermissionEdit) {
+			logger.WarnWithUser(currentUser.ID.String(), "permission_denied", map[string]interface{}{
+				"action":              "file_upload",
+				"target_id":           parent.ID.String(),
+				"required_permission": "edit",
+			})
+			return utils.Error(c, fiber.StatusForbidden, "no permission to upload to parent directory")
+		}
+		parentID = &parent.ID
+	}
+
+	info, statErr := h.Storage.StatObject(c.Context(), key)
+	if statErr != nil {
+		errResp := minio.ToErrorResponse(statErr)
+		if errResp.Code == "NoSuchKey" || errResp.StatusCode == fiber.StatusNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "uploaded object not found")
+		}
+		logger.Error("s3_stat_failed", statErr, map[string]interface{}{
+			"object_name": key,
+			"user_id":     currentUser.ID.String(),
+		})
+		return utils.Error(c, fiber.StatusInternalServerError, "failed verifying uploaded object")
+	}
+
+	if h.MaxUploadBytes > 0 && info.Size > h.MaxUploadBytes {
+		_ = h.Storage.Delete(c.Context(), key)
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+
+	contentType := resolveMimeType(filename, req.MimeType)
+
+	entry := models.File{
+		Name:        filename,
+		MimeType:    contentType,
+		Size:        info.Size,
+		IsDirectory: false,
+		ParentID:    parentID,
+		OwnerID:     currentUser.ID,
+		StoragePath: key,
+	}
+
+	if err := h.DB.Create(&entry).Error; err != nil {
+		_ = h.Storage.Delete(c.Context(), key)
+		return utils.Error(c, fiber.StatusInternalServerError, "failed creating file record")
+	}
+
+	logger.InfoWithUser(currentUser.ID.String(), "file_uploaded", map[string]interface{}{
+		"file_id":      entry.ID.String(),
+		"file_name":    filename,
+		"file_size":    info.Size,
+		"mime_type":    contentType,
+		"storage_path": key,
+		"parent_id":    parentID,
+		"upload_mode":  "presigned",
+	})
+
+	auditDetails := map[string]interface{}{
+		"file_name":   filename,
+		"file_size":   info.Size,
+		"mime_type":   contentType,
+		"upload_mode": "presigned",
+	}
+	if parentID != nil {
+		auditDetails["parent_id"] = parentID.String()
+	}
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.upload",
+		ResourceType: "file",
+		ResourceID:   &entry.ID,
+		Details:      auditDetails,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
+
+	return utils.Success(c, fiber.StatusCreated, entry)
+}
+
 
 type createDirectoryRequest struct {
 	Name     string  `json:"name"`

@@ -60,6 +60,7 @@ type ServerConfig struct {
 	Port        string
 	FrontendURL string
 	BackendURL  string
+	MaxUploadMB int
 }
 
 type GotenbergConfig struct {
@@ -158,6 +159,7 @@ func Load() *Config {
 			Port:        getEnv("SERVER_PORT", "8080"),
 			FrontendURL: getEnv("WEB_URL", "http://localhost:3001"),
 			BackendURL:  getEnv("API_URL", "http://localhost:8080/api"),
+			MaxUploadMB: getEnvAsInt("MAX_UPLOAD_MB", 100),
 		},
 		Gotenberg: GotenbergConfig{
 			URL: getEnv("GOTENBERG_URL", "http://localhost:3000"),

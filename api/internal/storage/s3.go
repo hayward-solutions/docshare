@@ -113,6 +113,18 @@ func (s *S3Client) PresignedGetURL(ctx context.Context, objectName string, expir
 	return urlValue.String(), nil
 }
 
+func (s *S3Client) PresignedPutURL(ctx context.Context, objectName string, expiry time.Duration) (string, error) {
+	urlValue, err := s.client.PresignedPutObject(ctx, s.bucket, objectName, expiry)
+	if err != nil {
+		return "", err
+	}
+	return urlValue.String(), nil
+}
+
+func (s *S3Client) StatObject(ctx context.Context, objectName string) (minio.ObjectInfo, error) {
+	return s.client.StatObject(ctx, s.bucket, objectName, minio.StatObjectOptions{})
+}
+
 func (s *S3Client) PresignedGetURLWithResponse(ctx context.Context, objectName string, expiry time.Duration, contentType string, contentDisposition string) (string, error) {
 	query := make(url.Values)
 	if contentType != "" {

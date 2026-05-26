@@ -103,7 +103,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	authHandler := NewAuthHandler(db, auditService)
 	usersHandler := NewUsersHandler(db, auditService)
 	groupsHandler := NewGroupsHandler(db, auditService)
-	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService)
+	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService, 100*1024*1024)
 	sharesHandler := NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := NewActivitiesHandler(db)
 	auditHandler := NewAuditHandler(db)
@@ -162,6 +162,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	fileRoutes := api.Group("/files", authMiddleware.RequireAuth)
 	fileRoutes.Post("/upload", filesHandler.Upload)
+	fileRoutes.Post("/upload/presign", filesHandler.PresignUpload)
+	fileRoutes.Post("/upload/finalize", filesHandler.FinalizeUpload)
 	fileRoutes.Post("/directory", filesHandler.CreateDirectory)
 	fileRoutes.Get("/", filesHandler.ListRoot)
 	fileRoutes.Get("/search", filesHandler.Search)
