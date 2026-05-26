@@ -536,3 +536,5 @@ site/
 config/production.*
 config/secrets.*
 secrets.*
+
+.claude
