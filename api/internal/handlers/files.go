@@ -32,6 +32,13 @@ const presignedUploadTTL = 30 * time.Minute
 // post-finalize overwrites.
 const uploadStagingPrefix = "uploads/"
 
+// s3SinglePutMaxBytes is AWS S3's hard ceiling for a single PUT request
+// (5 GiB). The presign flow issues a single-PUT URL, so we cap there
+// regardless of MAX_UPLOAD_MB — otherwise the client would happily try to
+// PUT 10 GB and only learn at upload time that S3 refuses. Going above
+// requires switching to multipart presigned uploads.
+const s3SinglePutMaxBytes int64 = 5 * 1024 * 1024 * 1024
+
 type FilesHandler struct {
 	DB             *gorm.DB
 	Storage        *storage.S3Client
@@ -202,6 +209,9 @@ func (h *FilesHandler) PresignUpload(c *fiber.Ctx) error {
 	}
 	if h.MaxUploadBytes > 0 && req.Size > h.MaxUploadBytes {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+	if req.Size > s3SinglePutMaxBytes {
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds 5 GiB single-PUT limit for pre-signed uploads (got %d bytes)", req.Size))
 	}
 
 	var parentID *uuid.UUID

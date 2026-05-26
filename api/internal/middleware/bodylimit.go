@@ -25,11 +25,13 @@ func SmallBodyLimitForNonUploadRoutes(maxBytes int) fiber.Handler {
 		if isLargeBodyRoute(c.Path()) {
 			return c.Next()
 		}
-		// GET / HEAD / DELETE / OPTIONS legitimately omit Content-Length
-		// (fasthttp surfaces that as -1). Only enforce the body cap on
-		// methods that normally carry a request body.
+		// GET / HEAD / OPTIONS legitimately omit Content-Length (fasthttp
+		// surfaces that as -1). DELETE is technically allowed to carry a
+		// body, so we still enforce the cap there to avoid leaving a hole
+		// — clients that genuinely send DELETE without a body have
+		// Content-Length: 0, which passes both checks.
 		switch c.Method() {
-		case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch:
+		case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch, fiber.MethodDelete:
 		default:
 			return c.Next()
 		}
@@ -54,8 +56,12 @@ func isLargeBodyRoute(path string) bool {
 	if path == "/api/files/upload" {
 		return true
 	}
-	// Transfer chunk uploads: /api/transfers/{code}/upload
-	if strings.HasPrefix(path, "/api/transfers/") && strings.HasSuffix(path, "/upload") {
+	// Transfer chunk uploads: must match exactly /api/transfers/{code}/upload
+	// where {code} contains no slashes. A naive prefix+suffix check would
+	// also exempt /api/transfers/a/b/upload (non-existent, 404s after route
+	// resolution, but bypasses the small-body cap on the way there).
+	parts := strings.Split(path, "/")
+	if len(parts) == 5 && parts[0] == "" && parts[1] == "api" && parts[2] == "transfers" && parts[3] != "" && parts[4] == "upload" {
 		return true
 	}
 	return false
