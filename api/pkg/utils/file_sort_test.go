@@ -112,6 +112,22 @@ func TestSortFiles(t *testing.T) {
 		}
 	})
 
+	t.Run("name asc uses natural numeric ordering", func(t *testing.T) {
+		numbered := []models.File{
+			{Name: "report-10.pdf", IsDirectory: false},
+			{Name: "report-2.pdf", IsDirectory: false},
+			{Name: "report-100.pdf", IsDirectory: false},
+			{Name: "report-1.pdf", IsDirectory: false},
+		}
+		FileSort{Column: "name", Direction: "ASC"}.SortFiles(numbered)
+		want := []string{"report-1.pdf", "report-2.pdf", "report-10.pdf", "report-100.pdf"}
+		for i, f := range numbered {
+			if f.Name != want[i] {
+				t.Fatalf("pos %d: got %s, want %s", i, f.Name, want[i])
+			}
+		}
+	})
+
 	t.Run("modified asc", func(t *testing.T) {
 		got := append([]models.File(nil), files...)
 		FileSort{Column: "updated_at", Direction: "ASC"}.SortFiles(got)
