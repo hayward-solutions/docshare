@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { File } from '@/lib/types';
@@ -50,8 +50,8 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
-import { UploadZone } from '@/components/upload-zone';
 import { MoveDialog } from '@/components/move-dialog';
+import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { FileInspector } from '@/components/file-inspector';
 import { ShareDialog } from '@/components/share-dialog';
 import { BulkActionBar } from '@/components/bulk-action-bar';
@@ -82,23 +82,47 @@ export default function FilesPage() {
 
   const selection = useFileSelection(displayedFiles);
 
+  const fetchRequestId = useRef(0);
   const fetchFiles = useCallback(async () => {
+    const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
       const res = await apiMethods.get<File[]>('/files');
+      if (requestId !== fetchRequestId.current) return;
       if (res.success) {
         setFiles(res.data);
       }
     } catch {
+      if (requestId !== fetchRequestId.current) return;
       toast.error('Failed to load files');
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchRequestId.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(() => {
+    useUploadStore.getState().setCurrentContext({
+      parentID: null,
+      canUpload: true,
+      label: 'My Files',
+    });
+    return () => useUploadStore.getState().setCurrentContext(null);
+  }, []);
+
+  const uploadTick = useUploadStore(
+    (s) => s.parentCompletionTicks[parentKey(null)] ?? 0,
+  );
+  const lastTick = useRef(uploadTick);
+  useEffect(() => {
+    if (uploadTick > lastTick.current) {
+      fetchFiles();
+    }
+    lastTick.current = uploadTick;
+  }, [uploadTick, fetchFiles]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -219,8 +243,6 @@ export default function FilesPage() {
           <CreateFolderDialog onFolderCreated={fetchFiles} />
         </div>
       </div>
-
-      {!isSearchActive && <UploadZone onUploadComplete={fetchFiles} />}
 
       {isSearchActive && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

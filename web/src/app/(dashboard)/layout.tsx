@@ -31,6 +31,10 @@ import { cn } from '@/lib/utils';
 import { LoadingPage } from '@/components/loading';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { UploadFAB } from '@/components/upload-fab';
+import { UploadModal } from '@/components/upload-modal';
+import { UploadDock } from '@/components/upload-dock';
+import { UploadEffects } from '@/components/upload-effects';
 
 const NavContent = ({ user, pathname, setIsMobileOpen, logout }: {
   user: {
@@ -230,6 +234,10 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+        <UploadModal />
+        <UploadDock />
+        <UploadFAB />
+        <UploadEffects />
       </div>
     </ActivityProvider>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { File, BreadcrumbItem } from '@/lib/types';
@@ -52,8 +52,8 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
-import { UploadZone } from '@/components/upload-zone';
 import { ShareDialog } from '@/components/share-dialog';
+import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
 import { FileViewer } from '@/components/file-viewer';
 import { FileInspector } from '@/components/file-inspector';
@@ -90,35 +90,71 @@ export default function FileDetailPage() {
   const { successWithRefresh } = useActivityToast();
   const canShareAll = selection.selectedFiles.every((f) => user?.id === f.ownerID);
 
+  const fetchRequestId = useRef(0);
   const fetchData = useCallback(async () => {
+    const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
       const fileRes = await apiMethods.get<File>(`/files/${id}`);
+      if (requestId !== fetchRequestId.current) return;
       if (!fileRes.success) throw new Error('Failed to load file');
       setFile(fileRes.data);
 
       const pathRes = await apiMethods.get<BreadcrumbItem[]>(`/files/${id}/path`);
+      if (requestId !== fetchRequestId.current) return;
       if (pathRes.success) {
         setBreadcrumbs(pathRes.data);
       }
 
       if (fileRes.data.isDirectory) {
         const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`);
+        if (requestId !== fetchRequestId.current) return;
         if (childrenRes.success) {
           setChildren(childrenRes.data);
         }
       }
     } catch {
+      if (requestId !== fetchRequestId.current) return;
       toast.error('Failed to load file data');
       router.push('/files');
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchRequestId.current) setIsLoading(false);
     }
   }, [id, router]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (file?.isDirectory && file.id === id) {
+      useUploadStore.getState().setCurrentContext({
+        parentID: id,
+        canUpload: true,
+        label: file.name,
+      });
+    } else {
+      useUploadStore.getState().setCurrentContext(null);
+    }
+    return () => useUploadStore.getState().setCurrentContext(null);
+  }, [id, file?.id, file?.isDirectory, file?.name]);
+
+  const uploadTick = useUploadStore(
+    (s) => s.parentCompletionTicks[parentKey(id)] ?? 0,
+  );
+  const lastTick = useRef(uploadTick);
+  const lastTickId = useRef(id);
+  useEffect(() => {
+    if (lastTickId.current !== id) {
+      lastTickId.current = id;
+      lastTick.current = uploadTick;
+      return;
+    }
+    if (uploadTick > lastTick.current && file?.isDirectory) {
+      fetchData();
+    }
+    lastTick.current = uploadTick;
+  }, [id, uploadTick, fetchData, file?.isDirectory]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -315,8 +351,6 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
       {file.isDirectory ? (
         <>
-          {!isSearchActive && <UploadZone parentID={file.id} onUploadComplete={fetchData} />}
-
           {isSearchActive && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {isSearching ? (
