@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { File } from '@/lib/types';
@@ -50,6 +50,9 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
+import { FileSortMenu } from '@/components/file-sort-menu';
+import { SortableTableHead } from '@/components/sortable-table-head';
+import { sortFiles } from '@/lib/file-sort';
 import { MoveDialog } from '@/components/move-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { FileInspector } from '@/components/file-inspector';
@@ -60,7 +63,7 @@ import { format } from 'date-fns';
 
 export default function FilesPage() {
   const { user } = useAuth();
-  const { viewMode, setViewMode } = usePreferences();
+  const { viewMode, setViewMode, sortKey, sortDirection } = usePreferences();
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,7 +81,11 @@ export default function FilesPage() {
 
   const isSearchActive = searchQuery.length >= 2;
 
-  const displayedFiles = isSearchActive ? searchResults : files;
+  const unsortedFiles = isSearchActive ? searchResults : files;
+  const displayedFiles = useMemo(
+    () => sortFiles(unsortedFiles, sortKey, sortDirection),
+    [unsortedFiles, sortKey, sortDirection],
+  );
 
   const selection = useFileSelection(displayedFiles);
 
@@ -222,6 +229,7 @@ export default function FilesPage() {
               </Tooltip>
             </TooltipProvider>
           </div>
+          <FileSortMenu />
           <div className="flex items-center border rounded-md bg-card">
             <Button
               variant="ghost"
@@ -370,10 +378,10 @@ export default function FilesPage() {
                   />
                 </TableHead>
                 <TableHead className="w-[50px]"></TableHead>
-                <TableHead>Name</TableHead>
+                <SortableTableHead sortKey="name">Name</SortableTableHead>
                 <TableHead>Owner</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Modified</TableHead>
+                <SortableTableHead sortKey="size">Size</SortableTableHead>
+                <SortableTableHead sortKey="modified">Modified</SortableTableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>

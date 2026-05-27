@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { File, BreadcrumbItem } from '@/lib/types';
@@ -52,6 +52,9 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
+import { FileSortMenu } from '@/components/file-sort-menu';
+import { SortableTableHead } from '@/components/sortable-table-head';
+import { sortFiles } from '@/lib/file-sort';
 import { ShareDialog } from '@/components/share-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
@@ -68,7 +71,7 @@ export default function FileDetailPage() {
   const id = params.id as string;
   const router = useRouter();
 
-  const { viewMode, setViewMode } = usePreferences();
+  const { viewMode, setViewMode, sortKey, sortDirection } = usePreferences();
   const [file, setFile] = useState<File | null>(null);
   const [children, setChildren] = useState<File[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
@@ -84,7 +87,11 @@ export default function FileDetailPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   const isSearchActive = searchQuery.length >= 2;
-  const displayedFiles = isSearchActive ? searchResults : children;
+  const unsortedFiles = isSearchActive ? searchResults : children;
+  const displayedFiles = useMemo(
+    () => sortFiles(unsortedFiles, sortKey, sortDirection),
+    [unsortedFiles, sortKey, sortDirection],
+  );
 
   const selection = useFileSelection(displayedFiles);
   const { successWithRefresh } = useActivityToast();
@@ -306,6 +313,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
           {file.isDirectory && (
             <>
+              <FileSortMenu />
               <div className="flex items-center border rounded-md bg-card">
                 <Button
                   variant="ghost"
@@ -465,9 +473,9 @@ const handleDownload = async (fileId: string, fileName: string) => {
                       />
                     </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Modified</TableHead>
+                    <SortableTableHead sortKey="name">Name</SortableTableHead>
+                    <SortableTableHead sortKey="size">Size</SortableTableHead>
+                    <SortableTableHead sortKey="modified">Modified</SortableTableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
