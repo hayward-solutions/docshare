@@ -204,7 +204,7 @@ export const filesAPI = {
         ...authHeaders(),
         'Content-Type': mimeType,
       },
-      body: body instanceof Uint8Array ? new Uint8Array(body) : new Uint8Array(body),
+      body: body as BodyInit,
     });
     if (res.status === 401) {
       if (typeof window !== 'undefined') {

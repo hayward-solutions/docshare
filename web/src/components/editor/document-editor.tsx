@@ -356,6 +356,10 @@ async function insertImageFiles(
   const datas = await Promise.all(files.map(fileToDataURI));
   const valid = datas.filter((d): d is string => !!d);
   if (valid.length === 0) return;
+  // The view can be torn down while we were awaiting FileReader for large
+  // files. Dispatching on a destroyed view throws — bail out cleanly.
+  if (view.isDestroyed) return;
+
   const schema = view.state.schema;
   const imageType = schema.nodes.image;
   if (!imageType) return;
@@ -374,5 +378,6 @@ async function insertImageFiles(
     tr.insert(pos, node);
     pos += node.nodeSize;
   }
+  if (view.isDestroyed) return;
   view.dispatch(tr);
 }

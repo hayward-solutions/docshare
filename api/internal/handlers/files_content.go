@@ -370,19 +370,18 @@ func (h *FilesHandler) GetBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed downloading file")
 	}
 
-	stat, err := obj.Stat()
-	if err != nil {
-		obj.Close()
-		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
-	}
-
 	// No defer obj.Close() — SendStream is responsible for the reader
 	// lifecycle. A defer here closes the object before Fiber starts
 	// reading the body and the response ends up as the MinIO
 	// "Object is already closed" error message.
+	//
+	// Size comes from the DB row rather than a fresh obj.Stat() call so
+	// we avoid an extra metadata round-trip; the SaveBinary path updates
+	// file.Size in the same transaction as the upload, so this stays
+	// in sync without a second S3 call.
 	c.Set("Content-Type", file.MimeType)
 	c.Set("Content-Disposition", "inline")
-	return c.SendStream(obj, int(stat.Size))
+	return c.SendStream(obj, int(file.Size))
 }
 
 // SaveBinary overwrites the S3 object backing the file with the supplied

@@ -25,9 +25,16 @@ export interface LinkDialogProps {
   onRemove: () => void;
 }
 
+// Schemes we refuse to set as a link target. javascript:/vbscript:/data: can
+// be triggered by user gestures even when the editor itself doesn't auto-
+// follow links — preventing them at insert time keeps malicious payloads out
+// of the saved markdown entirely.
+const DANGEROUS_SCHEMES = /^\s*(?:javascript|vbscript|data|file):/i;
+
 function normalizeHref(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+  if (DANGEROUS_SCHEMES.test(trimmed)) return null;
   // Treat anything without a scheme that starts with a word char as https
   // (the most common user intent is "type the domain, not the protocol").
   // Preserve mailto:, tel:, /relative, #anchor, etc.
@@ -63,9 +70,14 @@ export function LinkDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const normalized = normalizeHref(href);
-    if (!normalized) {
+    const trimmed = href.trim();
+    if (!trimmed) {
       setError('Enter a URL');
+      return;
+    }
+    const normalized = normalizeHref(trimmed);
+    if (!normalized) {
+      setError("That URL scheme isn't allowed");
       return;
     }
     onSubmit({ href: normalized, openInNewTab });

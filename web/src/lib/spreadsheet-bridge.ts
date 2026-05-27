@@ -121,6 +121,11 @@ function excelValueToScalar(value: CellValue): string | number | boolean | null 
   if (typeof value === 'object' && 'text' in value && typeof (value as { text: unknown }).text === 'string') {
     return (value as { text: string }).text;
   }
+  // Error value: { error: '#N/A' | '#REF!' | ... } — render the marker
+  // text so the grid shows "#N/A" instead of "[object Object]".
+  if (typeof value === 'object' && 'error' in value && typeof (value as { error: unknown }).error === 'string') {
+    return (value as { error: string }).error;
+  }
   // Date
   if (value instanceof Date) return value.toISOString();
   // Fallback to string representation
@@ -180,9 +185,12 @@ export async function workbookToXLSXBuffer(snapshot: UniverWorkbookSnapshot): Pr
     const sheet = snapshot.sheets[sheetId];
     if (!sheet) continue;
     const ws = wb.addWorksheet(sheet.name);
-    for (const [rowKey, row] of Object.entries(sheet.cellData)) {
+    // Defensive: Univer can hand back a snapshot where cellData or an
+    // individual row is undefined when the sheet is empty. Guarding here
+    // keeps the export from crashing on a brand-new workbook.
+    for (const [rowKey, row] of Object.entries(sheet.cellData ?? {})) {
       const rowIdx = Number(rowKey);
-      for (const [colKey, cell] of Object.entries(row)) {
+      for (const [colKey, cell] of Object.entries(row ?? {})) {
         const colIdx = Number(colKey);
         if (cell?.v === null || cell?.v === undefined) continue;
         // ExcelJS is 1-indexed
