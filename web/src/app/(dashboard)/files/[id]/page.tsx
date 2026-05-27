@@ -90,29 +90,35 @@ export default function FileDetailPage() {
   const { successWithRefresh } = useActivityToast();
   const canShareAll = selection.selectedFiles.every((f) => user?.id === f.ownerID);
 
+  const fetchRequestId = useRef(0);
   const fetchData = useCallback(async () => {
+    const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
       const fileRes = await apiMethods.get<File>(`/files/${id}`);
+      if (requestId !== fetchRequestId.current) return;
       if (!fileRes.success) throw new Error('Failed to load file');
       setFile(fileRes.data);
 
       const pathRes = await apiMethods.get<BreadcrumbItem[]>(`/files/${id}/path`);
+      if (requestId !== fetchRequestId.current) return;
       if (pathRes.success) {
         setBreadcrumbs(pathRes.data);
       }
 
       if (fileRes.data.isDirectory) {
         const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`);
+        if (requestId !== fetchRequestId.current) return;
         if (childrenRes.success) {
           setChildren(childrenRes.data);
         }
       }
     } catch {
+      if (requestId !== fetchRequestId.current) return;
       toast.error('Failed to load file data');
       router.push('/files');
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchRequestId.current) setIsLoading(false);
     }
   }, [id, router]);
 

@@ -82,17 +82,21 @@ export default function FilesPage() {
 
   const selection = useFileSelection(displayedFiles);
 
+  const fetchRequestId = useRef(0);
   const fetchFiles = useCallback(async () => {
+    const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
       const res = await apiMethods.get<File[]>('/files');
+      if (requestId !== fetchRequestId.current) return;
       if (res.success) {
         setFiles(res.data);
       }
     } catch {
+      if (requestId !== fetchRequestId.current) return;
       toast.error('Failed to load files');
     } finally {
-      setIsLoading(false);
+      if (requestId === fetchRequestId.current) setIsLoading(false);
     }
   }, []);
 

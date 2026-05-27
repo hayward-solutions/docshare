@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { filesAPI, putToPresignedURL, UploadAbortError } from './api';
+import { apiMethods, filesAPI, putToPresignedURL, UploadAbortError } from './api';
 
 export type UploadStatus =
   | 'queued'
@@ -141,6 +141,11 @@ export const useUploadStore = create<UploadState>((set, get) => {
       });
       if (!finalized.success) {
         throw new Error(finalized.error || 'failed to finalize upload');
+      }
+
+      if (controller.signal.aborted) {
+        void apiMethods.delete(`/files/${finalized.data.id}`).catch(() => {});
+        throw new UploadAbortError();
       }
 
       patchItem(id, {
