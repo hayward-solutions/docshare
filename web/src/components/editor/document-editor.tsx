@@ -13,7 +13,11 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { Image as ImageExtension } from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
+import { lowlight } from '@/lib/lowlight';
+import { fileToDataURI, isImageFile } from '@/lib/editor-images';
 import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,6 +28,7 @@ import { isSpreadsheetMime } from '@/lib/mime';
 import { EditorToolbar } from './toolbar';
 import { EditorShell, useCmdS, useUnsavedWarning, type SaveState } from './editor-shell';
 import { SpreadsheetEditor } from './spreadsheet-editor';
+import { SlashCommandExtension } from './slash-command';
 
 const MARKDOWN_MIMES = new Set(['text/markdown', 'text/x-markdown']);
 
@@ -155,6 +160,9 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
     () => [
       StarterKit.configure({
         link: false,
+        // Replaced by CodeBlockLowlight below so we get syntax highlighting
+        // instead of a bare <pre><code>.
+        codeBlock: false,
       }),
       LinkExt.configure({
         openOnClick: false,
@@ -170,6 +178,16 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'plaintext',
+      }),
+      ImageExtension.configure({
+        allowBase64: true,
+        inline: false,
+        HTMLAttributes: { class: 'editor-image' },
+      }),
+      SlashCommandExtension,
       Markdown.configure({
         html: false,
         tightLists: true,
@@ -187,6 +205,24 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
     content: initial.content,
     editable: initial.canEdit,
     immediatelyRender: false,
+    editorProps: {
+      handlePaste: (view, event) => {
+        if (!initial.canEdit) return false;
+        const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void insertImageFiles(view, files);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved || !initial.canEdit) return false;
+        const files = Array.from(event.dataTransfer?.files ?? []).filter(isImageFile);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void insertImageFiles(view, files, { x: event.clientX, y: event.clientY });
+        return true;
+      },
+    },
     onUpdate: ({ editor }) => {
       const next = readMarkdown(editor);
       const dirty = next !== lastSavedRef.current;
@@ -310,4 +346,33 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
 function readMarkdown(editor: Editor): string {
   const storage = editor.storage as { markdown?: { getMarkdown: () => string } };
   return storage.markdown?.getMarkdown() ?? editor.getText();
+}
+
+async function insertImageFiles(
+  view: import('@tiptap/pm/view').EditorView,
+  files: File[],
+  dropCoords?: { x: number; y: number },
+) {
+  const datas = await Promise.all(files.map(fileToDataURI));
+  const valid = datas.filter((d): d is string => !!d);
+  if (valid.length === 0) return;
+  const schema = view.state.schema;
+  const imageType = schema.nodes.image;
+  if (!imageType) return;
+
+  // For a drop, anchor the insertion at the drop location; otherwise insert
+  // at the current selection.
+  let pos = view.state.selection.from;
+  if (dropCoords) {
+    const coordPos = view.posAtCoords({ left: dropCoords.x, top: dropCoords.y });
+    if (coordPos) pos = coordPos.pos;
+  }
+
+  const tr = view.state.tr;
+  for (const src of valid) {
+    const node = imageType.create({ src });
+    tr.insert(pos, node);
+    pos += node.nodeSize;
+  }
+  view.dispatch(tr);
 }

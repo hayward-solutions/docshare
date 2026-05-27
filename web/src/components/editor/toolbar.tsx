@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import {
   Bold,
@@ -17,11 +17,13 @@ import {
   Code2,
   Minus,
   Link as LinkIcon,
+  Image as ImageIcon,
   Table as TableIcon,
   Undo,
   Redo,
   ChevronDown,
 } from 'lucide-react';
+import { fileToDataURI } from '@/lib/editor-images';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -36,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { LinkDialog } from './link-dialog';
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -81,6 +84,26 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImagePick = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const dataUri = await fileToDataURI(file);
+    if (!dataUri) return;
+    editor.chain().focus().setImage({ src: dataUri }).run();
+  };
+
+  // Slash menu "Image" item fires this event since it can't trigger our
+  // hidden file input directly from inside the ProseMirror command.
+  useEffect(() => {
+    const handler = () => imageInputRef.current?.click();
+    window.addEventListener('docshare:open-image-picker', handler);
+    return () => window.removeEventListener('docshare:open-image-picker', handler);
+  }, []);
+
   const activeHeading = editor.isActive('heading', { level: 1 })
     ? 'H1'
     : editor.isActive('heading', { level: 2 })
@@ -89,15 +112,19 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
         ? 'H3'
         : 'Text';
 
-  const promptLink = () => {
-    const previous = (editor.getAttributes('link').href as string | undefined) ?? '';
-    const url = window.prompt('Link URL (leave blank to remove):', previous);
-    if (url === null) return;
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  const linkAttrs = editor.getAttributes('link') as { href?: string; target?: string };
+  const hasExistingLink = editor.isActive('link');
+
+  const openLinkDialog = () => setLinkDialogOpen(true);
+
+  const handleLinkSubmit = ({ href, openInNewTab }: { href: string; openInNewTab: boolean }) => {
+    const chain = editor.chain().focus().extendMarkRange('link');
+    chain.setLink({ href, target: openInNewTab ? '_blank' : null }).run();
+    setLinkDialogOpen(false);
+  };
+
+  const handleLinkRemove = () => {
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
   };
 
   return (
@@ -176,9 +203,15 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
         <ToolbarButton
           tooltip="Link"
           active={editor.isActive('link')}
-          onClick={promptLink}
+          onClick={openLinkDialog}
         >
           <LinkIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Insert image (≤2 MiB)"
+          onClick={() => imageInputRef.current?.click()}
+        >
+          <ImageIcon className="h-4 w-4" />
         </ToolbarButton>
 
         <ToolbarDivider />
@@ -257,6 +290,22 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
           <Redo className="h-4 w-4" />
         </ToolbarButton>
       </div>
+      <LinkDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        initialHref={linkAttrs.href ?? ''}
+        initialOpenInNewTab={linkAttrs.target === '_blank'}
+        hasExistingLink={hasExistingLink}
+        onSubmit={handleLinkSubmit}
+        onRemove={handleLinkRemove}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={handleImagePick}
+      />
     </TooltipProvider>
   );
 }
