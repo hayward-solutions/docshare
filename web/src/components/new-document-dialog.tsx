@@ -17,7 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { filesAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
-export type NewDocType = 'markdown' | 'text';
+export type NewDocType = 'markdown' | 'text' | 'spreadsheet';
 
 interface NewDocumentDialogProps {
   open: boolean;
@@ -38,11 +38,17 @@ const DEFAULTS: Record<NewDocType, { name: string; mimeType: string; title: stri
     mimeType: 'text/plain',
     title: 'New text file',
   },
+  spreadsheet: {
+    name: 'Untitled.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    title: 'New spreadsheet',
+  },
 };
 
 const EXTENSIONS: Record<NewDocType, string[]> = {
   markdown: ['.md', '.markdown'],
   text: ['.txt'],
+  spreadsheet: ['.xlsx'],
 };
 
 function ensureExtension(name: string, docType: NewDocType): string {

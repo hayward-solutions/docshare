@@ -162,6 +162,8 @@ func main() {
 	fileRoutes.Get("/:id/children", filesHandler.ListChildren)
 	fileRoutes.Get("/:id/content", filesHandler.GetContent)
 	fileRoutes.Put("/:id/content", filesHandler.SaveContent)
+	fileRoutes.Get("/:id/binary", filesHandler.GetBinary)
+	fileRoutes.Put("/:id/binary", filesHandler.SaveBinary)
 	fileRoutes.Get("/:id/download", filesHandler.Download)
 	fileRoutes.Get("/:id/download-url", filesHandler.DownloadURL)
 	fileRoutes.Get("/:id/preview", filesHandler.PreviewURL)

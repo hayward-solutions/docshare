@@ -147,17 +147,78 @@ export interface FileContentResponse {
   canEdit: boolean;
 }
 
+export interface FileBinaryResponse {
+  bytes: ArrayBuffer;
+  mimeType: string;
+  size: number;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export const filesAPI = {
   presignUpload: (data: { name: string; size: number; mimeType: string; parentID?: string | null }) =>
     apiMethods.post<PresignUploadResponse>('/files/upload/presign', { ...data }),
   finalizeUpload: (data: { key: string; name: string; mimeType: string; parentID?: string | null }) =>
     apiMethods.post<{ id: string }>('/files/upload/finalize', { ...data }),
+  getMeta: (id: string) =>
+    apiMethods.get<FileMeta>(`/files/${id}`),
   getContent: (id: string) =>
     apiMethods.get<FileContentResponse>(`/files/${id}/content`),
   saveContent: (id: string, content: string) =>
     apiMethods.put<FileMeta>(`/files/${id}/content`, { content }),
   createDoc: (data: { name: string; mimeType: string; parentID?: string | null }) =>
     apiMethods.post<FileMeta>('/files/create-doc', { ...data }),
+  getBinary: async (id: string): Promise<FileBinaryResponse> => {
+    const res = await fetch(`${API_URL}/files/${id}/binary`, { headers: authHeaders() });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      let message = `Failed to load file (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // body wasn't JSON — keep generic message
+      }
+      throw new Error(message);
+    }
+    const bytes = await res.arrayBuffer();
+    return {
+      bytes,
+      mimeType: res.headers.get('content-type') ?? 'application/octet-stream',
+      size: bytes.byteLength,
+    };
+  },
+  saveBinary: async (id: string, body: ArrayBuffer | Uint8Array, mimeType: string): Promise<ApiResponse<FileMeta>> => {
+    const res = await fetch(`${API_URL}/files/${id}/binary`, {
+      method: 'PUT',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': mimeType,
+      },
+      body: body instanceof Uint8Array ? new Uint8Array(body) : new Uint8Array(body),
+    });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+      throw new Error('Unauthorized');
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Save failed');
+    }
+    return data as ApiResponse<FileMeta>;
+  },
 };
 
 export const activityAPI = {

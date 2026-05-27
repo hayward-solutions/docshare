@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, FileType, Plus, Upload } from 'lucide-react';
+import { FileText, FileType, Plus, Table2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -59,6 +59,10 @@ export function UploadFAB() {
             <DropdownMenuItem onClick={() => openNewDoc('markdown')}>
               <FileType className="h-4 w-4" />
               New markdown document
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openNewDoc('spreadsheet')}>
+              <Table2 className="h-4 w-4" />
+              New spreadsheet
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openNewDoc('text')}>
               <FileText className="h-4 w-4" />

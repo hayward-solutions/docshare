@@ -51,7 +51,7 @@ import {
   Globe,
   Pencil
 } from 'lucide-react';
-import { isEditableMime } from '@/lib/mime';
+import { isAnyEditableMime, isSpreadsheetBinaryMime } from '@/lib/mime';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ShareDialog } from '@/components/share-dialog';
@@ -291,7 +291,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
         )}
         
         <div className="flex items-center gap-2">
-          {!file.isDirectory && isEditableMime(file.mimeType) && file.size <= 5 * 1024 * 1024 && (
+          {!file.isDirectory && isAnyEditableMime(file.mimeType) && file.size <= editorSizeCapFor(file.mimeType) && (
             <Button variant="outline" asChild>
               <Link href={`/edit/${file.id}`}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -624,6 +624,14 @@ const handleDownload = async (fileId: string, fileName: string) => {
       />
     </div>
   );
+}
+
+function editorSizeCapFor(mimeType: string): number {
+  // Mirror of the backend caps in api/internal/handlers/files_content.go.
+  // 10 MiB for spreadsheet binaries (XLSX/XLS/ODS), 5 MiB for everything
+  // else. Keep these aligned with the server so the Edit button doesn't
+  // promise the user something the API will refuse.
+  return isSpreadsheetBinaryMime(mimeType) ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
 }
 
 function formatBytes(bytes: number, decimals = 2) {

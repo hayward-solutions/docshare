@@ -14,21 +14,16 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { Markdown } from 'tiptap-markdown';
-import {
-  ArrowLeft,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Save,
-  Eye,
-} from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Loading } from '@/components/loading';
 import { filesAPI } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { isSpreadsheetMime } from '@/lib/mime';
 import { EditorToolbar } from './toolbar';
+import { EditorShell, useCmdS, useUnsavedWarning, type SaveState } from './editor-shell';
+import { SpreadsheetEditor } from './spreadsheet-editor';
 
 const MARKDOWN_MIMES = new Set(['text/markdown', 'text/x-markdown']);
 
@@ -45,38 +40,61 @@ interface LoadedFile {
   content: string;
 }
 
+interface FileMetaResponse {
+  id: string;
+  name: string;
+  mimeType: string;
+  ownerID: string;
+  size: number;
+}
+
 export function DocumentEditor({ fileId }: DocumentEditorProps) {
   const router = useRouter();
-  const [loaded, setLoaded] = useState<LoadedFile | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isResolving, setIsResolving] = useState(true);
+  const [meta, setMeta] = useState<FileMetaResponse | null>(null);
+  const [loadedText, setLoadedText] = useState<LoadedFile | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
+    setIsResolving(true);
     setLoadError(null);
-    setLoaded(null);
+    setMeta(null);
+    setLoadedText(null);
 
     (async () => {
       try {
-        const res = await filesAPI.getContent(fileId);
+        const metaRes = await filesAPI.getMeta(fileId);
         if (cancelled) return;
-        if (!res.success) {
-          setLoadError(res.error || 'Failed to load file');
+        if (!metaRes.success) {
+          setLoadError(metaRes.error || 'Failed to load file');
           return;
         }
-        setLoaded({
-          name: res.data.name,
-          mimeType: res.data.mimeType,
-          canEdit: res.data.canEdit,
-          content: res.data.content,
+        setMeta(metaRes.data);
+
+        if (isSpreadsheetMime(metaRes.data.mimeType)) {
+          // Spreadsheet editor handles its own content fetch (text or binary).
+          return;
+        }
+
+        const contentRes = await filesAPI.getContent(fileId);
+        if (cancelled) return;
+        if (!contentRes.success) {
+          setLoadError(contentRes.error || 'Failed to load file content');
+          return;
+        }
+        setLoadedText({
+          name: contentRes.data.name,
+          mimeType: contentRes.data.mimeType,
+          canEdit: contentRes.data.canEdit,
+          content: contentRes.data.content,
         });
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : 'Failed to load file';
         setLoadError(message);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsResolving(false);
       }
     })();
 
@@ -85,7 +103,7 @@ export function DocumentEditor({ fileId }: DocumentEditorProps) {
     };
   }, [fileId]);
 
-  if (isLoading) return <Loading />;
+  if (isResolving) return <Loading />;
 
   if (loadError) {
     return (
@@ -107,14 +125,18 @@ export function DocumentEditor({ fileId }: DocumentEditorProps) {
     );
   }
 
-  if (!loaded) return null;
+  if (meta && isSpreadsheetMime(meta.mimeType)) {
+    return <SpreadsheetEditor fileId={fileId} name={meta.name} mimeType={meta.mimeType} />;
+  }
 
-  const mode: EditorMode = MARKDOWN_MIMES.has(loaded.mimeType) ? 'markdown' : 'plain';
+  if (!loadedText) return null;
+
+  const mode: EditorMode = MARKDOWN_MIMES.has(loadedText.mimeType) ? 'markdown' : 'plain';
 
   return mode === 'markdown' ? (
-    <MarkdownEditor fileId={fileId} initial={loaded} />
+    <MarkdownEditor fileId={fileId} initial={loadedText} />
   ) : (
-    <PlainTextEditor fileId={fileId} initial={loaded} />
+    <PlainTextEditor fileId={fileId} initial={loadedText} />
   );
 }
 
@@ -122,8 +144,6 @@ interface EditorVariantProps {
   fileId: string;
   initial: LoadedFile;
 }
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -287,149 +307,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
   );
 }
 
-interface EditorShellProps {
-  fileId: string;
-  name: string;
-  canEdit: boolean;
-  isDirty: boolean;
-  saveState: SaveState;
-  saveError: string | null;
-  onSave: () => void;
-  mimeBadge: string;
-  children: React.ReactNode;
-}
-
-function EditorShell({
-  fileId,
-  name,
-  canEdit,
-  isDirty,
-  saveState,
-  saveError,
-  onSave,
-  mimeBadge,
-  children,
-}: EditorShellProps) {
-  const router = useRouter();
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="truncate text-xl font-semibold" title={name}>
-            {name}
-          </h1>
-          <Badge variant="secondary" className="ml-2 shrink-0">
-            {mimeBadge}
-          </Badge>
-          {!canEdit && (
-            <Badge variant="outline" className="ml-1 shrink-0">
-              Read-only
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <SaveStatus state={saveState} dirty={isDirty} error={saveError} canEdit={canEdit} />
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/files/${fileId}`}>
-              <Eye className="mr-2 h-4 w-4" />
-              View
-            </Link>
-          </Button>
-          {canEdit && (
-            <Button size="sm" onClick={onSave} disabled={!isDirty || saveState === 'saving'}>
-              {saveState === 'saving' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              Save
-            </Button>
-          )}
-        </div>
-      </div>
-      <EditorChrome>{children}</EditorChrome>
-    </div>
-  );
-}
-
-function EditorChrome({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col gap-3">{children}</div>;
-}
-
-function SaveStatus({
-  state,
-  dirty,
-  error,
-  canEdit,
-}: {
-  state: SaveState;
-  dirty: boolean;
-  error: string | null;
-  canEdit: boolean;
-}) {
-  if (!canEdit) return null;
-  if (state === 'saving') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Saving…
-      </span>
-    );
-  }
-  if (state === 'error') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-destructive" title={error ?? undefined}>
-        <AlertCircle className="h-3.5 w-3.5" />
-        Save failed
-      </span>
-    );
-  }
-  if (dirty) {
-    return <span className="text-xs text-muted-foreground">Unsaved changes</span>;
-  }
-  if (state === 'saved') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-        Saved
-      </span>
-    );
-  }
-  return null;
-}
-
 function readMarkdown(editor: Editor): string {
   const storage = editor.storage as { markdown?: { getMarkdown: () => string } };
   return storage.markdown?.getMarkdown() ?? editor.getText();
 }
-
-function useUnsavedWarning(isDirty: boolean) {
-  useEffect(() => {
-    if (!isDirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
-}
-
-function useCmdS(onSave: () => void, enabled: boolean) {
-  useEffect(() => {
-    if (!enabled) return;
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        onSave();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onSave, enabled]);
-}
-
