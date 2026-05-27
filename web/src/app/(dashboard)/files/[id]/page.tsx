@@ -35,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { 
-  LayoutGrid, 
-  List, 
-  MoreVertical, 
-  Download, 
-  Trash2, 
+import {
+  LayoutGrid,
+  List,
+  MoreVertical,
+  Download,
+  Trash2,
   Move,
   ChevronRight,
   ArrowLeft,
@@ -48,8 +48,10 @@ import {
   Share2,
   Search,
   FolderOpen,
-  Globe
+  Globe,
+  Pencil
 } from 'lucide-react';
+import { isEditableMime } from '@/lib/mime';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { ShareDialog } from '@/components/share-dialog';
@@ -289,6 +291,14 @@ const handleDownload = async (fileId: string, fileName: string) => {
         )}
         
         <div className="flex items-center gap-2">
+          {!file.isDirectory && isEditableMime(file.mimeType) && file.size <= 5 * 1024 * 1024 && (
+            <Button variant="outline" asChild>
+              <Link href={`/edit/${file.id}`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          )}
           {!file.isDirectory && (
             <Button variant="outline" onClick={() => handleDownload(file.id, file.name)}>
               <Download className="mr-2 h-4 w-4" />

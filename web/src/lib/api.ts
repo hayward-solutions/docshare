@@ -1,4 +1,4 @@
-import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, Group, LinkedAccount, MFAStatus, PasskeyRegisterResponse, PreviewJob, RecoveryCodesResponse, SSOProvider, TOTPSetupResponse, User, WebAuthnCredentialInfo } from './types';
+import { Activity, APIToken, APITokenCreateResponse, ApiResponse, DeviceCodeVerification, File as FileMeta, Group, LinkedAccount, MFAStatus, PasskeyRegisterResponse, PreviewJob, RecoveryCodesResponse, SSOProvider, TOTPSetupResponse, User, WebAuthnCredentialInfo } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
@@ -139,11 +139,25 @@ export interface PresignUploadResponse {
   expiresAt: string;
 }
 
+export interface FileContentResponse {
+  content: string;
+  mimeType: string;
+  name: string;
+  size: number;
+  canEdit: boolean;
+}
+
 export const filesAPI = {
   presignUpload: (data: { name: string; size: number; mimeType: string; parentID?: string | null }) =>
     apiMethods.post<PresignUploadResponse>('/files/upload/presign', { ...data }),
   finalizeUpload: (data: { key: string; name: string; mimeType: string; parentID?: string | null }) =>
     apiMethods.post<{ id: string }>('/files/upload/finalize', { ...data }),
+  getContent: (id: string) =>
+    apiMethods.get<FileContentResponse>(`/files/${id}/content`),
+  saveContent: (id: string, content: string) =>
+    apiMethods.put<FileMeta>(`/files/${id}/content`, { content }),
+  createDoc: (data: { name: string; mimeType: string; parentID?: string | null }) =>
+    apiMethods.post<FileMeta>('/files/create-doc', { ...data }),
 };
 
 export const activityAPI = {
