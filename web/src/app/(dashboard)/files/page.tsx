@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { File } from '@/lib/types';
@@ -52,7 +52,6 @@ import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { FileSortMenu } from '@/components/file-sort-menu';
 import { SortableTableHead } from '@/components/sortable-table-head';
-import { sortFiles } from '@/lib/file-sort';
 import { MoveDialog } from '@/components/move-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { FileInspector } from '@/components/file-inspector';
@@ -81,11 +80,7 @@ export default function FilesPage() {
 
   const isSearchActive = searchQuery.length >= 2;
 
-  const unsortedFiles = isSearchActive ? searchResults : files;
-  const displayedFiles = useMemo(
-    () => sortFiles(unsortedFiles, sortKey, sortDirection),
-    [unsortedFiles, sortKey, sortDirection],
-  );
+  const displayedFiles = isSearchActive ? searchResults : files;
 
   const selection = useFileSelection(displayedFiles);
 
@@ -94,7 +89,10 @@ export default function FilesPage() {
     const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
-      const res = await apiMethods.get<File[]>('/files');
+      const res = await apiMethods.get<File[]>('/files', {
+        sort: sortKey,
+        order: sortDirection,
+      });
       if (requestId !== fetchRequestId.current) return;
       if (res.success) {
         setFiles(res.data);
@@ -105,7 +103,7 @@ export default function FilesPage() {
     } finally {
       if (requestId === fetchRequestId.current) setIsLoading(false);
     }
-  }, []);
+  }, [sortKey, sortDirection]);
 
   useEffect(() => {
     fetchFiles();
@@ -141,7 +139,11 @@ export default function FilesPage() {
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const params: Record<string, string> = { q: searchQuery };
+        const params: Record<string, string> = {
+          q: searchQuery,
+          sort: sortKey,
+          order: sortDirection,
+        };
         // At root, "here" and "everywhere" are equivalent (no directoryID)
         const res = await apiMethods.get<File[]>('/files/search', params);
         if (res.success) {
@@ -155,7 +157,7 @@ export default function FilesPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  }, [searchQuery, sortKey, sortDirection]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;

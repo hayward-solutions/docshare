@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { File, BreadcrumbItem } from '@/lib/types';
@@ -54,7 +54,6 @@ import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { FileSortMenu } from '@/components/file-sort-menu';
 import { SortableTableHead } from '@/components/sortable-table-head';
-import { sortFiles } from '@/lib/file-sort';
 import { ShareDialog } from '@/components/share-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
@@ -87,11 +86,7 @@ export default function FileDetailPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   const isSearchActive = searchQuery.length >= 2;
-  const unsortedFiles = isSearchActive ? searchResults : children;
-  const displayedFiles = useMemo(
-    () => sortFiles(unsortedFiles, sortKey, sortDirection),
-    [unsortedFiles, sortKey, sortDirection],
-  );
+  const displayedFiles = isSearchActive ? searchResults : children;
 
   const selection = useFileSelection(displayedFiles);
   const { successWithRefresh } = useActivityToast();
@@ -114,7 +109,10 @@ export default function FileDetailPage() {
       }
 
       if (fileRes.data.isDirectory) {
-        const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`);
+        const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`, {
+          sort: sortKey,
+          order: sortDirection,
+        });
         if (requestId !== fetchRequestId.current) return;
         if (childrenRes.success) {
           setChildren(childrenRes.data);
@@ -127,7 +125,7 @@ export default function FileDetailPage() {
     } finally {
       if (requestId === fetchRequestId.current) setIsLoading(false);
     }
-  }, [id, router]);
+  }, [id, router, sortKey, sortDirection]);
 
   useEffect(() => {
     fetchData();
@@ -173,7 +171,11 @@ export default function FileDetailPage() {
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const params: Record<string, string> = { q: searchQuery };
+        const params: Record<string, string> = {
+          q: searchQuery,
+          sort: sortKey,
+          order: sortDirection,
+        };
         if (searchScope === 'here' && file?.isDirectory) {
           params.directoryID = id;
         }
@@ -189,7 +191,7 @@ export default function FileDetailPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchScope, id, file?.isDirectory]);
+  }, [searchQuery, searchScope, id, file?.isDirectory, sortKey, sortDirection]);
 
   const handleDelete = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
