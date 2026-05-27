@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime"
+	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docshare/api/internal/middleware"
 	"github.com/docshare/api/internal/models"
@@ -16,8 +19,25 @@ import (
 	"github.com/docshare/api/pkg/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 	"gorm.io/gorm"
 )
+
+const presignedUploadTTL = 30 * time.Minute
+
+// uploadStagingPrefix scopes keys handed out by the presign endpoint. After
+// finalize, the object is moved out of this prefix (to its final
+// storage_path), so any later writes through the still-valid presigned URL
+// land at a key that nothing references — isolating finalized files from
+// post-finalize overwrites.
+const uploadStagingPrefix = "uploads/"
+
+// s3SinglePutMaxBytes is AWS S3's hard ceiling for a single PUT request
+// (5 GiB). The presign flow issues a single-PUT URL, so we cap there
+// regardless of MAX_UPLOAD_MB — otherwise the client would happily try to
+// PUT 10 GB and only learn at upload time that S3 refuses. Going above
+// requires switching to multipart presigned uploads.
+const s3SinglePutMaxBytes int64 = 5 * 1024 * 1024 * 1024
 
 type FilesHandler struct {
 	DB             *gorm.DB
@@ -26,10 +46,30 @@ type FilesHandler struct {
 	PreviewService *services.PreviewService
 	PreviewQueue   *services.PreviewQueueService
 	Audit          *services.AuditService
+	MaxUploadBytes int64
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService) *FilesHandler {
-	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit}
+func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService, maxUploadBytes int64) *FilesHandler {
+	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit, MaxUploadBytes: maxUploadBytes}
+}
+
+func resolveMimeType(filename, declared string) string {
+	contentType := declared
+	if contentType == "" {
+		contentType = mime.TypeByExtension(filepath.Ext(filename))
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".md", ".markdown":
+		contentType = "text/markdown"
+	case ".ts":
+		contentType = "text/typescript"
+	case ".tsx":
+		contentType = "text/tsx"
+	}
+	return contentType
 }
 
 func (h *FilesHandler) Upload(c *fiber.Ctx) error {
@@ -83,21 +123,7 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
 	}
 
-	contentType := fileHeader.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
-	}
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	switch strings.ToLower(filepath.Ext(filename)) {
-	case ".md", ".markdown":
-		contentType = "text/markdown"
-	case ".ts":
-		contentType = "text/typescript"
-	case ".tsx":
-		contentType = "text/tsx"
-	}
+	contentType := resolveMimeType(filename, fileHeader.Header.Get("Content-Type"))
 
 	objectName := fmt.Sprintf("%s/%s/%s", currentUser.ID.String(), uuid.New().String(), filename)
 	if err := h.Storage.Upload(c.Context(), objectName, stream, fileHeader.Size, contentType); err != nil {
@@ -148,6 +174,287 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
+
+type presignUploadRequest struct {
+	Name     string  `json:"name"`
+	Size     int64   `json:"size"`
+	MimeType string  `json:"mimeType"`
+	ParentID *string `json:"parentID"`
+}
+
+type presignUploadResponse struct {
+	UploadURL string    `json:"uploadURL"`
+	Key       string    `json:"key"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+func (h *FilesHandler) PresignUpload(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	var req presignUploadRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	filename := filepath.Base(strings.TrimSpace(req.Name))
+	if filename == "" || filename == "." || filename == "/" {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
+	}
+
+	if req.Size <= 0 {
+		return utils.Error(c, fiber.StatusBadRequest, "size must be positive")
+	}
+	if h.MaxUploadBytes > 0 && req.Size > h.MaxUploadBytes {
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+	if req.Size > s3SinglePutMaxBytes {
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds 5 GiB single-PUT limit for pre-signed uploads (got %d bytes)", req.Size))
+	}
+
+	var parentID *uuid.UUID
+	if req.ParentID != nil && strings.TrimSpace(*req.ParentID) != "" {
+		parsed, parseErr := parseUUID(strings.TrimSpace(*req.ParentID))
+		if parseErr != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid parentID")
+		}
+		var parent models.File
+		if err := h.DB.First(&parent, "id = ?", parsed).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return utils.Error(c, fiber.StatusNotFound, "parent folder not found")
+			}
+			return utils.Error(c, fiber.StatusInternalServerError, "failed validating parent folder")
+		}
+		if !parent.IsDirectory {
+			return utils.Error(c, fiber.StatusBadRequest, "parentID must be a directory")
+		}
+		if !h.Access.HasAccess(c.Context(), currentUser.ID, parent.ID, models.SharePermissionEdit) {
+			logger.WarnWithUser(currentUser.ID.String(), "permission_denied", map[string]interface{}{
+				"action":              "file_upload",
+				"target_id":           parent.ID.String(),
+				"required_permission": "edit",
+			})
+			return utils.Error(c, fiber.StatusForbidden, "no permission to upload to parent directory")
+		}
+		parentID = &parent.ID
+	}
+
+	// Issue the URL against the staging prefix; finalize will copy the object
+	// out of staging so this URL no longer addresses live content. Sign
+	// Content-Length into the URL so the holder can only PUT exactly the
+	// number of bytes they claimed — without this, a client could presign
+	// for 1 KB and upload 100 GB to staging.
+	objectName := fmt.Sprintf("%s%s/%s/%s", uploadStagingPrefix, currentUser.ID.String(), uuid.New().String(), filename)
+	uploadURL, presignErr := h.Storage.PresignedPutURLWithLength(c.Context(), objectName, presignedUploadTTL, req.Size)
+	if presignErr != nil {
+		logger.Error("s3_presign_put_failed", presignErr, map[string]interface{}{
+			"object_name": objectName,
+			"user_id":     currentUser.ID.String(),
+		})
+		return utils.Error(c, fiber.StatusInternalServerError, "failed generating upload URL")
+	}
+
+	logger.InfoWithUser(currentUser.ID.String(), "upload_presigned", map[string]interface{}{
+		"object_name": objectName,
+		"file_name":   filename,
+		"size":        req.Size,
+		"parent_id":   parentID,
+	})
+
+	return utils.Success(c, fiber.StatusOK, presignUploadResponse{
+		UploadURL: uploadURL,
+		Key:       objectName,
+		ExpiresAt: time.Now().Add(presignedUploadTTL),
+	})
+}
+
+type finalizeUploadRequest struct {
+	Key      string  `json:"key"`
+	Name     string  `json:"name"`
+	MimeType string  `json:"mimeType"`
+	ParentID *string `json:"parentID"`
+}
+
+func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil {
+		return utils.Error(c, fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	var req finalizeUploadRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	rawKey := strings.TrimSpace(req.Key)
+	if rawKey == "" {
+		return utils.Error(c, fiber.StatusBadRequest, "key is required")
+	}
+	// path.Clean resolves any "../" segments so the prefix check below cannot
+	// be bypassed (e.g. "uploads/uA/../uB/...") and gives us a canonical key.
+	stagingKey := path.Clean(rawKey)
+	expectedStagingPrefix := uploadStagingPrefix + currentUser.ID.String() + "/"
+	if !strings.HasPrefix(stagingKey, expectedStagingPrefix) {
+		logger.WarnWithUser(currentUser.ID.String(), "upload_finalize_foreign_key", map[string]interface{}{
+			"key":     rawKey,
+			"cleaned": stagingKey,
+		})
+		return utils.Error(c, fiber.StatusForbidden, "key does not belong to authenticated user")
+	}
+	// finalKey is what we persist as storage_path. Stripping the staging
+	// prefix gives `{userID}/{uuid}/{filename}` — the same shape used by the
+	// legacy multipart upload path, so downstream code (downloads, previews,
+	// audit) doesn't need to change.
+	finalKey := strings.TrimPrefix(stagingKey, uploadStagingPrefix)
+
+	filename := filepath.Base(strings.TrimSpace(req.Name))
+	if filename == "" || filename == "." || filename == "/" {
+		return utils.Error(c, fiber.StatusBadRequest, "invalid filename")
+	}
+
+	var parentID *uuid.UUID
+	if req.ParentID != nil && strings.TrimSpace(*req.ParentID) != "" {
+		parsed, parseErr := parseUUID(strings.TrimSpace(*req.ParentID))
+		if parseErr != nil {
+			return utils.Error(c, fiber.StatusBadRequest, "invalid parentID")
+		}
+		var parent models.File
+		if err := h.DB.First(&parent, "id = ?", parsed).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return utils.Error(c, fiber.StatusNotFound, "parent folder not found")
+			}
+			return utils.Error(c, fiber.StatusInternalServerError, "failed validating parent folder")
+		}
+		if !parent.IsDirectory {
+			return utils.Error(c, fiber.StatusBadRequest, "parentID must be a directory")
+		}
+		if !h.Access.HasAccess(c.Context(), currentUser.ID, parent.ID, models.SharePermissionEdit) {
+			logger.WarnWithUser(currentUser.ID.String(), "permission_denied", map[string]interface{}{
+				"action":              "file_upload",
+				"target_id":           parent.ID.String(),
+				"required_permission": "edit",
+			})
+			return utils.Error(c, fiber.StatusForbidden, "no permission to upload to parent directory")
+		}
+		parentID = &parent.ID
+	}
+
+	// Cheap fast-path for sequential replays: skip the S3 stat/copy work
+	// entirely if a (non-soft-deleted) row already references finalKey. The
+	// transactional Create below remains the source of truth for concurrent
+	// racers.
+	var existing int64
+	if err := h.DB.Model(&models.File{}).Where("storage_path = ?", finalKey).Count(&existing).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed checking file existence")
+	}
+	if existing > 0 {
+		return utils.Error(c, fiber.StatusConflict, "upload already finalized")
+	}
+
+	info, statErr := h.Storage.StatObject(c.Context(), stagingKey)
+	if statErr != nil {
+		errResp := minio.ToErrorResponse(statErr)
+		if errResp.Code == "NoSuchKey" || errResp.StatusCode == fiber.StatusNotFound {
+			return utils.Error(c, fiber.StatusNotFound, "uploaded object not found")
+		}
+		logger.Error("s3_stat_failed", statErr, map[string]interface{}{
+			"object_name": stagingKey,
+			"user_id":     currentUser.ID.String(),
+		})
+		return utils.Error(c, fiber.StatusInternalServerError, "failed verifying uploaded object")
+	}
+
+	if h.MaxUploadBytes > 0 && info.Size > h.MaxUploadBytes {
+		_ = h.Storage.Delete(c.Context(), stagingKey)
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds maximum upload size of %d bytes", h.MaxUploadBytes))
+	}
+
+	contentType := resolveMimeType(filename, req.MimeType)
+
+	entry := models.File{
+		Name:        filename,
+		MimeType:    contentType,
+		Size:        info.Size,
+		IsDirectory: false,
+		ParentID:    parentID,
+		OwnerID:     currentUser.ID,
+		StoragePath: finalKey,
+	}
+
+	// Claim → copy → commit. Inserting the row first inside a transaction
+	// turns the storage_path unique index into a race-safe gate: a concurrent
+	// finalize attempting to insert the same finalKey blocks on the index
+	// until we commit (then fails with duplicate-key) or rolls back (then
+	// succeeds). This stops the loser from ever calling CopyObject — without
+	// this, both finalizers would race-copy and the second copy could write
+	// different bytes if the staging URL was used to overwrite between
+	// stats. The MatchETag pinned on the copy further guarantees that the
+	// bytes we land at finalKey are the ones we stat'd, even if the staging
+	// key is overwritten between stat and copy.
+	txErr := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&entry).Error; err != nil {
+			return err
+		}
+		return h.Storage.CopyObject(c.Context(), finalKey, stagingKey, info.ETag)
+	})
+	if txErr != nil {
+		if errors.Is(txErr, gorm.ErrDuplicatedKey) {
+			return utils.Error(c, fiber.StatusConflict, "upload already finalized")
+		}
+		// Either the copy failed or another DB error fired. The transaction
+		// rolled back the row, but the copy may have partially written to
+		// finalKey before failing — best-effort clean it up. Staging is left
+		// alone so the caller can retry finalize without re-uploading.
+		_ = h.Storage.Delete(c.Context(), finalKey)
+		return utils.Error(c, fiber.StatusInternalServerError, "failed promoting upload")
+	}
+
+	// Best-effort cleanup of the staging object. If this fails the file row
+	// is already pointing at finalKey, so the failure only leaves an orphan
+	// in staging — addressable later via a lifecycle rule or sweeper.
+	if err := h.Storage.Delete(c.Context(), stagingKey); err != nil {
+		logger.Error("s3_staging_cleanup_failed", err, map[string]interface{}{
+			"staging_key": stagingKey,
+			"final_key":   finalKey,
+			"file_id":     entry.ID.String(),
+		})
+	}
+
+	logger.InfoWithUser(currentUser.ID.String(), "file_uploaded", map[string]interface{}{
+		"file_id":      entry.ID.String(),
+		"file_name":    filename,
+		"file_size":    info.Size,
+		"mime_type":    contentType,
+		"storage_path": finalKey,
+		"staging_key":  stagingKey,
+		"parent_id":    parentID,
+		"upload_mode":  "presigned",
+	})
+
+	auditDetails := map[string]interface{}{
+		"file_name":   filename,
+		"file_size":   info.Size,
+		"mime_type":   contentType,
+		"upload_mode": "presigned",
+	}
+	if parentID != nil {
+		auditDetails["parent_id"] = parentID.String()
+	}
+	h.Audit.LogAsync(services.AuditEntry{
+		UserID:       &currentUser.ID,
+		Action:       "file.upload",
+		ResourceType: "file",
+		ResourceID:   &entry.ID,
+		Details:      auditDetails,
+		IPAddress:    c.IP(),
+		RequestID:    getRequestID(c),
+	})
+
+	return utils.Success(c, fiber.StatusCreated, entry)
+}
+
 
 type createDirectoryRequest struct {
 	Name     string  `json:"name"`
@@ -444,9 +751,12 @@ func (h *FilesHandler) Download(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
+	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
+	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
+	// so S3's reported content-type isn't authoritative.
+	contentType := file.MimeType
 	if contentType == "" {
-		contentType = file.MimeType
+		contentType = stat.ContentType
 	}
 
 	logger.InfoWithUser(currentUser.ID.String(), "file_downloaded", map[string]interface{}{
@@ -537,8 +847,10 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 	}
 
 	storagePath := file.StoragePath
+	servingThumbnail := false
 	if file.ThumbnailPath != nil && *file.ThumbnailPath != "" {
 		storagePath = *file.ThumbnailPath
+		servingThumbnail = true
 	}
 
 	obj, err := h.Storage.Download(c.Context(), storagePath)
@@ -552,9 +864,22 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
-	if contentType == "" {
+	// When we're serving the thumbnail (a PDF rendering of the original) the
+	// DB's MimeType still reflects the original file (e.g. DOCX), so use S3's
+	// reported content-type — PreviewService uploaded the thumbnail with the
+	// correct one. For the original file, prefer DB MimeType, since
+	// pre-signed PUT uploads land in S3 as application/octet-stream.
+	var contentType string
+	if servingThumbnail {
+		contentType = stat.ContentType
+		if contentType == "" {
+			contentType = "application/pdf"
+		}
+	} else {
 		contentType = file.MimeType
+		if contentType == "" {
+			contentType = stat.ContentType
+		}
 	}
 
 	c.Set("Content-Type", contentType)
@@ -1240,9 +1565,12 @@ func (h *FilesHandler) downloadFile(c *fiber.Ctx, fileID uuid.UUID) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	contentType := stat.ContentType
+	// Prefer the MIME type stored in our DB: pre-signed PUT uploads land in S3
+	// as application/octet-stream (we don't sign Content-Type into the PUT URL),
+	// so S3's reported content-type isn't authoritative.
+	contentType := file.MimeType
 	if contentType == "" {
-		contentType = file.MimeType
+		contentType = stat.ContentType
 	}
 
 	c.Set("Content-Type", contentType)

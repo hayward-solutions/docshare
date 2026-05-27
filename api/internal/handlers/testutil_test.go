@@ -103,7 +103,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	authHandler := NewAuthHandler(db, auditService)
 	usersHandler := NewUsersHandler(db, auditService)
 	groupsHandler := NewGroupsHandler(db, auditService)
-	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService)
+	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService, 100*1024*1024)
 	sharesHandler := NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := NewActivitiesHandler(db)
 	auditHandler := NewAuditHandler(db)
@@ -120,6 +120,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	app.Use(middleware.CORS(cfg.Server.FrontendURL))
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.SecurityLogger())
+	app.Use(middleware.SmallBodyLimitForNonUploadRoutes(8 * 1024 * 1024))
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
@@ -162,6 +163,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	fileRoutes := api.Group("/files", authMiddleware.RequireAuth)
 	fileRoutes.Post("/upload", filesHandler.Upload)
+	fileRoutes.Post("/upload/presign", filesHandler.PresignUpload)
+	fileRoutes.Post("/upload/finalize", filesHandler.FinalizeUpload)
 	fileRoutes.Post("/directory", filesHandler.CreateDirectory)
 	fileRoutes.Get("/", filesHandler.ListRoot)
 	fileRoutes.Get("/search", filesHandler.Search)
@@ -276,7 +279,10 @@ func performRequest(t *testing.T, app *fiber.App, method, path string, body io.R
 		req.Header.Set(key, value)
 	}
 
-	resp, err := app.Test(req, int((10 * time.Second).Milliseconds()))
+	// MFA tests do bcrypt verification + hashing of 10 recovery codes; under
+	// `-race` on a constrained CI runner that can exceed 10s per request,
+	// so give the framework plenty of headroom.
+	resp, err := app.Test(req, int((45 * time.Second).Milliseconds()))
 	if err != nil {
 		t.Fatalf("request %s %s failed: %v", method, path, err)
 	}

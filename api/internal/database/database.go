@@ -21,7 +21,7 @@ func Connect(cfg config.DBConfig) (*gorm.DB, error) {
 		cfg.SSLMode,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,100 @@ BEGIN
   END IF;
 END $$;`
 
-	return db.Exec(constraint).Error
+	if err := db.Exec(constraint).Error; err != nil {
+		return err
+	}
+
+	// Reconcile any pre-existing duplicate storage_path rows BEFORE adding
+	// the unique index — otherwise CREATE UNIQUE INDEX fails and the API
+	// won't start on environments that ran finalize concurrently before
+	// this guard existed.
+	//
+	// For each non-empty storage_path with more than one live row, pick the
+	// earliest row as the survivor and remap dependent records (shares,
+	// preview jobs, and file-typed activity/audit rows) to the survivor's
+	// id. Then soft-delete the duplicates. Without the remap, dependent
+	// rows would point at hidden ids and default-scoped lookups would 404.
+	//
+	// The CTE returns (loser_id, winner_id) pairs we can join against.
+	remapDuplicateRefs := `
+WITH ranked AS (
+  SELECT id,
+         storage_path,
+         ROW_NUMBER() OVER (
+           PARTITION BY storage_path
+           ORDER BY created_at ASC, id ASC
+         ) AS rn
+  FROM files
+  WHERE storage_path <> ''
+    AND deleted_at IS NULL
+),
+winners AS (SELECT id, storage_path FROM ranked WHERE rn = 1),
+losers AS (SELECT id, storage_path FROM ranked WHERE rn > 1),
+pairs AS (
+  SELECT l.id AS loser_id, w.id AS winner_id
+  FROM losers l
+  JOIN winners w ON w.storage_path = l.storage_path
+),
+update_shares AS (
+  UPDATE shares s SET file_id = p.winner_id
+  FROM pairs p WHERE s.file_id = p.loser_id
+  RETURNING 1
+),
+update_preview_jobs AS (
+  UPDATE preview_jobs pj SET file_id = p.winner_id
+  FROM pairs p WHERE pj.file_id = p.loser_id
+  RETURNING 1
+),
+update_activities AS (
+  UPDATE activities a SET resource_id = p.winner_id
+  FROM pairs p WHERE a.resource_id = p.loser_id AND a.resource_type = 'file'
+  RETURNING 1
+),
+update_audit_logs AS (
+  UPDATE audit_logs al SET resource_id = p.winner_id
+  FROM pairs p WHERE al.resource_id = p.loser_id AND al.resource_type = 'file'
+  RETURNING 1
+)
+SELECT 1;`
+
+	if err := db.Exec(remapDuplicateRefs).Error; err != nil {
+		return err
+	}
+
+	dedupeFiles := `
+UPDATE files
+SET deleted_at = NOW()
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (
+             PARTITION BY storage_path
+             ORDER BY created_at ASC, id ASC
+           ) AS rn
+    FROM files
+    WHERE storage_path <> ''
+      AND deleted_at IS NULL
+  ) ranked
+  WHERE rn > 1
+);`
+
+	if err := db.Exec(dedupeFiles).Error; err != nil {
+		return err
+	}
+
+	// Defends FinalizeUpload's replay check against concurrent racers: with
+	// only an application-level Count→Create gap, two parallel finalize calls
+	// could both observe no row and both insert. The partial unique index
+	// excludes directories (which legitimately share storage_path = '')
+	// AND soft-deleted rows (so finalize's default-scoped pre-check stays
+	// consistent with the index — a deleted row's storage_path is freed).
+	storagePathUnique := `
+CREATE UNIQUE INDEX IF NOT EXISTS files_storage_path_unique
+ON files (storage_path)
+WHERE storage_path <> '' AND deleted_at IS NULL;`
+
+	return db.Exec(storagePathUnique).Error
 }
 
 func seedAdminUser(db *gorm.DB) error {

@@ -18,6 +18,7 @@ data:
   S3_USE_SSL: {{ .Values.s3.useSsl | quote }}
   GOTENBERG_URL: {{ default (include "docshare.gotenbergUrl" .) .Values.api.env.gotenbergUrl | quote }}
   SERVER_PORT: {{ .Values.api.env.serverPort | quote }}
+  MAX_UPLOAD_MB: {{ .Values.api.env.maxUploadMB | quote }}
   JWT_EXPIRATION_HOURS: {{ .Values.api.env.jwtExpirationHours | quote }}
   WEB_URL: {{ include "docshare.externalFrontendUrl" . | quote }}
   API_URL: {{ include "docshare.externalApiUrl" . | quote }}

@@ -65,7 +65,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db, auditService)
 	usersHandler := handlers.NewUsersHandler(db, auditService)
 	groupsHandler := handlers.NewGroupsHandler(db, auditService)
-	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, previewQueueService, auditService)
+	filesHandler := handlers.NewFilesHandler(db, storageClient, accessService, previewService, previewQueueService, auditService, int64(cfg.Server.MaxUploadMB)*1024*1024)
 	sharesHandler := handlers.NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := handlers.NewActivitiesHandler(db)
 	auditHandler := handlers.NewAuditHandler(db)
@@ -89,11 +89,15 @@ func main() {
 
 	authMiddleware := middleware.NewAuthMiddleware(db)
 
-	app := fiber.New(fiber.Config{BodyLimit: 100 * 1024 * 1024})
+	app := fiber.New(fiber.Config{BodyLimit: cfg.Server.MaxUploadMB * 1024 * 1024})
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
 	app.Use(middleware.CORS(cfg.Server.FrontendURL))
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.SecurityLogger())
+	// Fiber's BodyLimit is global; cap non-upload routes to a smaller size
+	// so raising MAX_UPLOAD_MB for the legacy multipart upload doesn't also
+	// let auth/JSON endpoints accept gigabyte payloads.
+	app.Use(middleware.SmallBodyLimitForNonUploadRoutes(8 * 1024 * 1024))
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
@@ -149,6 +153,8 @@ func main() {
 
 	fileRoutes := api.Group("/files", authMiddleware.RequireAuth)
 	fileRoutes.Post("/upload", filesHandler.Upload)
+	fileRoutes.Post("/upload/presign", filesHandler.PresignUpload)
+	fileRoutes.Post("/upload/finalize", filesHandler.FinalizeUpload)
 	fileRoutes.Post("/directory", filesHandler.CreateDirectory)
 	fileRoutes.Get("/", filesHandler.ListRoot)
 	fileRoutes.Get("/search", filesHandler.Search)
@@ -248,7 +254,7 @@ func main() {
 	logger.Info("server_starting", map[string]interface{}{
 		"port":       cfg.Server.Port,
 		"address":    listenAddr,
-		"body_limit": "100MB",
+		"body_limit": fmt.Sprintf("%dMB", cfg.Server.MaxUploadMB),
 	})
 
 	errCh := make(chan error, 1)

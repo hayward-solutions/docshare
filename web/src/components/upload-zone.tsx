@@ -5,7 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, File as FileIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { apiMethods } from '@/lib/api';
+import { filesAPI, putToPresignedURL } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useActivityToast } from '@/hooks/use-activity-toast';
@@ -26,36 +26,51 @@ export function UploadZone({ parentID, onUploadComplete }: UploadZoneProps) {
   const { successWithRefresh } = useActivityToast();
 
   const uploadFileToServer = useCallback(async (uploadFile: UploadingFile) => {
-    setUploadingFiles(prev => prev.map(f => 
+    setUploadingFiles(prev => prev.map(f =>
       f.file === uploadFile.file ? { ...f, status: 'uploading' } : f
     ));
 
-    const formData = new FormData();
-    formData.append('file', uploadFile.file);
-    if (parentID) {
-      formData.append('parentID', parentID);
-    }
+    const file = uploadFile.file;
+    const mimeType = file.type || 'application/octet-stream';
 
     try {
-      const interval = setInterval(() => {
-        setUploadingFiles(prev => prev.map(f => 
-          f.file === uploadFile.file ? { ...f, progress: Math.min(f.progress + 10, 90) } : f
-        ));
-      }, 100);
+      const presigned = await filesAPI.presignUpload({
+        name: file.name,
+        size: file.size,
+        mimeType,
+        parentID: parentID ?? null,
+      });
+      if (!presigned.success) {
+        throw new Error(presigned.error || 'failed to obtain upload URL');
+      }
 
-      await apiMethods.upload('/files/upload', formData);
-      
-      clearInterval(interval);
-      setUploadingFiles(prev => prev.map(f => 
-        f.file === uploadFile.file ? { ...f, progress: 100, status: 'completed' } : f
+      await putToPresignedURL(presigned.data.uploadURL, file, (loaded, total) => {
+        const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        setUploadingFiles(prev => prev.map(f =>
+          f.file === file ? { ...f, progress: pct } : f
+        ));
+      });
+
+      const finalized = await filesAPI.finalizeUpload({
+        key: presigned.data.key,
+        name: file.name,
+        mimeType,
+        parentID: parentID ?? null,
+      });
+      if (!finalized.success) {
+        throw new Error(finalized.error || 'failed to finalize upload');
+      }
+
+      setUploadingFiles(prev => prev.map(f =>
+        f.file === file ? { ...f, progress: 100, status: 'completed' } : f
       ));
-      successWithRefresh(`Uploaded ${uploadFile.file.name}`);
+      successWithRefresh(`Uploaded ${file.name}`);
     } catch (error) {
       console.error(error);
-      setUploadingFiles(prev => prev.map(f => 
-        f.file === uploadFile.file ? { ...f, status: 'error' } : f
+      setUploadingFiles(prev => prev.map(f =>
+        f.file === file ? { ...f, status: 'error' } : f
       ));
-      toast.error(`Failed to upload ${uploadFile.file.name}`);
+      toast.error(`Failed to upload ${file.name}`);
     }
   }, [parentID, successWithRefresh]);
 

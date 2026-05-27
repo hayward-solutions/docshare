@@ -78,6 +78,47 @@ export const apiMethods = {
   }
 };
 
+export function putToPresignedURL(url: string, file: File, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    // Intentionally do NOT set Content-Type. The pre-signed URL signs only the
+    // `host` header; on some S3 implementations a Content-Type the signer
+    // didn't include would risk SignatureDoesNotMatch. The server stores the
+    // client-declared MIME type in the DB at finalize time and uses that
+    // value when serving downloads, so S3's reported content-type doesn't
+    // need to be correct.
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(event.loaded, event.total);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`upload failed with status ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('network error during upload'));
+    xhr.onabort = () => reject(new Error('upload aborted'));
+    xhr.send(file);
+  });
+}
+
+export interface PresignUploadResponse {
+  uploadURL: string;
+  key: string;
+  expiresAt: string;
+}
+
+export const filesAPI = {
+  presignUpload: (data: { name: string; size: number; mimeType: string; parentID?: string | null }) =>
+    apiMethods.post<PresignUploadResponse>('/files/upload/presign', { ...data }),
+  finalizeUpload: (data: { key: string; name: string; mimeType: string; parentID?: string | null }) =>
+    apiMethods.post<{ id: string }>('/files/upload/finalize', { ...data }),
+};
+
 export const activityAPI = {
   list: async (page = 1, limit = 20) =>
     apiMethods.get<Activity[]>('/activities', { page, limit }),
