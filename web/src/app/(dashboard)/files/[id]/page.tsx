@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { File, BreadcrumbItem } from '@/lib/types';
@@ -121,7 +121,7 @@ export default function FileDetailPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (file?.isDirectory) {
+    if (file?.isDirectory && file.id === id) {
       useUploadStore.getState().setCurrentContext({
         parentID: id,
         canUpload: true,
@@ -131,14 +131,24 @@ export default function FileDetailPage() {
       useUploadStore.getState().setCurrentContext(null);
     }
     return () => useUploadStore.getState().setCurrentContext(null);
-  }, [id, file?.isDirectory, file?.name]);
+  }, [id, file?.id, file?.isDirectory, file?.name]);
 
   const uploadTick = useUploadStore(
     (s) => s.parentCompletionTicks[parentKey(id)] ?? 0,
   );
+  const lastTick = useRef(uploadTick);
+  const lastTickId = useRef(id);
   useEffect(() => {
-    if (uploadTick > 0 && file?.isDirectory) fetchData();
-  }, [uploadTick, fetchData, file?.isDirectory]);
+    if (lastTickId.current !== id) {
+      lastTickId.current = id;
+      lastTick.current = uploadTick;
+      return;
+    }
+    if (uploadTick > lastTick.current && file?.isDirectory) {
+      fetchData();
+    }
+    lastTick.current = uploadTick;
+  }, [id, uploadTick, fetchData, file?.isDirectory]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {

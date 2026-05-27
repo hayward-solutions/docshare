@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { File } from '@/lib/types';
@@ -112,8 +112,12 @@ export default function FilesPage() {
   const uploadTick = useUploadStore(
     (s) => s.parentCompletionTicks[parentKey(null)] ?? 0,
   );
+  const lastTick = useRef(uploadTick);
   useEffect(() => {
-    if (uploadTick > 0) fetchFiles();
+    if (uploadTick > lastTick.current) {
+      fetchFiles();
+    }
+    lastTick.current = uploadTick;
   }, [uploadTick, fetchFiles]);
 
   useEffect(() => {
