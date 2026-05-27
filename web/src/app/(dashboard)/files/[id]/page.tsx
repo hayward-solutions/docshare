@@ -52,8 +52,8 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
-import { UploadZone } from '@/components/upload-zone';
 import { ShareDialog } from '@/components/share-dialog';
+import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
 import { FileViewer } from '@/components/file-viewer';
 import { FileInspector } from '@/components/file-inspector';
@@ -119,6 +119,26 @@ export default function FileDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (file?.isDirectory) {
+      useUploadStore.getState().setCurrentContext({
+        parentID: id,
+        canUpload: true,
+        label: file.name,
+      });
+    } else {
+      useUploadStore.getState().setCurrentContext(null);
+    }
+    return () => useUploadStore.getState().setCurrentContext(null);
+  }, [id, file?.isDirectory, file?.name]);
+
+  const uploadTick = useUploadStore(
+    (s) => s.parentCompletionTicks[parentKey(id)] ?? 0,
+  );
+  useEffect(() => {
+    if (uploadTick > 0 && file?.isDirectory) fetchData();
+  }, [uploadTick, fetchData, file?.isDirectory]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -315,8 +335,6 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
       {file.isDirectory ? (
         <>
-          {!isSearchActive && <UploadZone parentID={file.id} onUploadComplete={fetchData} />}
-
           {isSearchActive && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {isSearching ? (

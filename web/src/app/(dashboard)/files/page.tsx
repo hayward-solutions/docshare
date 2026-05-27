@@ -50,8 +50,8 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
-import { UploadZone } from '@/components/upload-zone';
 import { MoveDialog } from '@/components/move-dialog';
+import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { FileInspector } from '@/components/file-inspector';
 import { ShareDialog } from '@/components/share-dialog';
 import { BulkActionBar } from '@/components/bulk-action-bar';
@@ -99,6 +99,22 @@ export default function FilesPage() {
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(() => {
+    useUploadStore.getState().setCurrentContext({
+      parentID: null,
+      canUpload: true,
+      label: 'My Files',
+    });
+    return () => useUploadStore.getState().setCurrentContext(null);
+  }, []);
+
+  const uploadTick = useUploadStore(
+    (s) => s.parentCompletionTicks[parentKey(null)] ?? 0,
+  );
+  useEffect(() => {
+    if (uploadTick > 0) fetchFiles();
+  }, [uploadTick, fetchFiles]);
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -219,8 +235,6 @@ export default function FilesPage() {
           <CreateFolderDialog onFolderCreated={fetchFiles} />
         </div>
       </div>
-
-      {!isSearchActive && <UploadZone onUploadComplete={fetchFiles} />}
 
       {isSearchActive && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

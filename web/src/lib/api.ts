@@ -78,8 +78,26 @@ export const apiMethods = {
   }
 };
 
-export function putToPresignedURL(url: string, file: File, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+export class UploadAbortError extends Error {
+  constructor() {
+    super('upload aborted');
+    this.name = 'UploadAbortError';
+  }
+}
+
+export interface PutToPresignedURLOptions {
+  onProgress?: (loaded: number, total: number) => void;
+  signal?: AbortSignal;
+}
+
+export function putToPresignedURL(url: string, file: File, options: PutToPresignedURLOptions = {}): Promise<void> {
+  const { onProgress, signal } = options;
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new UploadAbortError());
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
     // Intentionally do NOT set Content-Type. The pre-signed URL signs only the
@@ -101,7 +119,16 @@ export function putToPresignedURL(url: string, file: File, onProgress?: (loaded:
       }
     };
     xhr.onerror = () => reject(new Error('network error during upload'));
-    xhr.onabort = () => reject(new Error('upload aborted'));
+    xhr.onabort = () => reject(new UploadAbortError());
+
+    const onAbort = () => xhr.abort();
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+    xhr.onloadend = () => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+    };
+
     xhr.send(file);
   });
 }
