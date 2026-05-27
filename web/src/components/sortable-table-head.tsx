@@ -15,9 +15,14 @@ interface Props {
 export function SortableTableHead({ sortKey: key, children, className }: Props) {
   const { sortKey, sortDirection, setSort } = usePreferences();
   const isActive = sortKey === key;
+  const ariaSort: 'ascending' | 'descending' | 'none' = isActive
+    ? sortDirection === 'asc'
+      ? 'ascending'
+      : 'descending'
+    : 'none';
 
   return (
-    <TableHead className={className}>
+    <TableHead className={className} aria-sort={ariaSort}>
       <button
         type="button"
         onClick={() =>

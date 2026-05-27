@@ -26,7 +26,8 @@ export function sortFiles(
         cmp = a.size - b.size;
         break;
       case 'modified':
-        cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+        // updatedAt is an ISO 8601 string — lexicographic order matches chronological.
+        cmp = a.updatedAt < b.updatedAt ? -1 : a.updatedAt > b.updatedAt ? 1 : 0;
         break;
     }
     if (cmp === 0) cmp = collator.compare(a.name, b.name);

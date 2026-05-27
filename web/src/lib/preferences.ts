@@ -26,7 +26,10 @@ function getStoredSort(): { sortKey: SortKey; sortDirection: SortDirection } {
   try {
     const raw = localStorage.getItem(SORT_STORAGE_KEY);
     if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as { sortKey?: unknown; sortDirection?: unknown };
+    const parsed = JSON.parse(raw) as
+      | { sortKey?: unknown; sortDirection?: unknown }
+      | null;
+    if (!parsed || typeof parsed !== 'object') return fallback;
     const key: SortKey =
       parsed.sortKey === 'size' || parsed.sortKey === 'modified' ? parsed.sortKey : 'name';
     const dir: SortDirection = parsed.sortDirection === 'desc' ? 'desc' : 'asc';
