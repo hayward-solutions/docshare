@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -131,14 +132,67 @@ func TestMimeFor(t *testing.T) {
 	}
 }
 
-func TestSourceFormatFor(t *testing.T) {
-	// Pandoc has no `plain` reader (only a writer), so we use gfm for
-	// every text source. Plain text round-trips through gfm cleanly.
-	mimes := []string{"text/markdown", "text/x-markdown; charset=utf-8", "text/plain", "text/csv", "text/typescript"}
-	for _, m := range mimes {
-		if got := sourceFormatFor(m); got != "gfm" {
-			t.Errorf("sourceFormatFor(%q) = %q, want \"gfm\"", m, got)
+func TestIsMarkdownMime(t *testing.T) {
+	cases := map[string]bool{
+		"text/markdown":              true,
+		"text/x-markdown":            true,
+		"text/markdown; charset=utf-8": true,
+		"TEXT/MARKDOWN":              true,
+		"text/plain":                 false,
+		"text/csv":                   false,
+		"text/typescript":            false,
+		"":                           false,
+	}
+	for mime, want := range cases {
+		if got := isMarkdownMime(mime); got != want {
+			t.Errorf("isMarkdownMime(%q) = %v, want %v", mime, got, want)
 		}
+	}
+}
+
+func TestPrepareForPandoc(t *testing.T) {
+	// Markdown source must pass through verbatim.
+	md := []byte("# Heading\n\nText with **bold**.")
+	if got := prepareForPandoc(md, "text/markdown"); !bytes.Equal(got, md) {
+		t.Errorf("markdown should pass through unchanged, got %q", got)
+	}
+
+	// Non-markdown source must be wrapped in a fenced code block so
+	// gfm doesn't interpret `# not a heading` etc.
+	plain := []byte("# not a heading\n_not_ italics\n| a | b |")
+	out := prepareForPandoc(plain, "text/plain")
+	s := string(out)
+	if !strings.HasPrefix(s, "~~~") {
+		t.Errorf("expected tilde fence prefix, got %q", s)
+	}
+	if !strings.Contains(s, "# not a heading") {
+		t.Errorf("source content missing from output")
+	}
+	// Round-trip through the actual gfm reader → html writer would
+	// preserve the literal `#`; here we just assert the wrapper shape.
+	if !strings.HasSuffix(strings.TrimRight(s, "\n"), "~~~") {
+		t.Errorf("expected tilde fence suffix, got %q", s)
+	}
+}
+
+func TestTildeFenceFor(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"no tildes", "hello world", "~~~"},
+		{"short tilde run", "x~~", "~~~"},
+		{"line-leading 3 tildes need 4", "~~~\nbody", "~~~~"},
+		{"line-leading 5 tildes need 6", "~~~~~\nbody", "~~~~~~"},
+		{"tildes mid-line ignored", "foo ~~~~~ bar", "~~~"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tildeFenceFor([]byte(tt.source)); got != tt.want {
+				t.Errorf("tildeFenceFor(%q) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -310,6 +364,29 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			name:           "drops math (MathML foreign content)",
 			input:          `<html><body><math><mi>x</mi></math></body></html>`,
 			wantNotContain: []string{"<math"},
+		},
+		{
+			name:           "scrubs comment-obfuscated @import",
+			input:          `<html><head><style>@import/**/"http://169.254.169.254/x.css";body{color:red}</style></head><body></body></html>`,
+			wantContain:    []string{"color:red"},
+			wantNotContain: []string{"@import", "169.254.169.254"},
+		},
+		{
+			name:           "scrubs url() with comment-obfuscated remote",
+			input:          `<html><head><style>body{background:url(/**/http://169.254.169.254/)}</style></head><body></body></html>`,
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:           "drops body background attribute (HTML4 legacy)",
+			input:          `<html><body background="http://169.254.169.254/x.png"><p>hi</p></body></html>`,
+			wantContain:    []string{"hi"},
+			wantNotContain: []string{"background=", "169.254.169.254"},
+		},
+		{
+			name:           "drops td background attribute",
+			input:          `<html><body><table><tr><td background="http://169.254.169.254/">x</td></tr></table></body></html>`,
+			wantContain:    []string{">x<"},
+			wantNotContain: []string{"background=", "169.254.169.254"},
 		},
 	}
 	for _, tt := range tests {

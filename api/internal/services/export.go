@@ -190,22 +190,88 @@ func (e *ExportService) Export(ctx context.Context, file *models.File, format Ex
 
 	outName := exportFilename(file.Name, format)
 
+	prepared := prepareForPandoc(source, file.MimeType)
+
 	switch format {
 	case ExportMD, ExportTXT:
 		return &ExportResult{Body: source, MimeType: mimeFor(format), Filename: outName}, nil
 	case ExportPDF:
-		body, err := e.renderPDF(ctx, source, file.MimeType)
+		body, err := e.renderPDF(ctx, prepared)
 		if err != nil {
 			return nil, err
 		}
 		return &ExportResult{Body: body, MimeType: mimeFor(format), Filename: outName}, nil
 	default:
-		body, err := e.runPandoc(ctx, source, sourceFormatFor(file.MimeType), string(format))
+		body, err := e.runPandoc(ctx, prepared, "gfm", string(format))
 		if err != nil {
 			return nil, err
 		}
 		return &ExportResult{Body: body, MimeType: mimeFor(format), Filename: outName}, nil
 	}
+}
+
+// prepareForPandoc wraps non-markdown text in a fenced code block so the
+// gfm reader doesn't reinterpret literal `#`, `_`, `|`, etc. as markdown
+// syntax. Markdown sources pass through verbatim.
+//
+// The fence is built from tildes — one more than the longest run of `~`
+// at the start of any line in the source — so a pathological input that
+// contains `~~~~` can't terminate the wrapper early.
+func prepareForPandoc(source []byte, mimeType string) []byte {
+	if isMarkdownMime(mimeType) {
+		return source
+	}
+	fence := tildeFenceFor(source)
+	var buf bytes.Buffer
+	buf.Grow(len(source) + 2*len(fence) + 4)
+	buf.WriteString(fence)
+	buf.WriteByte('\n')
+	buf.Write(source)
+	if len(source) == 0 || source[len(source)-1] != '\n' {
+		buf.WriteByte('\n')
+	}
+	buf.WriteString(fence)
+	buf.WriteByte('\n')
+	return buf.Bytes()
+}
+
+func isMarkdownMime(mimeType string) bool {
+	m := strings.ToLower(strings.TrimSpace(mimeType))
+	if i := strings.IndexByte(m, ';'); i >= 0 {
+		m = m[:i]
+	}
+	return m == "text/markdown" || m == "text/x-markdown"
+}
+
+// tildeFenceFor returns a tilde fence guaranteed to be longer than any
+// line-leading tilde run in source, so a wrapped fenced code block
+// cannot be closed prematurely by content.
+func tildeFenceFor(source []byte) string {
+	longest := 0
+	atLineStart := true
+	run := 0
+	for _, b := range source {
+		switch b {
+		case '\n':
+			atLineStart = true
+			run = 0
+		case '~':
+			if atLineStart {
+				run++
+				if run > longest {
+					longest = run
+				}
+			}
+		default:
+			atLineStart = false
+			run = 0
+		}
+	}
+	n := longest + 1
+	if n < 3 {
+		n = 3
+	}
+	return strings.Repeat("~", n)
 }
 
 func (e *ExportService) readSource(ctx context.Context, file *models.File) ([]byte, error) {
@@ -226,16 +292,6 @@ func (e *ExportService) readSource(ctx context.Context, file *models.File) ([]by
 	return body, nil
 }
 
-// sourceFormatFor maps a stored MIME type to the format flag pandoc
-// expects on its -f argument. Pandoc has no `plain` reader (only a
-// writer of that name), so we use `gfm` for every text source — gfm
-// treats plain text as markdown with no formatting, which is harmless
-// for actual plain text and preserves tables/task lists when the source
-// really is markdown.
-func sourceFormatFor(mimeType string) string {
-	_ = mimeType
-	return "gfm"
-}
 
 // runPandoc invokes pandoc, piping the source on stdin and capturing the
 // converted bytes from stdout. Stderr is captured so a failure surfaces a
@@ -286,17 +342,18 @@ func (e *ExportService) runPandoc(ctx context.Context, source []byte, fromFmt, t
 	return stdout.Bytes(), nil
 }
 
-// renderPDF takes the raw source bytes, has pandoc emit a self-contained
-// HTML document, and posts that HTML to Gotenberg's chromium HTML route
-// to produce the PDF. This avoids pulling in LaTeX just for PDF output.
+// renderPDF takes the prepared source bytes (markdown or fenced text —
+// see prepareForPandoc), has pandoc emit a self-contained HTML
+// document, and posts that HTML to Gotenberg's chromium HTML route to
+// produce the PDF. This avoids pulling in LaTeX just for PDF output.
 //
 // The intermediate HTML is run through sanitizeHTMLForChromium first so
 // remote `<img src>` / `<link href>` / similar attributes don't trigger
 // SSRF when Chromium renders the page — markdown like
 // `![](http://169.254.169.254/...)` would otherwise reach internal hosts
 // from inside the gotenberg container.
-func (e *ExportService) renderPDF(ctx context.Context, source []byte, mimeType string) ([]byte, error) {
-	rendered, err := e.runPandoc(ctx, source, sourceFormatFor(mimeType), "html")
+func (e *ExportService) renderPDF(ctx context.Context, source []byte) ([]byte, error) {
+	rendered, err := e.runPandoc(ctx, source, "gfm", "html")
 	if err != nil {
 		return nil, err
 	}
@@ -439,8 +496,16 @@ var cssURLPattern = regexp.MustCompile(`(?i)url\s*\(\s*['"]?\s*([^'")\s]*)\s*['"
 
 // cssImportPattern matches CSS `@import` directives. We drop these
 // entirely — there's no reason for user-controlled @import in our
-// pandoc-rendered output.
-var cssImportPattern = regexp.MustCompile(`(?i)@import\s+[^;]+;?`)
+// pandoc-rendered output. Note: CSS comments are stripped before this
+// pattern runs so `@import/**/"..."` style obfuscation can't slip past
+// the whitespace requirement here.
+var cssImportPattern = regexp.MustCompile(`(?is)@import\b[^;]*;?`)
+
+// cssCommentPattern matches CSS block comments (`/* ... */`, including
+// multi-line). Chromium treats comments as whitespace, so
+// `@import/**/"http://..."` would bypass cssImportPattern unless we
+// strip comments first.
+var cssCommentPattern = regexp.MustCompile(`/\*[\s\S]*?\*/`)
 
 // sanitizeHTMLForChromium walks the parsed HTML tree and removes anything
 // that would cause Chromium to issue outbound requests, execute scripts,
@@ -540,6 +605,10 @@ func filterDangerousAttrs(attrs []html.Attribute) []html.Attribute {
 			// candidate, so a single safe data: entry doesn't make the
 			// whole attribute safe. Drop unconditionally.
 			continue
+		case key == "background":
+			// Legacy HTML4 `<body background="…">` and `<td background="…">`
+			// are still honored by Chromium and would trigger a fetch.
+			continue
 		case strings.HasPrefix(key, "on"):
 			// onclick, onload, onerror, etc.
 			continue
@@ -560,8 +629,11 @@ func scrubStyleContent(n *html.Node) {
 
 // scrubCSSResources rewrites `url(...)` references in a CSS snippet to
 // `url()` when the referenced URL would trigger a fetch, and removes
-// `@import` directives entirely.
+// `@import` directives entirely. CSS comments are stripped first so
+// constructs like `@import/**/"http://..."` (Chromium parses comments
+// as whitespace) can't bypass the import-removal pattern.
 func scrubCSSResources(css string) string {
+	css = cssCommentPattern.ReplaceAllString(css, "")
 	css = cssImportPattern.ReplaceAllString(css, "")
 	css = cssURLPattern.ReplaceAllStringFunc(css, func(match string) string {
 		sub := cssURLPattern.FindStringSubmatch(match)
