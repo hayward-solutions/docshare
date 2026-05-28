@@ -18,8 +18,10 @@ export type ExportFormat = 'pdf' | 'docx' | 'odt' | 'rtf' | 'html' | 'epub' | 'm
 
 // Mirror of services.IsExportableSource in the Go API: markdown and any
 // plain-text MIME can be exported. Used by the viewer to decide whether
-// to render the menu at all.
-export function isExportableSourceMime(mimeType: string): boolean {
+// to render the menu at all. Accepts null/undefined so callers can pass
+// straight from a partially-loaded File object without an extra check.
+export function isExportableSourceMime(mimeType: string | undefined | null): boolean {
+  if (!mimeType) return false;
   const m = mimeType.toLowerCase().split(';')[0].trim();
   return m === 'text/markdown' || m === 'text/x-markdown' || m.startsWith('text/');
 }
@@ -55,7 +57,8 @@ interface ExportMenuProps {
 export function ExportMenu({ fileId, sourceMime, disabled }: ExportMenuProps) {
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
 
-  const options = sourceMime.startsWith('text/markdown') || sourceMime.startsWith('text/x-markdown')
+  const mime = sourceMime.toLowerCase();
+  const options = mime.startsWith('text/markdown') || mime.startsWith('text/x-markdown')
     ? MARKDOWN_OPTIONS
     : TEXT_OPTIONS;
 

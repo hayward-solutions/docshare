@@ -191,7 +191,7 @@ func (e *ExportService) Export(ctx context.Context, file *models.File, format Ex
 	case ExportMD, ExportTXT:
 		return &ExportResult{Body: source, MimeType: mimeFor(format), Filename: outName}, nil
 	case ExportPDF:
-		body, err := e.renderPDF(ctx, source, file.Name)
+		body, err := e.renderPDF(ctx, source, file.MimeType)
 		if err != nil {
 			return nil, err
 		}
@@ -279,24 +279,12 @@ func (e *ExportService) runPandoc(ctx context.Context, source []byte, fromFmt, t
 // renderPDF takes the raw source bytes, has pandoc emit a self-contained
 // HTML document, and posts that HTML to Gotenberg's chromium HTML route
 // to produce the PDF. This avoids pulling in LaTeX just for PDF output.
-func (e *ExportService) renderPDF(ctx context.Context, source []byte, sourceName string) ([]byte, error) {
-	html, err := e.runPandoc(ctx, source, sourceFormatFor(mimeForExtension(sourceName)), "html")
+func (e *ExportService) renderPDF(ctx context.Context, source []byte, mimeType string) ([]byte, error) {
+	html, err := e.runPandoc(ctx, source, sourceFormatFor(mimeType), "html")
 	if err != nil {
 		return nil, err
 	}
 	return e.htmlToPDF(ctx, html)
-}
-
-// mimeForExtension is a tiny helper so renderPDF can pass a sensible
-// format flag to pandoc when called purely from a filename context — the
-// caller (Export) already has the MIME type, but we keep readPDF stand-
-// alone for testability.
-func mimeForExtension(name string) string {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".markdown":
-		return "text/markdown"
-	}
-	return "text/plain"
 }
 
 func (e *ExportService) htmlToPDF(ctx context.Context, html []byte) ([]byte, error) {
