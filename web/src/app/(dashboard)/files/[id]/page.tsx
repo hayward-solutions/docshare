@@ -650,11 +650,12 @@ function canOpenInEditor(file: { mimeType: string; canDownload?: boolean }): boo
 function editorSizeCapFor(mimeType: string): number {
   // Mirror of the backend caps in api/internal/handlers/files_content.go.
   // 8 MiB for spreadsheet binaries (capped below the
-  // SmallBodyLimitForNonUploadRoutes middleware), 4 MiB for text (lower
-  // so worst-case JSON-encoded content still fits inside the middleware
-  // limit). Keep these aligned with the server so the Edit button
-  // doesn't promise the user something the API will refuse.
-  return isSpreadsheetBinaryMime(mimeType) ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
+  // SmallBodyLimitForNonUploadRoutes middleware), 1 MiB for text (lower
+  // so worst-case JSON-encoded content — quotes, backslashes, control
+  // chars can inflate 2-6× — still fits inside the middleware limit).
+  // Keep these aligned with the server so the Edit button doesn't
+  // promise the user something the API will refuse.
+  return isSpreadsheetBinaryMime(mimeType) ? 8 * 1024 * 1024 : 1 * 1024 * 1024;
 }
 
 function formatBytes(bytes: number, decimals = 2) {

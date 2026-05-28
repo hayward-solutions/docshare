@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -24,13 +25,14 @@ import (
 // editor flow exists for human-authored docs (markdown, txt, code), not
 // for arbitrary blobs.
 //
-// The save path PUTs a JSON body ({"content":"..."}), so the wire size
-// after escaping can be larger than the raw content — pathological inputs
-// (all quotes, backslashes, control chars) can roughly double. The cap
-// stays below SmallBodyLimitForNonUploadRoutes (8 MiB) at 4 MiB so a
-// worst-case-encoded 4 MiB document still fits under the middleware's
-// pre-handler limit.
-const editableContentMaxBytes = 4 * 1024 * 1024
+// The save path PUTs a JSON body ({"content":"..."}), so wire size after
+// escaping can dwarf the raw content — pathological inputs of all
+// quotes/backslashes inflate ~2×, and all control characters
+// (`\u00XX`) inflate ~6×. The cap stays at 1 MiB so even a 6× escape
+// ratio fits under the SmallBodyLimitForNonUploadRoutes middleware (8
+// MiB), and a defensive raw-body check in SaveContent rejects requests
+// that somehow get through with too-large wire size.
+const editableContentMaxBytes = 1 * 1024 * 1024
 
 // editableBinaryMaxBytes is the analogous cap for the binary editor path
 // (spreadsheet workbooks). A Univer session decoding a multi-hundred-MB
@@ -192,6 +194,15 @@ func (h *FilesHandler) SaveContent(c *fiber.Ctx) error {
 			"required_permission": "edit",
 		})
 		return utils.Error(c, fiber.StatusForbidden, "no permission to edit this file")
+	}
+
+	// Defensive raw-wire-size check. The SmallBodyLimitForNonUploadRoutes
+	// middleware (8 MiB) is the primary guard, but reject obviously-too-
+	// large bodies here with a clear message before parsing JSON. JSON
+	// escape inflation means a < 1 MiB raw doc rarely exceeds even 2 MiB
+	// wire, so cap the wire body at 6× the decoded cap.
+	if int64(len(c.Body())) > editableContentMaxBytes*6 {
+		return utils.Error(c, fiber.StatusRequestEntityTooLarge, "request body too large for editor save")
 	}
 
 	var req saveContentRequest
@@ -506,7 +517,27 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed saving file content")
 	}
 
-	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(map[string]interface{}{"size": int64(len(body))}).Error; err != nil {
+	// Capture any thumbnail a viewer-enqueued worker may have published
+	// in the gap between our pre-upload UPDATE (which cleared the path)
+	// and now (after upload). Read this BEFORE the post-upload UPDATE,
+	// since that UPDATE re-clears the path.
+	var raceThumb sql.NullString
+	_ = h.DB.Raw("SELECT thumbnail_path FROM files WHERE id = ?", file.ID).Scan(&raceThumb).Error
+
+	// Update size AND clear thumbnail_path + bump updated_at again. A
+	// viewer that enqueues a preview between our pre-upload UPDATE and
+	// this one can land a stale render in that window: the new job's
+	// started_at is after our first updated_at bump, so the fence
+	// (file.updated_at <= started_at) passes and the worker writes
+	// thumbnail_path against the pre-upload bytes. Re-clearing here
+	// drops that stale pointer and re-fencing knocks out any further
+	// in-flight worker that started before this final bump.
+	postUpdates := map[string]interface{}{
+		"size":           int64(len(body)),
+		"updated_at":     time.Now().UTC(),
+		"thumbnail_path": nil,
+	}
+	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(postUpdates).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed updating file metadata")
 	}
 	if priorThumb != "" {
@@ -514,6 +545,16 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 			logger.Error("preview_thumb_cleanup_failed", delErr, map[string]interface{}{
 				"file_id":        file.ID.String(),
 				"thumbnail_path": priorThumb,
+			})
+		}
+	}
+	if raceThumb.Valid && raceThumb.String != "" && raceThumb.String != priorThumb {
+		// Worker raced in a stale thumbnail between our two updates. The
+		// row no longer references it, so the S3 object is orphaned.
+		if delErr := h.Storage.Delete(c.Context(), raceThumb.String); delErr != nil {
+			logger.Error("preview_thumb_race_cleanup_failed", delErr, map[string]interface{}{
+				"file_id":        file.ID.String(),
+				"thumbnail_path": raceThumb.String,
 			})
 		}
 	}

@@ -32,6 +32,11 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
   const containerRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<UniverHandle | null>(null);
   const lastSavedRef = useRef<string>('');
+  // Pending blank-XLSX seed PUT. handleSave awaits this before its own
+  // PUT so a quick user save can't be overwritten by the older seed
+  // request finishing afterwards. Reset to null once the seed resolves
+  // (success or error).
+  const seedPromiseRef = useRef<Promise<unknown> | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,17 +129,25 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
         // Seed a freshly-created blank XLSX with real bytes so a user who
         // bounces out before making changes still leaves a valid workbook
         // in storage (preview/download won't get a 0-byte placeholder).
+        // The PUT is awaited by handleSave so a quick user save can't
+        // race with — and be overwritten by — this seed.
         if (seedEmptyXlsx && handleRef.current && !cancelled) {
-          try {
-            const buf = await workbookToXLSXBuffer(handleRef.current.saveSnapshot());
-            if (!cancelled) {
+          const seedHandle = handleRef.current;
+          seedPromiseRef.current = (async () => {
+            try {
+              const buf = await workbookToXLSXBuffer(seedHandle.saveSnapshot());
+              if (cancelled) return;
               await filesAPI.saveBinary(fileId, buf, XLSX_MIME);
+            } catch (err) {
+              // Best-effort: log but don't fail the editor open. The user
+              // can still type and save normally.
+              console.warn('Failed to seed empty XLSX', err);
+            } finally {
+              // Only one seed per mount, so unconditionally clearing is
+              // safe (no risk of clobbering a newer seed).
+              seedPromiseRef.current = null;
             }
-          } catch (err) {
-            // Best-effort: log but don't fail the editor open. The user
-            // can still type and save normally.
-            console.warn('Failed to seed empty XLSX', err);
-          }
+          })();
         }
       } catch (err) {
         if (cancelled) return;
@@ -168,6 +181,13 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
     if (saveState === 'saving') return;
     setSaveState('saving');
     setSaveError(null);
+    // If the freshly-created blank-XLSX seed PUT is still in flight, let
+    // it land first so the user's save doesn't get retroactively
+    // overwritten by the older seed when it resolves last.
+    const pendingSeed = seedPromiseRef.current;
+    if (pendingSeed) {
+      try { await pendingSeed; } catch { /* ignore — log already happened */ }
+    }
     // Capture the snapshot at save-start. If the user keeps typing during
     // the PUT we don't want to clear isDirty when the response lands —
     // their newer edits aren't saved yet.
