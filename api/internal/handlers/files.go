@@ -45,12 +45,13 @@ type FilesHandler struct {
 	Access         *services.AccessService
 	PreviewService *services.PreviewService
 	PreviewQueue   *services.PreviewQueueService
+	ExportService  *services.ExportService
 	Audit          *services.AuditService
 	MaxUploadBytes int64
 }
 
-func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, audit *services.AuditService, maxUploadBytes int64) *FilesHandler {
-	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, Audit: audit, MaxUploadBytes: maxUploadBytes}
+func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *services.AccessService, preview *services.PreviewService, previewQueue *services.PreviewQueueService, export *services.ExportService, audit *services.AuditService, maxUploadBytes int64) *FilesHandler {
+	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, ExportService: export, Audit: audit, MaxUploadBytes: maxUploadBytes}
 }
 
 func resolveMimeType(filename, declared string) string {

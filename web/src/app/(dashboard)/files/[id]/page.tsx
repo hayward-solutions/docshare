@@ -60,6 +60,7 @@ import { ShareDialog } from '@/components/share-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
 import { FileViewer } from '@/components/file-viewer';
+import { ExportMenu, canExportFile } from '@/components/export-menu';
 import { FileInspector } from '@/components/file-inspector';
 import { BulkActionBar } from '@/components/bulk-action-bar';
 import { toast } from 'sonner';
@@ -313,6 +314,9 @@ const handleDownload = async (fileId: string, fileName: string) => {
               <Download className="mr-2 h-4 w-4" />
               Download
             </Button>
+          )}
+          {!file.isDirectory && canExportFile(file) && (
+            <ExportMenu fileId={file.id} sourceMime={file.mimeType} />
           )}
 
           {user?.id === file.ownerID && (

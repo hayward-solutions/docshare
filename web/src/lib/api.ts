@@ -145,6 +145,7 @@ export interface FileContentResponse {
   name: string;
   size: number;
   canEdit: boolean;
+  canDownload: boolean;
 }
 
 export interface FileBinaryResponse {
@@ -200,6 +201,36 @@ export const filesAPI = {
       // (X-Can-Edit) so a view-only share opens read-only in the editor.
       canEdit: res.headers.get('x-can-edit') === 'true',
     };
+  },
+  exportFile: async (id: string, format: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`${API_URL}/files/${id}/export?format=${encodeURIComponent(format)}`, {
+      headers: authHeaders(),
+    });
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      let message = `Export failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // Non-JSON body — fall through with the generic message.
+      }
+      throw new Error(message);
+    }
+    // Parse the filename out of Content-Disposition so the saved file
+    // mirrors the source name with the new extension. Falls back to
+    // <id>.<format> if the header is missing or malformed.
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = match?.[1] ?? `${id}.${format}`;
+    const blob = await res.blob();
+    return { blob, filename };
   },
   saveBinary: async (id: string, body: ArrayBuffer | Uint8Array, mimeType: string): Promise<ApiResponse<FileMeta>> => {
     const res = await fetch(`${API_URL}/files/${id}/binary`, {

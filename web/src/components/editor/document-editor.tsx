@@ -29,6 +29,7 @@ import { EditorToolbar } from './toolbar';
 import { EditorShell, useCmdS, useUnsavedWarning, type SaveState } from './editor-shell';
 import { SpreadsheetEditor } from './spreadsheet-editor';
 import { SlashCommandExtension } from './slash-command';
+import { isExportableSourceMime } from '@/components/export-menu';
 
 const MARKDOWN_MIMES = new Set(['text/markdown', 'text/x-markdown']);
 
@@ -42,6 +43,7 @@ interface LoadedFile {
   name: string;
   mimeType: string;
   canEdit: boolean;
+  canDownload: boolean;
   content: string;
 }
 
@@ -92,6 +94,7 @@ export function DocumentEditor({ fileId }: DocumentEditorProps) {
           name: contentRes.data.name,
           mimeType: contentRes.data.mimeType,
           canEdit: contentRes.data.canEdit,
+          canDownload: contentRes.data.canDownload,
           content: contentRes.data.content,
         });
       } catch (err) {
@@ -288,6 +291,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge="Markdown"
+      exportMime={initial.canDownload && isExportableSourceMime(initial.mimeType) ? initial.mimeType : undefined}
     >
       {editor ? (
         <>
@@ -364,6 +368,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge={badge}
+      exportMime={initial.canDownload && isExportableSourceMime(initial.mimeType) ? initial.mimeType : undefined}
     >
       <textarea
         value={value}

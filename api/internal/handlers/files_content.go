@@ -143,14 +143,21 @@ func (h *FilesHandler) GetContent(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, "file exceeds editor maximum")
 	}
 
-	canEdit := file.OwnerID == currentUser.ID || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	isOwner := file.OwnerID == currentUser.ID
+	canEdit := isOwner || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	// canDownload gates Export-style features in the editor. A view-only
+	// share lets a user open the doc read-only but should not let them
+	// pull the bytes (raw or converted) back out — mirrors the Download
+	// handler's permission check.
+	canDownload := canEdit || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionDownload)
 
 	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"content":  string(body),
-		"mimeType": file.MimeType,
-		"name":     file.Name,
-		"size":     file.Size,
-		"canEdit":  canEdit,
+		"content":     string(body),
+		"mimeType":    file.MimeType,
+		"name":        file.Name,
+		"size":        file.Size,
+		"canEdit":     canEdit,
+		"canDownload": canDownload,
 	})
 }
 
