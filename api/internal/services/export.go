@@ -247,19 +247,20 @@ func (e *ExportService) runPandoc(ctx context.Context, source []byte, fromFmt, t
 	execCtx, cancel := context.WithTimeout(ctx, pandocExecTimeout)
 	defer cancel()
 
+	// `--sandbox` blocks all filesystem and network access except stdin/
+	// stdout and the explicit `--resource-path`. Without it, pandoc's
+	// DOCX/ODT/EPUB writers transparently fetch `<img src="http://…">`
+	// references to embed image bytes into the output — the same SSRF
+	// primitive that motivated dropping `--embed-resources` from the
+	// HTML path, but on a writer the flag doesn't reach. With sandbox
+	// on, embedded images must come from data URIs (which the TipTap
+	// editor already produces for pasted/dropped images).
+	//
 	// `-o -` forces pandoc to write to stdout. Binary formats (docx, odt,
 	// epub) refuse a TTY-bound stdout in some versions and require either
 	// a file path or this explicit dash; including it for all formats
 	// keeps behavior consistent.
-	//
-	// We intentionally do NOT pass --embed-resources: pandoc would resolve
-	// `![](http://…)` references over the network, giving an authenticated
-	// user an SSRF primitive from the api container (cloud metadata,
-	// internal services, etc.). Editor-pasted images are already data
-	// URIs (see web/src/lib/editor-images.ts) so they survive without
-	// remote fetching. Remote URLs in markdown survive as plain HTML
-	// references that the consumer's browser resolves.
-	args := []string{"-f", fromFmt, "-t", toFmt, "--standalone", "-o", "-"}
+	args := []string{"--sandbox", "-f", fromFmt, "-t", toFmt, "--standalone", "-o", "-"}
 
 	cmd := exec.CommandContext(execCtx, e.PandocPath, args...)
 	cmd.Stdin = bytes.NewReader(source)
