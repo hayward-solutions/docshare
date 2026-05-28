@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -400,10 +401,8 @@ func extensionFor(format ExportFormat) string {
 // remoteFetchAttrs maps element names to the attributes Chromium would
 // hit the network for when rendering. Anchor `<a href>` is intentionally
 // excluded — those are user clicks, not auto-fetches, and stripping them
-// would degrade the PDF as a usable document. `<script>` is rare in
-// pandoc output but listed defensively. `<style>` inline CSS can also
-// reference URLs via `url(...)` but pandoc's standalone template doesn't
-// include user-controllable CSS, so we leave style content alone.
+// would degrade the PDF as a usable document. `<script>` elements are
+// removed wholesale below so the `src` entry here is mostly defensive.
 var remoteFetchAttrs = map[string][]string{
 	"img":    {"src", "srcset", "longdesc"},
 	"source": {"src", "srcset"},
@@ -413,45 +412,148 @@ var remoteFetchAttrs = map[string][]string{
 	"iframe": {"src"},
 	"embed":  {"src"},
 	"object": {"data"},
-	"script": {"src"},
 	"link":   {"href"},
 	"input":  {"src"},
 }
 
-// sanitizeHTMLForChromium walks the parsed HTML tree and strips
-// attributes that would cause Chromium to issue outbound requests when
-// rendering the document for PDF export. This blunts a server-side
-// request forgery primitive: without it, an authenticated user could
-// drop `![](http://169.254.169.254/...)` in markdown and the gotenberg
-// container would dutifully fetch the URL.
+// cssURLPattern matches CSS `url(...)` references — quoted or bare, with
+// or without surrounding whitespace. Used to rewrite `<style>` content so
+// user-injected raw HTML can't smuggle SSRF through CSS.
+var cssURLPattern = regexp.MustCompile(`(?i)url\s*\(\s*['"]?\s*([^'")\s]*)\s*['"]?\s*\)`)
+
+// cssImportPattern matches CSS `@import` directives. We drop these
+// entirely — there's no reason for user-controlled @import in our
+// pandoc-rendered output.
+var cssImportPattern = regexp.MustCompile(`(?i)@import\s+[^;]+;?`)
+
+// sanitizeHTMLForChromium walks the parsed HTML tree and removes anything
+// that would cause Chromium to issue outbound requests, execute scripts,
+// or trigger event handlers when rendering for PDF export. This blunts an
+// SSRF primitive: without it, an authenticated user could drop a remote
+// image, inline script, or `url()` reference in markdown (pandoc's gfm
+// reader passes raw HTML through) and the gotenberg container would
+// dutifully fetch internal services.
 //
-// `data:` and `cid:` URLs are preserved so editor-pasted images
-// (encoded as data URIs by the TipTap upload path) survive.
+// What it does:
+//   - removes <script> and <link> elements entirely
+//   - scrubs <style> body content of url() and @import references
+//   - drops `style=` attributes on all elements (inline CSS can carry url())
+//   - drops `on*=` event handler attributes
+//   - strips src/href/data/etc. attributes on auto-fetching tags when the
+//     URL isn't a data:/cid:/fragment URL
+//
+// `data:` and `cid:` URLs survive so editor-pasted images (encoded as
+// data URIs by the TipTap upload path) still render.
 func sanitizeHTMLForChromium(input []byte) ([]byte, error) {
 	doc, err := html.Parse(bytes.NewReader(input))
 	if err != nil {
 		return nil, err
 	}
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode {
-			if attrs, ok := remoteFetchAttrs[strings.ToLower(n.Data)]; ok {
-				for _, name := range attrs {
-					stripRemoteAttr(n, name)
-				}
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
+	sanitizeNode(doc)
 
 	var buf bytes.Buffer
 	if err := html.Render(&buf, doc); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func sanitizeNode(n *html.Node) {
+	// Snapshot children before walking — we mutate the tree as we go.
+	var children []*html.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		children = append(children, c)
+	}
+
+	for _, c := range children {
+		if c.Type != html.ElementNode {
+			sanitizeNode(c)
+			continue
+		}
+
+		data := strings.ToLower(c.Data)
+
+		// Drop <script> outright. The inline body, not just the src, is
+		// the danger: `<script>fetch('http://169.254.169.254/...')</script>`
+		// would execute when Chromium renders the page.
+		if data == "script" {
+			n.RemoveChild(c)
+			continue
+		}
+
+		// Drop <link> outright. Pandoc's --standalone output doesn't use
+		// it (CSS goes in an inline <style>), and user-injected raw
+		// <link rel="stylesheet"> / <link rel="preload"> would fetch.
+		if data == "link" {
+			n.RemoveChild(c)
+			continue
+		}
+
+		// Strip inline event handlers and `style=` attributes (which can
+		// embed `background:url(...)` etc.).
+		c.Attr = filterDangerousAttrs(c.Attr)
+
+		// Strip remote URLs in src/href/data attributes for auto-fetching
+		// tags. data:/cid:/fragment URLs survive.
+		if attrs, ok := remoteFetchAttrs[data]; ok {
+			for _, name := range attrs {
+				stripRemoteAttr(c, name)
+			}
+		}
+
+		// Inside <style>, rewrite url(...) refs to url() and drop @import
+		// directives. Pandoc's own default stylesheet doesn't use either,
+		// so this only affects user-injected raw <style> blocks.
+		if data == "style" {
+			scrubStyleContent(c)
+		}
+
+		sanitizeNode(c)
+	}
+}
+
+func filterDangerousAttrs(attrs []html.Attribute) []html.Attribute {
+	out := attrs[:0]
+	for _, a := range attrs {
+		key := strings.ToLower(a.Key)
+		if key == "style" {
+			continue
+		}
+		if strings.HasPrefix(key, "on") {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+func scrubStyleContent(n *html.Node) {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != html.TextNode {
+			continue
+		}
+		c.Data = scrubCSSResources(c.Data)
+	}
+}
+
+// scrubCSSResources rewrites `url(...)` references in a CSS snippet to
+// `url()` when the referenced URL would trigger a fetch, and removes
+// `@import` directives entirely.
+func scrubCSSResources(css string) string {
+	css = cssImportPattern.ReplaceAllString(css, "")
+	css = cssURLPattern.ReplaceAllStringFunc(css, func(match string) string {
+		sub := cssURLPattern.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return "url()"
+		}
+		ref := strings.TrimSpace(sub[1])
+		low := strings.ToLower(ref)
+		if strings.HasPrefix(low, "data:") {
+			return match
+		}
+		return "url()"
+	})
+	return css
 }
 
 func stripRemoteAttr(n *html.Node, attrName string) {

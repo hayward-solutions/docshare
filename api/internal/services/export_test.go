@@ -220,12 +220,6 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			wantContain: []string{`href="#section"`, `src="#foo"`},
 		},
 		{
-			name:           "strips link href to external CSS",
-			input:          `<html><head><link rel="stylesheet" href="http://cdn.example.com/style.css"></head><body></body></html>`,
-			wantContain:    []string{`rel="stylesheet"`},
-			wantNotContain: []string{"cdn.example.com"},
-		},
-		{
 			name:           "strips iframe src",
 			input:          `<html><body><iframe src="http://internal/admin"></iframe></body></html>`,
 			wantNotContain: []string{"internal/admin"},
@@ -239,6 +233,47 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			name:        "preserves headings and paragraphs",
 			input:       `<html><body><h1>Title</h1><p>Hello <strong>world</strong></p></body></html>`,
 			wantContain: []string{"<h1>Title</h1>", "<strong>world</strong>"},
+		},
+		{
+			name:           "drops script element entirely",
+			input:          `<html><body><p>before</p><script>new Image().src='http://169.254.169.254/'</script><p>after</p></body></html>`,
+			wantContain:    []string{"before", "after"},
+			wantNotContain: []string{"<script", "169.254.169.254", "Image()"},
+		},
+		{
+			name:           "drops link element entirely",
+			input:          `<html><head><link rel="stylesheet" href="http://cdn.example.com/x.css"></head><body><p>hi</p></body></html>`,
+			wantContain:    []string{"hi"},
+			wantNotContain: []string{"<link", "cdn.example.com", "stylesheet"},
+		},
+		{
+			name:           "strips style attribute",
+			input:          `<html><body><div style="background-image:url(http://169.254.169.254/)">x</div></body></html>`,
+			wantContain:    []string{"x"},
+			wantNotContain: []string{"style=", "background-image", "169.254.169.254"},
+		},
+		{
+			name:           "strips inline event handler",
+			input:          `<html><body><div onclick="fetch('http://internal')" onload="x()">x</div></body></html>`,
+			wantContain:    []string{"x"},
+			wantNotContain: []string{"onclick", "onload", "fetch(", "internal"},
+		},
+		{
+			name:           "scrubs url() in style block",
+			input:          `<html><head><style>body { background: url(http://169.254.169.254/); color: red; }</style></head><body></body></html>`,
+			wantContain:    []string{"<style", "color: red", "url()"},
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:           "scrubs @import in style block",
+			input:          `<html><head><style>@import url('http://evil.com/x.css'); body { color: red; }</style></head><body></body></html>`,
+			wantContain:    []string{"color: red"},
+			wantNotContain: []string{"@import", "evil.com"},
+		},
+		{
+			name:        "preserves data: url() in style block",
+			input:       `<html><head><style>.icon { background: url(data:image/png;base64,iVBOR); }</style></head><body></body></html>`,
+			wantContain: []string{"data:image/png;base64,iVBOR"},
 		},
 	}
 	for _, tt := range tests {
