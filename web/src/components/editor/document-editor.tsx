@@ -288,6 +288,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge="Markdown"
+      exportMime={initial.mimeType}
     >
       {editor ? (
         <>
@@ -364,6 +365,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge={badge}
+      exportMime={initial.mimeType}
     >
       <textarea
         value={value}

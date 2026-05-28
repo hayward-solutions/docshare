@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ExportMenu } from '@/components/export-menu';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -25,6 +26,11 @@ export interface EditorShellProps {
   saveError: string | null;
   onSave: () => void;
   mimeBadge: string;
+  // exportMime, when set, surfaces the Export-as menu. Pass the source
+  // file's MIME type so the menu can offer format options the backend
+  // ExportService actually supports. Editors for binary formats (XLSX)
+  // omit this since users already have the native file via Download.
+  exportMime?: string;
   children: React.ReactNode;
 }
 
@@ -37,6 +43,7 @@ export function EditorShell({
   saveError,
   onSave,
   mimeBadge,
+  exportMime,
   children,
 }: EditorShellProps) {
   const router = useRouter();
@@ -79,6 +86,7 @@ export function EditorShell({
         </div>
         <div className="flex items-center gap-3">
           <SaveStatus state={saveState} dirty={isDirty} error={saveError} canEdit={canEdit} />
+          {exportMime && <ExportMenu fileId={fileId} sourceMime={exportMime} disabled={isDirty && canEdit} />}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/files/${fileId}`} onClick={handleView}>
               <Eye className="mr-2 h-4 w-4" />

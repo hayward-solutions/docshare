@@ -103,7 +103,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	authHandler := NewAuthHandler(db, auditService)
 	usersHandler := NewUsersHandler(db, auditService)
 	groupsHandler := NewGroupsHandler(db, auditService)
-	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, auditService, 100*1024*1024)
+	filesHandler := NewFilesHandler(db, nil, accessService, previewService, previewQueueService, nil, auditService, 100*1024*1024)
 	sharesHandler := NewSharesHandler(db, accessService, auditService)
 	activitiesHandler := NewActivitiesHandler(db)
 	auditHandler := NewAuditHandler(db)
