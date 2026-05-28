@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/docshare/api/internal/middleware"
@@ -27,9 +28,10 @@ const editableContentMaxBytes = 5 * 1024 * 1024
 
 // editableBinaryMaxBytes is the analogous cap for the binary editor path
 // (spreadsheet workbooks). A Univer session decoding a multi-hundred-MB
-// XLSX would crash the tab; a smaller cap also keeps the in-place PUT
-// path from being misused to ship large bodies.
-const editableBinaryMaxBytes = 10 * 1024 * 1024
+// XLSX would crash the tab. The cap is kept below
+// SmallBodyLimitForNonUploadRoutes (8 MiB) so the PUT body limit
+// middleware doesn't 413 us before we reach this handler.
+const editableBinaryMaxBytes = 8 * 1024 * 1024
 
 // isEditableTextMime gates the JSON /content endpoints. Anything that's not
 // human-readable text is rejected so a save through this path can't silently
@@ -53,17 +55,13 @@ func isEditableTextMime(mimeType string) bool {
 	return false
 }
 
-// isEditableSpreadsheetBinaryMime gates the /binary endpoints to the
-// workbook formats the SpreadsheetEditor knows how to parse and re-emit
-// (XLSX, XLS, ODS). text/csv stays on the text path because it's plain text.
+// isEditableSpreadsheetBinaryMime gates the /binary endpoints. Currently
+// XLSX-only — the ExcelJS bridge used by the SpreadsheetEditor only parses
+// and writes XLSX, so accepting .xls (BIFF) or .ods (OpenDocument) would
+// either fail on load or silently rewrite the bytes as XLSX under the old
+// mime/extension. text/csv stays on the text path because it's plain text.
 func isEditableSpreadsheetBinaryMime(mimeType string) bool {
-	switch mimeType {
-	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		"application/vnd.ms-excel",
-		"application/vnd.oasis.opendocument.spreadsheet":
-		return true
-	}
-	return false
+	return mimeType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 }
 
 // isCreatableDocMime is the union — what CreateDoc is willing to mint a
@@ -357,6 +355,14 @@ func (h *FilesHandler) GetBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	// Surface edit-permission to the spreadsheet editor in a custom
+	// response header so it can mount Univer read-only when a view-only
+	// share opens the file. Mirrors the canEdit field on the JSON
+	// /content response.
+	canEdit := file.OwnerID == currentUser.ID || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	c.Set("X-Can-Edit", strconv.FormatBool(canEdit))
+	c.Set("Access-Control-Expose-Headers", "X-Can-Edit")
+
 	// A freshly-minted blank file from CreateDoc has size 0 — stream nothing
 	// rather than hitting S3 for an empty object, and let the client treat
 	// the missing body as "open an empty workbook."
@@ -431,8 +437,32 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed saving file content")
 	}
 
-	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(map[string]interface{}{"size": int64(len(body))}).Error; err != nil {
+	updates := map[string]interface{}{"size": int64(len(body))}
+	// The previously-rendered preview (PDF thumbnail of the pre-edit
+	// workbook) no longer reflects what's in storage. Clear the pointer
+	// so PreviewURL/ProxyPreview don't serve a stale image, drop the old
+	// thumbnail object best-effort, and delete the completed PreviewJob
+	// so the viewer re-enqueues a fresh render on next open.
+	priorThumb := ""
+	if file.ThumbnailPath != nil {
+		priorThumb = *file.ThumbnailPath
+		updates["thumbnail_path"] = nil
+	}
+	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(updates).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed updating file metadata")
+	}
+	if priorThumb != "" {
+		if delErr := h.Storage.Delete(c.Context(), priorThumb); delErr != nil {
+			logger.Error("preview_thumb_cleanup_failed", delErr, map[string]interface{}{
+				"file_id":        file.ID.String(),
+				"thumbnail_path": priorThumb,
+			})
+		}
+	}
+	if err := h.DB.Where("file_id = ?", file.ID).Delete(&models.PreviewJob{}).Error; err != nil {
+		logger.Error("preview_job_cleanup_failed", err, map[string]interface{}{
+			"file_id": file.ID.String(),
+		})
 	}
 
 	var updated models.File

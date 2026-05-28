@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import '@univerjs/preset-sheets-core/lib/index.css';
 import { filesAPI } from '@/lib/api';
-import { isCsvMime } from '@/lib/mime';
+import { isCsvMime, XLSX_MIME } from '@/lib/mime';
 import {
   csvToWorkbook,
   workbookToCSV,
@@ -38,6 +38,7 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lossyImport, setLossyImport] = useState(false);
 
   const isCsv = isCsvMime(mimeType);
 
@@ -54,6 +55,8 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
       try {
         let snapshot: UniverWorkbookSnapshot;
         let editable = false;
+        let seedEmptyXlsx = false;
+        let complex = false;
 
         if (isCsv) {
           const res = await filesAPI.getContent(fileId);
@@ -62,23 +65,30 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
           snapshot = csvToWorkbook(res.data.content, res.data.name);
           editable = res.data.canEdit;
         } else {
-          // Need editability from the metadata endpoint since /binary doesn't return it
-          const [binRes, metaRes] = await Promise.all([
-            filesAPI.getBinary(fileId),
-            filesAPI.getMeta(fileId),
-          ]);
+          // The backend echoes the edit-permission decision via the
+          // X-Can-Edit header on the /binary response so view-only shares
+          // open Univer read-only.
+          const binRes = await filesAPI.getBinary(fileId);
           if (cancelled) return;
-          if (!metaRes.success) throw new Error(metaRes.error || 'Failed to load metadata');
-          snapshot = binRes.size === 0
-            ? emptyWorkbook(metaRes.data.name)
-            : await xlsxBufferToWorkbook(binRes.bytes, metaRes.data.name);
-          // canEdit: owner OR has edit share. For the editor route, treat
-          // owner as editable; the backend will still gate the save.
-          editable = true;
+          editable = binRes.canEdit;
+          if (binRes.size === 0) {
+            snapshot = emptyWorkbook(name);
+            // CreateDoc stores a zero-byte placeholder; if we don't seed
+            // real XLSX bytes after mount, the file is unusable from any
+            // other surface (download/preview). Defer the seed-save until
+            // after Univer has mounted so a re-export reflects the
+            // canonical empty workbook.
+            seedEmptyXlsx = editable;
+          } else {
+            const imported = await xlsxBufferToWorkbook(binRes.bytes, name);
+            snapshot = imported.workbook;
+            complex = imported.hasComplexFormatting;
+          }
         }
 
         if (cancelled) return;
         setCanEdit(editable);
+        setLossyImport(complex);
 
         const container = containerRef.current;
         if (!container) return;
@@ -109,6 +119,22 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
         if (handleRef.current) {
           lastSavedRef.current = JSON.stringify(handleRef.current.saveSnapshot());
         }
+
+        // Seed a freshly-created blank XLSX with real bytes so a user who
+        // bounces out before making changes still leaves a valid workbook
+        // in storage (preview/download won't get a 0-byte placeholder).
+        if (seedEmptyXlsx && handleRef.current && !cancelled) {
+          try {
+            const buf = await workbookToXLSXBuffer(handleRef.current.saveSnapshot());
+            if (!cancelled) {
+              await filesAPI.saveBinary(fileId, buf, XLSX_MIME);
+            }
+          } catch (err) {
+            // Best-effort: log but don't fail the editor open. The user
+            // can still type and save normally.
+            console.warn('Failed to seed empty XLSX', err);
+          }
+        }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : 'Failed to load file';
@@ -126,15 +152,19 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
         try { handle.dispose(); } catch { /* noop */ }
       }
     };
-  }, [fileId, isCsv]);
+  }, [fileId, isCsv, name]);
 
   const handleSave = useCallback(async () => {
     const handle = handleRef.current;
     if (!handle || !canEdit) return;
     setSaveState('saving');
     setSaveError(null);
+    // Capture the snapshot at save-start. If the user keeps typing during
+    // the PUT we don't want to clear isDirty when the response lands —
+    // their newer edits aren't saved yet.
+    const snapshot = handle.saveSnapshot();
+    const savedKey = JSON.stringify(snapshot);
     try {
-      const snapshot = handle.saveSnapshot();
       if (isCsv) {
         const csv = workbookToCSV(snapshot);
         const res = await filesAPI.saveContent(fileId, csv);
@@ -144,8 +174,17 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
         const res = await filesAPI.saveBinary(fileId, buf, mimeType);
         if (!res.success) throw new Error(res.error || 'Save failed');
       }
-      lastSavedRef.current = JSON.stringify(snapshot);
-      setIsDirty(false);
+      lastSavedRef.current = savedKey;
+      // Only clear dirty if the editor's current snapshot still matches
+      // what we just saved. Otherwise the user typed during the PUT and
+      // the new content is still un-persisted.
+      const liveHandle = handleRef.current;
+      if (liveHandle) {
+        const liveKey = JSON.stringify(liveHandle.saveSnapshot());
+        setIsDirty(liveKey !== savedKey);
+      } else {
+        setIsDirty(false);
+      }
       setSaveState('saved');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -181,6 +220,16 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
       onSave={handleSave}
       mimeBadge={isCsv ? 'CSV' : 'Spreadsheet'}
     >
+      {lossyImport && canEdit && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            This workbook contains formulas, custom styles, merged cells, or multiple sheets.
+            Saving here will keep cell values but <span className="font-medium">drop those structures</span>.
+            Download a copy first if you need the original.
+          </div>
+        </div>
+      )}
       <div className="relative h-[75vh] rounded-lg border bg-card shadow-xs overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-card">

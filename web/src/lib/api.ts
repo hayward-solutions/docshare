@@ -151,6 +151,7 @@ export interface FileBinaryResponse {
   bytes: ArrayBuffer;
   mimeType: string;
   size: number;
+  canEdit: boolean;
 }
 
 function authHeaders(): Record<string, string> {
@@ -195,6 +196,9 @@ export const filesAPI = {
       bytes,
       mimeType: res.headers.get('content-type') ?? 'application/octet-stream',
       size: bytes.byteLength,
+      // Backend exposes the edit-permission decision via a custom header
+      // (X-Can-Edit) so a view-only share opens read-only in the editor.
+      canEdit: res.headers.get('x-can-edit') === 'true',
     };
   },
   saveBinary: async (id: string, body: ArrayBuffer | Uint8Array, mimeType: string): Promise<ApiResponse<FileMeta>> => {

@@ -132,7 +132,7 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       <div
         className={cn(
           'flex flex-wrap items-center gap-0.5 rounded-md border bg-card p-1',
-          disabled && 'pointer-events-none opacity-60',
+          disabled && 'opacity-60',
         )}
         role="toolbar"
         aria-label="Document formatting"
@@ -140,11 +140,12 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger asChild disabled={disabled}>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
+                  disabled={disabled}
                   className="h-8 min-w-[5.5rem] justify-between gap-1.5 px-2"
                 >
                   <span className="text-xs font-medium">{activeHeading}</span>

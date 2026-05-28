@@ -628,10 +628,11 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
 function editorSizeCapFor(mimeType: string): number {
   // Mirror of the backend caps in api/internal/handlers/files_content.go.
-  // 10 MiB for spreadsheet binaries (XLSX/XLS/ODS), 5 MiB for everything
-  // else. Keep these aligned with the server so the Edit button doesn't
-  // promise the user something the API will refuse.
-  return isSpreadsheetBinaryMime(mimeType) ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+  // 8 MiB for spreadsheet binaries (capped below the
+  // SmallBodyLimitForNonUploadRoutes middleware), 5 MiB for text. Keep
+  // these aligned with the server so the Edit button doesn't promise the
+  // user something the API will refuse.
+  return isSpreadsheetBinaryMime(mimeType) ? 8 * 1024 * 1024 : 5 * 1024 * 1024;
 }
 
 function formatBytes(bytes: number, decimals = 2) {

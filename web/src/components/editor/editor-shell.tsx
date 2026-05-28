@@ -41,11 +41,28 @@ export function EditorShell({
 }: EditorShellProps) {
   const router = useRouter();
 
+  // beforeunload covers full-page navigation (close tab, hard refresh) but
+  // does nothing for Next's in-app router pushes. Gate the Back/View
+  // controls with a confirm() when there are unsaved changes so a misclick
+  // doesn't silently drop work.
+  const confirmDiscard = (): boolean => {
+    if (!isDirty) return true;
+    return window.confirm('You have unsaved changes. Leave the editor and discard them?');
+  };
+
+  const handleBack = () => {
+    if (confirmDiscard()) router.back();
+  };
+
+  const handleView = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!confirmDiscard()) e.preventDefault();
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back">
+          <Button variant="ghost" size="icon" onClick={handleBack} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="truncate text-xl font-semibold" title={name}>
@@ -63,7 +80,7 @@ export function EditorShell({
         <div className="flex items-center gap-3">
           <SaveStatus state={saveState} dirty={isDirty} error={saveError} canEdit={canEdit} />
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/files/${fileId}`}>
+            <Link href={`/files/${fileId}`} onClick={handleView}>
               <Eye className="mr-2 h-4 w-4" />
               View
             </Link>

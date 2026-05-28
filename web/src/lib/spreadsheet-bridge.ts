@@ -136,12 +136,27 @@ function excelValueToScalar(value: CellValue): string | number | boolean | null 
   }
 }
 
-export async function xlsxBufferToWorkbook(buffer: ArrayBuffer, workbookName = 'Spreadsheet'): Promise<UniverWorkbookSnapshot> {
-  if (buffer.byteLength === 0) return emptyWorkbook(workbookName);
+export interface XlsxImportResult {
+  workbook: UniverWorkbookSnapshot;
+  // True when the source XLSX contains structure (formulas, custom styles,
+  // merged cells, multiple sheets, etc.) that the bridge can't round-trip
+  // cleanly. The editor uses this to surface a "save will lose X" banner.
+  hasComplexFormatting: boolean;
+}
+
+export async function xlsxBufferToWorkbook(
+  buffer: ArrayBuffer,
+  workbookName = 'Spreadsheet',
+): Promise<XlsxImportResult> {
+  if (buffer.byteLength === 0) {
+    return { workbook: emptyWorkbook(workbookName), hasComplexFormatting: false };
+  }
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const sheetOrder: string[] = [];
   const sheets: Record<string, UniverSheetSnapshot> = {};
+  let hasComplexFormatting = false;
+  if (wb.worksheets.length > 1) hasComplexFormatting = true;
 
   wb.worksheets.forEach((ws, idx) => {
     const id = `sheet-${idx + 1}`;
@@ -149,12 +164,23 @@ export async function xlsxBufferToWorkbook(buffer: ArrayBuffer, workbookName = '
     const cellData: UniverCellData = {};
     let maxRow = 0;
     let maxCol = 0;
+    const merges = (ws as unknown as { _merges?: Record<string, unknown> })._merges;
+    if (merges && Object.keys(merges).length > 0) hasComplexFormatting = true;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       const rowIdx = rowNumber - 1;
       if (rowIdx > maxRow) maxRow = rowIdx;
       row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
         const colIdx = colNumber - 1;
         if (colIdx > maxCol) maxCol = colIdx;
+        // Detect lossy structure: formulas reduce to their cached result on
+        // save, custom styles drop entirely. One hit is enough to flip the
+        // banner; we don't need to enumerate every cell.
+        if (!hasComplexFormatting) {
+          if (cell.formula) hasComplexFormatting = true;
+          else if (cell.style && (cell.style.font || cell.style.fill || cell.style.border)) {
+            hasComplexFormatting = true;
+          }
+        }
         const scalar = excelValueToScalar(cell.value);
         if (scalar === null || scalar === '') return;
         if (!cellData[rowIdx]) cellData[rowIdx] = {};
@@ -176,7 +202,10 @@ export async function xlsxBufferToWorkbook(buffer: ArrayBuffer, workbookName = '
     sheets[sheet.id] = sheet;
   }
 
-  return { id: 'workbook-1', name: workbookName, sheetOrder, sheets };
+  return {
+    workbook: { id: 'workbook-1', name: workbookName, sheetOrder, sheets },
+    hasComplexFormatting,
+  };
 }
 
 export async function workbookToXLSXBuffer(snapshot: UniverWorkbookSnapshot): Promise<ArrayBuffer> {

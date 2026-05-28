@@ -11,10 +11,12 @@ const MARKDOWN_MIMES = new Set(['text/markdown', 'text/x-markdown']);
 
 const CSV_MIMES = new Set(['text/csv', 'application/csv']);
 
+// XLSX-only for now. ExcelJS doesn't parse .xls (BIFF) or .ods, and
+// silently re-emitting those formats as XLSX on save would lose data or
+// confuse mime/extension expectations. Re-add when format-specific
+// bridges land.
 const SPREADSHEET_BINARY_MIMES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'application/vnd.oasis.opendocument.spreadsheet',
 ]);
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

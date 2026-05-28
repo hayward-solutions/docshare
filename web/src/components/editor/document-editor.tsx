@@ -233,6 +233,8 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!editor || !initial.canEdit) return;
+    // Capture the content at save-start so a user who keeps typing during
+    // the PUT doesn't get their later edits wiped from the dirty state.
     const content = readMarkdown(editor);
     setSaveState('saving');
     setSaveError(null);
@@ -240,7 +242,10 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       const res = await filesAPI.saveContent(fileId, content);
       if (!res.success) throw new Error(res.error || 'Save failed');
       lastSavedRef.current = content;
-      setIsDirty(false);
+      // Only clear dirty if the editor still holds the exact content we
+      // just saved. Otherwise newer edits remain un-persisted.
+      const liveContent = readMarkdown(editor);
+      setIsDirty(liveContent !== content);
       setSaveState('saved');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -266,7 +271,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
     >
       {editor ? (
         <>
-          <EditorToolbar editor={editor} disabled={!initial.canEdit} />
+          {initial.canEdit && <EditorToolbar editor={editor} />}
           <div
             className="editor-content rounded-lg border bg-card p-6 shadow-xs"
             onClick={() => editor.chain().focus().run()}
@@ -283,6 +288,8 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
 
 function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
   const [value, setValue] = useState(initial.content);
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const lastSavedRef = useRef<string>(initial.content);
@@ -290,12 +297,17 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!initial.canEdit) return;
+    // Snapshot the value at save-start; the textarea may receive more
+    // keystrokes before the PUT lands. We use a ref to read the live
+    // value after the await so the post-save dirty calculation reflects
+    // current keystrokes, not the closed-over `value`.
+    const saved = valueRef.current;
     setSaveState('saving');
     setSaveError(null);
     try {
-      const res = await filesAPI.saveContent(fileId, value);
+      const res = await filesAPI.saveContent(fileId, saved);
       if (!res.success) throw new Error(res.error || 'Save failed');
-      lastSavedRef.current = value;
+      lastSavedRef.current = saved;
       setSaveState('saved');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -303,7 +315,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       setSaveState('error');
       toast.error(message);
     }
-  }, [fileId, value, initial.canEdit]);
+  }, [fileId, initial.canEdit]);
 
   useEffect(() => {
     if (saveState === 'saved' && isDirty) setSaveState('idle');
