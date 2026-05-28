@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/html"
+
 	"github.com/docshare/api/internal/config"
 	"github.com/docshare/api/internal/models"
 	"github.com/docshare/api/internal/storage"
@@ -285,15 +287,25 @@ func (e *ExportService) runPandoc(ctx context.Context, source []byte, fromFmt, t
 // renderPDF takes the raw source bytes, has pandoc emit a self-contained
 // HTML document, and posts that HTML to Gotenberg's chromium HTML route
 // to produce the PDF. This avoids pulling in LaTeX just for PDF output.
+//
+// The intermediate HTML is run through sanitizeHTMLForChromium first so
+// remote `<img src>` / `<link href>` / similar attributes don't trigger
+// SSRF when Chromium renders the page — markdown like
+// `![](http://169.254.169.254/...)` would otherwise reach internal hosts
+// from inside the gotenberg container.
 func (e *ExportService) renderPDF(ctx context.Context, source []byte, mimeType string) ([]byte, error) {
-	html, err := e.runPandoc(ctx, source, sourceFormatFor(mimeType), "html")
+	rendered, err := e.runPandoc(ctx, source, sourceFormatFor(mimeType), "html")
 	if err != nil {
 		return nil, err
 	}
-	return e.htmlToPDF(ctx, html)
+	safe, err := sanitizeHTMLForChromium(rendered)
+	if err != nil {
+		return nil, fmt.Errorf("sanitize html: %w", err)
+	}
+	return e.htmlToPDF(ctx, safe)
 }
 
-func (e *ExportService) htmlToPDF(ctx context.Context, html []byte) ([]byte, error) {
+func (e *ExportService) htmlToPDF(ctx context.Context, body []byte) ([]byte, error) {
 	if strings.TrimSpace(e.Gotenberg.URL) == "" {
 		return nil, errors.New("gotenberg url not configured")
 	}
@@ -312,7 +324,7 @@ func (e *ExportService) htmlToPDF(ctx context.Context, html []byte) ([]byte, err
 			_ = pw.CloseWithError(err)
 			return
 		}
-		if _, err := part.Write(html); err != nil {
+		if _, err := part.Write(body); err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
@@ -382,4 +394,93 @@ func extensionFor(format ExportFormat) string {
 		return "txt"
 	}
 	return string(format)
+}
+
+// remoteFetchAttrs maps element names to the attributes Chromium would
+// hit the network for when rendering. Anchor `<a href>` is intentionally
+// excluded — those are user clicks, not auto-fetches, and stripping them
+// would degrade the PDF as a usable document. `<script>` is rare in
+// pandoc output but listed defensively. `<style>` inline CSS can also
+// reference URLs via `url(...)` but pandoc's standalone template doesn't
+// include user-controllable CSS, so we leave style content alone.
+var remoteFetchAttrs = map[string][]string{
+	"img":    {"src", "srcset", "longdesc"},
+	"source": {"src", "srcset"},
+	"track":  {"src"},
+	"video":  {"src", "poster"},
+	"audio":  {"src"},
+	"iframe": {"src"},
+	"embed":  {"src"},
+	"object": {"data"},
+	"script": {"src"},
+	"link":   {"href"},
+	"input":  {"src"},
+}
+
+// sanitizeHTMLForChromium walks the parsed HTML tree and strips
+// attributes that would cause Chromium to issue outbound requests when
+// rendering the document for PDF export. This blunts a server-side
+// request forgery primitive: without it, an authenticated user could
+// drop `![](http://169.254.169.254/...)` in markdown and the gotenberg
+// container would dutifully fetch the URL.
+//
+// `data:` and `cid:` URLs are preserved so editor-pasted images
+// (encoded as data URIs by the TipTap upload path) survive.
+func sanitizeHTMLForChromium(input []byte) ([]byte, error) {
+	doc, err := html.Parse(bytes.NewReader(input))
+	if err != nil {
+		return nil, err
+	}
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if attrs, ok := remoteFetchAttrs[strings.ToLower(n.Data)]; ok {
+				for _, name := range attrs {
+					stripRemoteAttr(n, name)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+
+	var buf bytes.Buffer
+	if err := html.Render(&buf, doc); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func stripRemoteAttr(n *html.Node, attrName string) {
+	for i := len(n.Attr) - 1; i >= 0; i-- {
+		if !strings.EqualFold(n.Attr[i].Key, attrName) {
+			continue
+		}
+		if isRemoteURL(n.Attr[i].Val) {
+			n.Attr = append(n.Attr[:i], n.Attr[i+1:]...)
+		}
+	}
+}
+
+// isRemoteURL returns true if v points at a resource Chromium would
+// fetch over the network. Conservative: anything not obviously a
+// safe data/cid URL is treated as remote, including relative paths
+// (which Chromium would resolve against the document base — pandoc's
+// standalone HTML has no useful base, so stripping these costs nothing).
+func isRemoteURL(v string) bool {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return false
+	}
+	low := strings.ToLower(v)
+	if strings.HasPrefix(low, "data:") || strings.HasPrefix(low, "cid:") {
+		return false
+	}
+	// Pure fragments (#section) are intra-document and safe.
+	if strings.HasPrefix(low, "#") {
+		return false
+	}
+	return true
 }

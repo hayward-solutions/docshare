@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/docshare/api/internal/config"
@@ -156,5 +157,107 @@ func TestExport_RejectsUnsupportedFormatForSource(t *testing.T) {
 	// EPUB is only offered for markdown, not plain text.
 	if _, err := svc.Export(context.Background(), file, ExportEPUB); err != ErrFormatNotSupported {
 		t.Errorf("expected ErrFormatNotSupported for txt → epub, got %v", err)
+	}
+}
+
+func TestIsRemoteURL(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"data:image/png;base64,abc", false},
+		{"DATA:image/png;base64,abc", false},
+		{"cid:foo@bar", false},
+		{"#section-1", false},
+		{"http://example.com/x.png", true},
+		{"https://example.com/x.png", true},
+		{"//example.com/x.png", true},
+		{"http://169.254.169.254/latest/meta-data/", true},
+		{"file:///etc/passwd", true},
+		{"./image.png", true},
+		{"images/foo.png", true},
+		{"  http://example.com  ", true},
+	}
+	for _, tt := range tests {
+		if got := isRemoteURL(tt.in); got != tt.want {
+			t.Errorf("isRemoteURL(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestSanitizeHTMLForChromium(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		wantContain    []string
+		wantNotContain []string
+	}{
+		{
+			name:           "strips remote img src (SSRF target)",
+			input:          `<html><body><img src="http://169.254.169.254/latest/meta-data/"></body></html>`,
+			wantNotContain: []string{"169.254.169.254", `src="http`},
+		},
+		{
+			name:           "strips https img src",
+			input:          `<html><body><img src="https://evil.com/track.png" alt="x"></body></html>`,
+			wantContain:    []string{`alt="x"`},
+			wantNotContain: []string{"evil.com"},
+		},
+		{
+			name:        "preserves data URI img",
+			input:       `<html><body><img src="data:image/png;base64,iVBORw0KGgo="></body></html>`,
+			wantContain: []string{"data:image/png;base64,iVBORw0KGgo="},
+		},
+		{
+			name:        "preserves anchor href so PDFs stay clickable",
+			input:       `<html><body><a href="https://example.com">link</a></body></html>`,
+			wantContain: []string{`href="https://example.com"`, "link"},
+		},
+		{
+			name:        "preserves fragment anchors",
+			input:       `<html><body><a href="#section">jump</a><img src="#foo"></body></html>`,
+			wantContain: []string{`href="#section"`, `src="#foo"`},
+		},
+		{
+			name:           "strips link href to external CSS",
+			input:          `<html><head><link rel="stylesheet" href="http://cdn.example.com/style.css"></head><body></body></html>`,
+			wantContain:    []string{`rel="stylesheet"`},
+			wantNotContain: []string{"cdn.example.com"},
+		},
+		{
+			name:           "strips iframe src",
+			input:          `<html><body><iframe src="http://internal/admin"></iframe></body></html>`,
+			wantNotContain: []string{"internal/admin"},
+		},
+		{
+			name:           "strips relative img path",
+			input:          `<html><body><img src="./local.png"></body></html>`,
+			wantNotContain: []string{"./local.png"},
+		},
+		{
+			name:        "preserves headings and paragraphs",
+			input:       `<html><body><h1>Title</h1><p>Hello <strong>world</strong></p></body></html>`,
+			wantContain: []string{"<h1>Title</h1>", "<strong>world</strong>"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := sanitizeHTMLForChromium([]byte(tt.input))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			s := string(out)
+			for _, want := range tt.wantContain {
+				if !strings.Contains(s, want) {
+					t.Errorf("output missing %q\noutput: %s", want, s)
+				}
+			}
+			for _, notWant := range tt.wantNotContain {
+				if strings.Contains(s, notWant) {
+					t.Errorf("output unexpectedly contains %q\noutput: %s", notWant, s)
+				}
+			}
+		})
 	}
 }

@@ -29,6 +29,7 @@ import { EditorToolbar } from './toolbar';
 import { EditorShell, useCmdS, useUnsavedWarning, type SaveState } from './editor-shell';
 import { SpreadsheetEditor } from './spreadsheet-editor';
 import { SlashCommandExtension } from './slash-command';
+import { isExportableSourceMime } from '@/components/export-menu';
 
 const MARKDOWN_MIMES = new Set(['text/markdown', 'text/x-markdown']);
 
@@ -290,7 +291,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge="Markdown"
-      exportMime={initial.canDownload ? initial.mimeType : undefined}
+      exportMime={initial.canDownload && isExportableSourceMime(initial.mimeType) ? initial.mimeType : undefined}
     >
       {editor ? (
         <>
@@ -367,7 +368,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge={badge}
-      exportMime={initial.canDownload ? initial.mimeType : undefined}
+      exportMime={initial.canDownload && isExportableSourceMime(initial.mimeType) ? initial.mimeType : undefined}
     >
       <textarea
         value={value}
