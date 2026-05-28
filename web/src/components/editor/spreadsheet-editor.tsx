@@ -158,6 +158,10 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
   const handleSave = useCallback(async () => {
     const handle = handleRef.current;
     if (!handle || !canEdit) return;
+    // No-op when nothing changed — protects a reflexive ⌘S on a
+    // freshly-loaded lossy XLSX from being rewritten through the bridge
+    // with no real user intent.
+    if (!isDirty) return;
     // Guard ⌘S spam — the toolbar Save button is already disabled during
     // an in-flight save, but the keyboard shortcut bypasses that and two
     // concurrent PUTs could complete out of order.
@@ -206,7 +210,7 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
       setSaveState('error');
       toast.error(message);
     }
-  }, [fileId, isCsv, mimeType, canEdit, saveState]);
+  }, [fileId, isCsv, mimeType, canEdit, saveState, isDirty]);
 
   useUnsavedWarning(isDirty);
   useCmdS(handleSave, canEdit);

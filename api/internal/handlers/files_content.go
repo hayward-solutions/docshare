@@ -466,6 +466,20 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("content exceeds editor maximum of %d bytes", editableBinaryMaxBytes))
 	}
 
+	// Snapshot the set of preview-job IDs that exist BEFORE we update the
+	// file. The fenced-conversion path in PreviewService can race with us:
+	// once we bump file.updated_at below, an in-flight worker returns
+	// ErrPreviewSuperseded and processJob enqueues a fresh job against the
+	// new bytes. Deleting by file_id at the end would also wipe that fresh
+	// job — by remembering the prior IDs and deleting only them, the
+	// replacement survives so a polling viewer sees forward progress.
+	var priorJobIDs []uuid.UUID
+	if err := h.DB.Model(&models.PreviewJob{}).Where("file_id = ?", file.ID).Pluck("id", &priorJobIDs).Error; err != nil {
+		logger.Error("preview_job_snapshot_failed", err, map[string]interface{}{
+			"file_id": file.ID.String(),
+		})
+	}
+
 	if err := h.Storage.Upload(c.Context(), file.StoragePath, bytes.NewReader(body), int64(len(body)), file.MimeType); err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed saving file content")
 	}
@@ -492,10 +506,15 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 			})
 		}
 	}
-	if err := h.DB.Where("file_id = ?", file.ID).Delete(&models.PreviewJob{}).Error; err != nil {
-		logger.Error("preview_job_cleanup_failed", err, map[string]interface{}{
-			"file_id": file.ID.String(),
-		})
+	if len(priorJobIDs) > 0 {
+		// Delete only the jobs we snapshotted above. A replacement job
+		// enqueued by the worker's superseded path (which sees our
+		// updated_at bump) lives outside this id-set and survives.
+		if err := h.DB.Where("id IN ?", priorJobIDs).Delete(&models.PreviewJob{}).Error; err != nil {
+			logger.Error("preview_job_cleanup_failed", err, map[string]interface{}{
+				"file_id": file.ID.String(),
+			})
+		}
 	}
 
 	var updated models.File

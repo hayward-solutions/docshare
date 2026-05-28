@@ -244,6 +244,10 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!editor || !initial.canEdit) return;
+    // The toolbar Save button is hidden when !isDirty, but ⌘S bypasses
+    // that. A reflexive save on a freshly-loaded doc has no value and
+    // could silently rewrite a lossy XLSX through the bridge.
+    if (!isDirty) return;
     // Guard against ⌘S landing twice in quick succession — the toolbar
     // Save button is already disabled while saving, but the keyboard
     // shortcut bypasses that. Two concurrent PUTs can complete out of
@@ -269,7 +273,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       setSaveState('error');
       toast.error(message);
     }
-  }, [editor, fileId, initial.canEdit, saveState]);
+  }, [editor, fileId, initial.canEdit, saveState, isDirty]);
 
   useUnsavedWarning(isDirty);
   useCmdS(handleSave, !!editor && initial.canEdit);
@@ -313,6 +317,9 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!initial.canEdit) return;
+    // No-op when there's nothing to save; the toolbar already hides
+    // Save in that case but ⌘S bypasses the disabled state.
+    if (!isDirty) return;
     // Same concurrent-save guard as MarkdownEditor — see comment there.
     if (saveState === 'saving') return;
     // Snapshot the value at save-start; the textarea may receive more
@@ -333,7 +340,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       setSaveState('error');
       toast.error(message);
     }
-  }, [fileId, initial.canEdit, saveState]);
+  }, [fileId, initial.canEdit, saveState, isDirty]);
 
   useEffect(() => {
     if (saveState === 'saved' && isDirty) setSaveState('idle');

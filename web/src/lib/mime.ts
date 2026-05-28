@@ -61,5 +61,9 @@ export function isSpreadsheetMime(mimeType: string | undefined | null): boolean 
 }
 
 export function isAnyEditableMime(mimeType: string | undefined | null): boolean {
-  return isEditableMime(mimeType) || isSpreadsheetBinaryMime(mimeType);
+  // CSV gets its own check because application/csv (the rare-but-valid
+  // alternate spelling) isn't text/* and isn't in the editable
+  // application set — without this OR, the viewer would hide Edit for a
+  // CSV that the spreadsheet editor is perfectly happy to open.
+  return isEditableMime(mimeType) || isCsvMime(mimeType) || isSpreadsheetBinaryMime(mimeType);
 }
