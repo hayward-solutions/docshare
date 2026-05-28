@@ -441,6 +441,26 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			input:          `<html><body><applet code="evil.class" archive="http://internal/x.jar"></applet></body></html>`,
 			wantNotContain: []string{"<applet", "internal"},
 		},
+		{
+			name:           "scrubs image-set quoted URL (CSS Images L4)",
+			input:          `<html><head><style>body{background:image-set("http://169.254.169.254/" 1x,"http://169.254.169.254/2x" 2x)}</style></head><body></body></html>`,
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:           "scrubs cross-fade with remote URL",
+			input:          `<html><head><style>.a{background:cross-fade("http://internal/x.png", "http://internal/y.png", 50%)}</style></head><body></body></html>`,
+			wantNotContain: []string{"internal/x", "internal/y"},
+		},
+		{
+			name:           "scrubs image() function with URL",
+			input:          `<html><head><style>.a{content:image("http://169.254.169.254/", red)}</style></head><body></body></html>`,
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:        "preserves data: URI in image-set",
+			input:       `<html><head><style>.a{background:image-set("data:image/png;base64,iVBOR" 1x)}</style></head><body></body></html>`,
+			wantContain: []string{"data:image/png;base64,iVBOR"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

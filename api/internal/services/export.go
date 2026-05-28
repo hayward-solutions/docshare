@@ -533,6 +533,15 @@ var cssCommentPattern = regexp.MustCompile(`/\*[\s\S]*?\*/`)
 // and reaches the network unless we decode first.
 var cssEscapePattern = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])`)
 
+// cssRemoteURLPattern is the backstop: after `url()` and `@import` have
+// been scrubbed, any remaining absolute URL still embedded in the CSS
+// text (e.g. inside `image-set("http://internal" 1x)`, `image()`,
+// `cross-fade()`, or any future resource-loading function) gets
+// rewritten so Chromium can't fetch it. Replaced with `about:blank`
+// so string literals stay syntactically valid. Data URIs lack `://`
+// and are therefore never matched here.
+var cssRemoteURLPattern = regexp.MustCompile(`(?i)\b(?:https?|ftp|ftps|file|ws|wss|gopher|sftp|smb):\/\/[^\s'"\)\}\];,]*`)
+
 // sanitizeHTMLForChromium walks the parsed HTML tree and removes anything
 // that would cause Chromium to issue outbound requests, execute scripts,
 // or trigger event handlers when rendering for PDF export. This blunts an
@@ -659,6 +668,12 @@ func scrubStyleContent(n *html.Node) {
 // (Chromium parses them as whitespace), then CSS character escapes
 // are decoded so payloads like `\75\72\6c(http://...)` or
 // `\@import "http://..."` don't slip past the keyword patterns.
+//
+// A final pass replaces any remaining absolute URL with `about:blank`
+// as a backstop — this catches resource-loading CSS functions we don't
+// enumerate (`image-set("http://..." 1x)`, `image(...)`, `cross-fade
+// (...)`) so user-injected raw `<style>` blocks can't smuggle a fetch
+// past Chromium.
 func scrubCSSResources(css string) string {
 	css = cssCommentPattern.ReplaceAllString(css, "")
 	css = decodeCSSEscapes(css)
@@ -675,6 +690,7 @@ func scrubCSSResources(css string) string {
 		}
 		return "url()"
 	})
+	css = cssRemoteURLPattern.ReplaceAllString(css, "about:blank")
 	return css
 }
 

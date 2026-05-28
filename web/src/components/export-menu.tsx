@@ -16,6 +16,11 @@ import { filesAPI } from '@/lib/api';
 
 export type ExportFormat = 'pdf' | 'docx' | 'odt' | 'rtf' | 'html' | 'epub' | 'md' | 'txt';
 
+// Mirror of services.maxConvertedBytes in the Go API. The backend
+// refuses sources larger than this — surfacing a menu the user can
+// click only to get a generic 500 is worse than hiding it.
+export const MAX_EXPORTABLE_BYTES = 10 * 1024 * 1024;
+
 // Mirror of services.IsExportableSource in the Go API: markdown and any
 // plain-text MIME can be exported. Used by the viewer to decide whether
 // to render the menu at all. Accepts null/undefined so callers can pass
@@ -24,6 +29,16 @@ export function isExportableSourceMime(mimeType: string | undefined | null): boo
   if (!mimeType) return false;
   const m = mimeType.toLowerCase().split(';')[0].trim();
   return m === 'text/markdown' || m === 'text/x-markdown' || m.startsWith('text/');
+}
+
+// canExportFile combines the MIME check, the backend size cap, and the
+// caller's download-permission flag so the viewer/editor only render an
+// Export control when every backend gate would actually pass.
+export function canExportFile(file: { mimeType: string; size?: number; canDownload?: boolean }): boolean {
+  if (file.canDownload === false) return false;
+  if (!isExportableSourceMime(file.mimeType)) return false;
+  if (typeof file.size === 'number' && file.size > MAX_EXPORTABLE_BYTES) return false;
+  return true;
 }
 
 interface ExportOption {
