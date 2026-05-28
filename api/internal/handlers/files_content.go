@@ -20,11 +20,16 @@ import (
 )
 
 // editableContentMaxBytes caps in-app text-document reads and saves. The
-// editor flow exists for human-authored docs (markdown, txt, code), not for
-// arbitrary blobs — keeping this bounded avoids loading multi-GB binaries
-// into a Tiptap session and blocks the save path from being used to push
-// large bodies through the JSON API.
-const editableContentMaxBytes = 5 * 1024 * 1024
+// editor flow exists for human-authored docs (markdown, txt, code), not
+// for arbitrary blobs.
+//
+// The save path PUTs a JSON body ({"content":"..."}), so the wire size
+// after escaping can be larger than the raw content — pathological inputs
+// (all quotes, backslashes, control chars) can roughly double. The cap
+// stays below SmallBodyLimitForNonUploadRoutes (8 MiB) at 4 MiB so a
+// worst-case-encoded 4 MiB document still fits under the middleware's
+// pre-handler limit.
+const editableContentMaxBytes = 4 * 1024 * 1024
 
 // editableBinaryMaxBytes is the analogous cap for the binary editor path
 // (spreadsheet workbooks). A Univer session decoding a multi-hundred-MB

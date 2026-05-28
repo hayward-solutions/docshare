@@ -14,6 +14,11 @@ export interface UniverSheetSnapshot {
   rowCount: number;
   columnCount: number;
   cellData: UniverCellData;
+  // Original-data extent, used by sheetToRows to keep trailing empty
+  // cells when round-tripping CSV. rowCount/columnCount are inflated to
+  // DEFAULT padding for grid display; these stay exact.
+  dataRowCount?: number;
+  dataColumnCount?: number;
 }
 
 export interface UniverWorkbookSnapshot {
@@ -59,19 +64,31 @@ function rowsToSheet(rows: (string | number | boolean | null)[][], sheetName = D
     rowCount: Math.max(rows.length, DEFAULT_ROWS),
     columnCount: Math.max(maxCol, DEFAULT_COLS),
     cellData,
+    // Track the exact input dims so sheetToRows can re-emit trailing
+    // empty cells on save. Without this, "a,b," would round-trip as
+    // "a,b" because the empty trailing field never lands in cellData.
+    dataRowCount: rows.length,
+    dataColumnCount: maxCol,
   };
 }
 
 function sheetToRows(sheet: UniverSheetSnapshot): (string | number | boolean | null)[][] {
   const rowEntries = Object.entries(sheet.cellData).map(([k]) => Number(k));
-  const maxRow = rowEntries.length ? Math.max(...rowEntries) : -1;
-  let maxCol = -1;
+  const cellMaxRow = rowEntries.length ? Math.max(...rowEntries) : -1;
+  let cellMaxCol = -1;
   for (const row of Object.values(sheet.cellData)) {
     for (const colKey of Object.keys(row)) {
       const c = Number(colKey);
-      if (c > maxCol) maxCol = c;
+      if (c > cellMaxCol) cellMaxCol = c;
     }
   }
+  // Respect the original input dimensions when present: a CSV with trailing
+  // empty columns (e.g. "a,b,") has dataColumnCount=3 but cellMaxCol=1 since
+  // empty cells aren't stored, and we'd otherwise truncate to "a,b" on save.
+  const dataRowExtent = sheet.dataRowCount !== undefined ? sheet.dataRowCount - 1 : -1;
+  const dataColExtent = sheet.dataColumnCount !== undefined ? sheet.dataColumnCount - 1 : -1;
+  const maxRow = Math.max(cellMaxRow, dataRowExtent);
+  const maxCol = Math.max(cellMaxCol, dataColExtent);
   const out: (string | number | boolean | null)[][] = [];
   for (let r = 0; r <= maxRow; r++) {
     const row: (string | number | boolean | null)[] = [];

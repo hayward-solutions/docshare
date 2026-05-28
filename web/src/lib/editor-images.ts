@@ -4,9 +4,11 @@ export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 // Mirror of editableContentMaxBytes in api/internal/handlers/files_content.go.
 // Used to refuse image inserts that would push the rendered markdown past
-// the backend save cap — base64-encoded images inflate ~1.37× so two
-// 2 MiB binaries easily blow past 5 MiB of document.
-export const MAX_CONTENT_BYTES = 5 * 1024 * 1024;
+// the backend save cap. base64-encoded images inflate ~1.37×, and the
+// JSON save body itself adds escape overhead, so the backend caps the
+// decoded content at 4 MiB to keep worst-case JSON under the
+// 8 MiB SmallBodyLimitForNonUploadRoutes middleware.
+export const MAX_CONTENT_BYTES = 4 * 1024 * 1024;
 
 // Overhead for the `![](...)` wrapper Markdown adds around each image src.
 const MARKDOWN_IMAGE_OVERHEAD_BYTES = 8;

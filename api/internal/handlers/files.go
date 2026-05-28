@@ -639,6 +639,13 @@ func (h *FilesHandler) Get(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	// Populate the transient permission flags so the file viewer can hide
+	// the Edit button when the user lacks the byte-level access the
+	// editor's /binary or /content fetch will require.
+	isOwner := file.OwnerID == currentUser.ID
+	file.CanEdit = isOwner || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	file.CanDownload = file.CanEdit || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionDownload)
+
 	return utils.Success(c, fiber.StatusOK, file)
 }
 

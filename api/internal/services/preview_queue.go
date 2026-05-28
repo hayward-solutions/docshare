@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -166,6 +167,27 @@ func (s *PreviewQueueService) processJob(task PreviewJobTask) {
 	// stale PDF being re-attached after the cleanup.
 	previewURL, err := s.PreviewService.ConvertToPreview(ctx, &file, now)
 	if err != nil {
+		if errors.Is(err, ErrPreviewSuperseded) {
+			// The file was edited while we were rendering. Drop this job
+			// and enqueue a fresh one against the new bytes so the
+			// viewer's polling sees progress rather than a completed
+			// job with no thumbnail.
+			if delErr := s.DB.Delete(&job).Error; delErr != nil {
+				logger.Error("preview_superseded_cleanup_failed", delErr, map[string]interface{}{
+					"job_id": job.ID.String(),
+				})
+			}
+			logger.Info("preview_job_superseded", map[string]interface{}{
+				"job_id":  job.ID.String(),
+				"file_id": task.FileID.String(),
+			})
+			if _, enqueueErr := s.Enqueue(task.FileID, task.RequestedByID); enqueueErr != nil {
+				logger.Error("preview_resume_enqueue_failed", enqueueErr, map[string]interface{}{
+					"file_id": task.FileID.String(),
+				})
+			}
+			return
+		}
 		s.markJobFailed(&job, err)
 		return
 	}
