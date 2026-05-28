@@ -50,6 +50,8 @@ import {
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
+import { FileSortMenu } from '@/components/file-sort-menu';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { MoveDialog } from '@/components/move-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { FileInspector } from '@/components/file-inspector';
@@ -60,7 +62,7 @@ import { format } from 'date-fns';
 
 export default function FilesPage() {
   const { user } = useAuth();
-  const { viewMode, setViewMode } = usePreferences();
+  const { viewMode, setViewMode, sortKey, sortDirection } = usePreferences();
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,7 +89,10 @@ export default function FilesPage() {
     const requestId = ++fetchRequestId.current;
     setIsLoading(true);
     try {
-      const res = await apiMethods.get<File[]>('/files');
+      const res = await apiMethods.get<File[]>('/files', {
+        sort: sortKey,
+        order: sortDirection,
+      });
       if (requestId !== fetchRequestId.current) return;
       if (res.success) {
         setFiles(res.data);
@@ -98,7 +103,7 @@ export default function FilesPage() {
     } finally {
       if (requestId === fetchRequestId.current) setIsLoading(false);
     }
-  }, []);
+  }, [sortKey, sortDirection]);
 
   useEffect(() => {
     fetchFiles();
@@ -134,7 +139,11 @@ export default function FilesPage() {
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const params: Record<string, string> = { q: searchQuery };
+        const params: Record<string, string> = {
+          q: searchQuery,
+          sort: sortKey,
+          order: sortDirection,
+        };
         // At root, "here" and "everywhere" are equivalent (no directoryID)
         const res = await apiMethods.get<File[]>('/files/search', params);
         if (res.success) {
@@ -148,7 +157,7 @@ export default function FilesPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  }, [searchQuery, sortKey, sortDirection]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
@@ -222,6 +231,7 @@ export default function FilesPage() {
               </Tooltip>
             </TooltipProvider>
           </div>
+          <FileSortMenu />
           <div className="flex items-center border rounded-md bg-card">
             <Button
               variant="ghost"
@@ -370,10 +380,10 @@ export default function FilesPage() {
                   />
                 </TableHead>
                 <TableHead className="w-[50px]"></TableHead>
-                <TableHead>Name</TableHead>
+                <SortableTableHead sortKey="name">Name</SortableTableHead>
                 <TableHead>Owner</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Modified</TableHead>
+                <SortableTableHead sortKey="size">Size</SortableTableHead>
+                <SortableTableHead sortKey="modified">Modified</SortableTableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>

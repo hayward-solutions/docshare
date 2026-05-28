@@ -536,9 +536,10 @@ func (h *FilesHandler) ListRoot(c *fiber.Ctx) error {
 	}
 
 	p := utils.ParsePagination(c)
+	sort := utils.ParseFileSort(c)
 
 	var owned []models.File
-	if err := h.DB.Preload("Owner").Where("owner_id = ? AND parent_id IS NULL", currentUser.ID).Order("created_at DESC").Find(&owned).Error; err != nil {
+	if err := h.DB.Preload("Owner").Where("owner_id = ? AND parent_id IS NULL", currentUser.ID).Find(&owned).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed listing owned files")
 	}
 
@@ -572,6 +573,7 @@ func (h *FilesHandler) ListRoot(c *fiber.Ctx) error {
 		}
 	}
 
+	sort.SortFiles(combined)
 	total := int64(len(combined))
 
 	start := p.Offset
@@ -674,7 +676,7 @@ func (h *FilesHandler) ListChildren(c *fiber.Ctx) error {
 	}
 
 	var children []models.File
-	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC")
+	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order(utils.ParseFileSort(c).SQLClause())
 	if err := utils.ApplyPagination(query, p).Find(&children).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading children")
 	}
@@ -1122,7 +1124,7 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 
 		if err := h.DB.Preload("Owner").
 			Where("id IN ? AND LOWER(name) LIKE ?", ids, searchValue).
-			Order("is_directory DESC, name ASC").
+			Order(utils.ParseFileSort(c).SQLClause()).
 			Offset(p.Offset).
 			Limit(p.Limit).
 			Find(&files).Error; err != nil {
@@ -1136,7 +1138,7 @@ func (h *FilesHandler) Search(c *fiber.Ctx) error {
 
 		if err := h.DB.Preload("Owner").
 			Where("owner_id = ? AND LOWER(name) LIKE ?", currentUser.ID, searchValue).
-			Order("is_directory DESC, name ASC").
+			Order(utils.ParseFileSort(c).SQLClause()).
 			Offset(p.Offset).
 			Limit(p.Limit).
 			Find(&files).Error; err != nil {
@@ -1534,7 +1536,7 @@ func (h *FilesHandler) PublicChildren(c *fiber.Ctx) error {
 	}
 
 	var children []models.File
-	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order("is_directory DESC, name ASC")
+	query := h.DB.Preload("Owner").Where("parent_id = ?", parent.ID).Order(utils.ParseFileSort(c).SQLClause())
 	if err := utils.ApplyPagination(query, p).Find(&children).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed loading children")
 	}

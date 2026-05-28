@@ -54,6 +54,8 @@ import {
 import { isAnyEditableMime, isSpreadsheetBinaryMime } from '@/lib/mime';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
+import { FileSortMenu } from '@/components/file-sort-menu';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { ShareDialog } from '@/components/share-dialog';
 import { useUploadStore, parentKey } from '@/lib/upload-store';
 import { MoveDialog } from '@/components/move-dialog';
@@ -70,7 +72,7 @@ export default function FileDetailPage() {
   const id = params.id as string;
   const router = useRouter();
 
-  const { viewMode, setViewMode } = usePreferences();
+  const { viewMode, setViewMode, sortKey, sortDirection } = usePreferences();
   const [file, setFile] = useState<File | null>(null);
   const [children, setChildren] = useState<File[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
@@ -109,7 +111,10 @@ export default function FileDetailPage() {
       }
 
       if (fileRes.data.isDirectory) {
-        const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`);
+        const childrenRes = await apiMethods.get<File[]>(`/files/${id}/children`, {
+          sort: sortKey,
+          order: sortDirection,
+        });
         if (requestId !== fetchRequestId.current) return;
         if (childrenRes.success) {
           setChildren(childrenRes.data);
@@ -122,7 +127,7 @@ export default function FileDetailPage() {
     } finally {
       if (requestId === fetchRequestId.current) setIsLoading(false);
     }
-  }, [id, router]);
+  }, [id, router, sortKey, sortDirection]);
 
   useEffect(() => {
     fetchData();
@@ -168,7 +173,11 @@ export default function FileDetailPage() {
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const params: Record<string, string> = { q: searchQuery };
+        const params: Record<string, string> = {
+          q: searchQuery,
+          sort: sortKey,
+          order: sortDirection,
+        };
         if (searchScope === 'here' && file?.isDirectory) {
           params.directoryID = id;
         }
@@ -184,7 +193,7 @@ export default function FileDetailPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchScope, id, file?.isDirectory]);
+  }, [searchQuery, searchScope, id, file?.isDirectory, sortKey, sortDirection]);
 
   const handleDelete = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
@@ -316,6 +325,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
 
           {file.isDirectory && (
             <>
+              <FileSortMenu />
               <div className="flex items-center border rounded-md bg-card">
                 <Button
                   variant="ghost"
@@ -475,9 +485,9 @@ const handleDownload = async (fileId: string, fileName: string) => {
                       />
                     </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Modified</TableHead>
+                    <SortableTableHead sortKey="name">Name</SortableTableHead>
+                    <SortableTableHead sortKey="size">Size</SortableTableHead>
+                    <SortableTableHead sortKey="modified">Modified</SortableTableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
