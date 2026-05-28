@@ -198,6 +198,20 @@ export async function xlsxBufferToWorkbook(
           else if (cell.style && (cell.style.font || cell.style.fill || cell.style.border)) {
             hasComplexFormatting = true;
           }
+          // numFmt-formatted cells (dates, currency, percentages) survive
+          // import as raw scalars but lose their display formats on save
+          // because workbookToXLSXBuffer writes only `v`. Treat the
+          // presence of any non-default numFmt as lossy.
+          else if (cell.style?.numFmt && cell.style.numFmt !== 'General') {
+            hasComplexFormatting = true;
+          }
+          // Date-valued cells implicitly carry a format and need the same
+          // warning — the scalar is converted to an ISO string by
+          // excelValueToScalar, which the user would see as plain text
+          // rather than a date.
+          else if (cell.value instanceof Date) {
+            hasComplexFormatting = true;
+          }
         }
         const scalar = excelValueToScalar(cell.value);
         if (scalar === null || scalar === '') return;

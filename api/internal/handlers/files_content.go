@@ -33,23 +33,39 @@ const editableContentMaxBytes = 5 * 1024 * 1024
 // middleware doesn't 413 us before we reach this handler.
 const editableBinaryMaxBytes = 8 * 1024 * 1024
 
+// normalizeMime strips parameters (charset, boundary, etc.) and lowercases
+// the bare type/subtype. resolveMimeType can hand us values like
+// "text/csv; charset=utf-8" from Go's mime.TypeByExtension, and our
+// Set/equality checks would otherwise miss them.
+func normalizeMime(mimeType string) string {
+	if mimeType == "" {
+		return ""
+	}
+	if i := strings.IndexByte(mimeType, ';'); i >= 0 {
+		mimeType = mimeType[:i]
+	}
+	return strings.ToLower(strings.TrimSpace(mimeType))
+}
+
 // isEditableTextMime gates the JSON /content endpoints. Anything that's not
 // human-readable text is rejected so a save through this path can't silently
 // overwrite a binary at file.StoragePath with text.
 func isEditableTextMime(mimeType string) bool {
-	if mimeType == "" {
+	m := normalizeMime(mimeType)
+	if m == "" {
 		return false
 	}
-	if strings.HasPrefix(mimeType, "text/") {
+	if strings.HasPrefix(m, "text/") {
 		return true
 	}
-	switch mimeType {
+	switch m {
 	case "application/json",
 		"application/xml",
 		"application/javascript",
 		"application/typescript",
 		"application/x-yaml",
-		"application/yaml":
+		"application/yaml",
+		"application/csv":
 		return true
 	}
 	return false
@@ -61,7 +77,7 @@ func isEditableTextMime(mimeType string) bool {
 // either fail on load or silently rewrite the bytes as XLSX under the old
 // mime/extension. text/csv stays on the text path because it's plain text.
 func isEditableSpreadsheetBinaryMime(mimeType string) bool {
-	return mimeType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	return normalizeMime(mimeType) == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 }
 
 // isCreatableDocMime is the union — what CreateDoc is willing to mint a

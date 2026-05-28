@@ -21,25 +21,39 @@ const SPREADSHEET_BINARY_MIMES = new Set([
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+/**
+ * Strip any parameters (charset, boundary, etc.) and lowercase the bare
+ * type/subtype. The backend's resolveMimeType can hand us
+ * `text/csv; charset=utf-8` (from Go's mime.TypeByExtension), and our
+ * Set/equality checks would otherwise miss it.
+ */
+function normalize(mimeType: string | undefined | null): string {
+  if (!mimeType) return '';
+  const semi = mimeType.indexOf(';');
+  const base = semi >= 0 ? mimeType.slice(0, semi) : mimeType;
+  return base.trim().toLowerCase();
+}
+
 export function isEditableMime(mimeType: string | undefined | null): boolean {
-  if (!mimeType) return false;
-  if (mimeType.startsWith('text/')) return true;
-  return EDITABLE_APPLICATION_MIMES.has(mimeType);
+  const m = normalize(mimeType);
+  if (!m) return false;
+  if (m.startsWith('text/')) return true;
+  return EDITABLE_APPLICATION_MIMES.has(m);
 }
 
 export function isMarkdownMime(mimeType: string | undefined | null): boolean {
-  if (!mimeType) return false;
-  return MARKDOWN_MIMES.has(mimeType);
+  const m = normalize(mimeType);
+  return !!m && MARKDOWN_MIMES.has(m);
 }
 
 export function isCsvMime(mimeType: string | undefined | null): boolean {
-  if (!mimeType) return false;
-  return CSV_MIMES.has(mimeType);
+  const m = normalize(mimeType);
+  return !!m && CSV_MIMES.has(m);
 }
 
 export function isSpreadsheetBinaryMime(mimeType: string | undefined | null): boolean {
-  if (!mimeType) return false;
-  return SPREADSHEET_BINARY_MIMES.has(mimeType);
+  const m = normalize(mimeType);
+  return !!m && SPREADSHEET_BINARY_MIMES.has(m);
 }
 
 export function isSpreadsheetMime(mimeType: string | undefined | null): boolean {
