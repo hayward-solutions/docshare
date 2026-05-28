@@ -160,7 +160,11 @@ func (s *PreviewQueueService) processJob(task PreviewJobTask) {
 		return
 	}
 
-	previewURL, err := s.PreviewService.ConvertToPreview(ctx, &file)
+	// Pass the job's start time as a fence; ConvertToPreview will only
+	// publish thumbnail_path if file.updated_at hasn't advanced past it.
+	// Protects against SaveBinary clearing the preview mid-render and a
+	// stale PDF being re-attached after the cleanup.
+	previewURL, err := s.PreviewService.ConvertToPreview(ctx, &file, now)
 	if err != nil {
 		s.markJobFailed(&job, err)
 		return

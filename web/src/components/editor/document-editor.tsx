@@ -244,6 +244,11 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!editor || !initial.canEdit) return;
+    // Guard against ⌘S landing twice in quick succession — the toolbar
+    // Save button is already disabled while saving, but the keyboard
+    // shortcut bypasses that. Two concurrent PUTs can complete out of
+    // order and the older one wins.
+    if (saveState === 'saving') return;
     // Capture the content at save-start so a user who keeps typing during
     // the PUT doesn't get their later edits wiped from the dirty state.
     const content = readMarkdown(editor);
@@ -264,7 +269,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       setSaveState('error');
       toast.error(message);
     }
-  }, [editor, fileId, initial.canEdit]);
+  }, [editor, fileId, initial.canEdit, saveState]);
 
   useUnsavedWarning(isDirty);
   useCmdS(handleSave, !!editor && initial.canEdit);
@@ -308,6 +313,8 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
 
   const handleSave = useCallback(async () => {
     if (!initial.canEdit) return;
+    // Same concurrent-save guard as MarkdownEditor — see comment there.
+    if (saveState === 'saving') return;
     // Snapshot the value at save-start; the textarea may receive more
     // keystrokes before the PUT lands. We use a ref to read the live
     // value after the await so the post-save dirty calculation reflects
@@ -326,7 +333,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       setSaveState('error');
       toast.error(message);
     }
-  }, [fileId, initial.canEdit]);
+  }, [fileId, initial.canEdit, saveState]);
 
   useEffect(() => {
     if (saveState === 'saved' && isDirty) setSaveState('idle');

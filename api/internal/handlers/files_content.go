@@ -351,15 +351,27 @@ func (h *FilesHandler) GetBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("file exceeds editor maximum of %d bytes", editableBinaryMaxBytes))
 	}
 
-	if !h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionView) {
+	// /binary streams the original workbook bytes to the browser, which
+	// is the same exposure as /download — gate on download (or edit, or
+	// owner) rather than mere view. View-only collaborators see the PDF
+	// preview but should not be able to pull the unmodified file via this
+	// path.
+	isOwner := file.OwnerID == currentUser.ID
+	canEdit := isOwner || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	canDownload := canEdit || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionDownload)
+	if !canDownload {
+		logger.WarnWithUser(currentUser.ID.String(), "permission_denied", map[string]interface{}{
+			"action":              "file_binary_get",
+			"target_id":           file.ID.String(),
+			"required_permission": "download",
+		})
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
 	// Surface edit-permission to the spreadsheet editor in a custom
-	// response header so it can mount Univer read-only when a view-only
-	// share opens the file. Mirrors the canEdit field on the JSON
-	// /content response.
-	canEdit := file.OwnerID == currentUser.ID || h.Access.HasAccess(c.Context(), currentUser.ID, file.ID, models.SharePermissionEdit)
+	// response header so it can mount Univer read-only when a share
+	// allows download but not edit. Mirrors the canEdit field on the
+	// JSON /content response.
 	c.Set("X-Can-Edit", strconv.FormatBool(canEdit))
 	c.Set("Access-Control-Expose-Headers", "X-Can-Edit")
 

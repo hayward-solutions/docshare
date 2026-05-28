@@ -158,6 +158,10 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
   const handleSave = useCallback(async () => {
     const handle = handleRef.current;
     if (!handle || !canEdit) return;
+    // Guard ⌘S spam — the toolbar Save button is already disabled during
+    // an in-flight save, but the keyboard shortcut bypasses that and two
+    // concurrent PUTs could complete out of order.
+    if (saveState === 'saving') return;
     setSaveState('saving');
     setSaveError(null);
     // Capture the snapshot at save-start. If the user keeps typing during
@@ -202,7 +206,7 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
       setSaveState('error');
       toast.error(message);
     }
-  }, [fileId, isCsv, mimeType, canEdit]);
+  }, [fileId, isCsv, mimeType, canEdit, saveState]);
 
   useUnsavedWarning(isDirty);
   useCmdS(handleSave, canEdit);
