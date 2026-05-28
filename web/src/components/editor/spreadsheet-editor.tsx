@@ -12,6 +12,7 @@ import {
   xlsxBufferToWorkbook,
   workbookToXLSXBuffer,
   emptyWorkbook,
+  extraNonEmptySheetCount,
   type UniverWorkbookSnapshot,
 } from '@/lib/spreadsheet-bridge';
 import { EditorShell, useCmdS, useUnsavedWarning, type SaveState } from './editor-shell';
@@ -166,6 +167,15 @@ export function SpreadsheetEditor({ fileId, name, mimeType }: SpreadsheetEditorP
     const savedKey = JSON.stringify(snapshot);
     try {
       if (isCsv) {
+        // CSV is one-sheet by definition. Refuse the save if Univer's
+        // multi-sheet UI was used to add data to a second sheet — better
+        // a clear error than a silent drop of the user's work.
+        const extra = extraNonEmptySheetCount(snapshot);
+        if (extra > 0) {
+          throw new Error(
+            `CSV files only support one sheet. Move data from the extra sheet${extra > 1 ? 's' : ''} into the first sheet, or delete ${extra > 1 ? 'them' : 'it'}, before saving.`,
+          );
+        }
         const csv = workbookToCSV(snapshot);
         const res = await filesAPI.saveContent(fileId, csv);
         if (!res.success) throw new Error(res.error || 'Save failed');

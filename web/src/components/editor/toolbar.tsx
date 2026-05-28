@@ -23,7 +23,7 @@ import {
   Redo,
   ChevronDown,
 } from 'lucide-react';
-import { fileToDataURI } from '@/lib/editor-images';
+import { fileToDataURI, MAX_CONTENT_BYTES, markdownByteLength } from '@/lib/editor-images';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -91,7 +91,14 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const dataUri = await fileToDataURI(file);
+    // Compute how much room is left in the 5 MiB save cap before letting
+    // the image through. Reading the markdown serialization (not the
+    // tiptap JSON tree) keeps the budget aligned with what the backend
+    // will measure.
+    const storage = editor.storage as { markdown?: { getMarkdown: () => string } };
+    const currentBytes = markdownByteLength(storage.markdown?.getMarkdown() ?? editor.getText());
+    const remaining = Math.max(0, MAX_CONTENT_BYTES - currentBytes);
+    const dataUri = await fileToDataURI(file, remaining);
     if (!dataUri) return;
     editor.chain().focus().setImage({ src: dataUri }).run();
   };

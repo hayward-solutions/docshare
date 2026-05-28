@@ -17,7 +17,7 @@ import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import { Image as ImageExtension } from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
 import { lowlight } from '@/lib/lowlight';
-import { fileToDataURI, isImageFile } from '@/lib/editor-images';
+import { fileToDataURI, isImageFile, MAX_CONTENT_BYTES, markdownByteLength } from '@/lib/editor-images';
 import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -155,6 +155,11 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const lastSavedRef = useRef<string>(initial.content);
+  // editorInstance lets paste/drop handlers (which close over the
+  // pre-useEditor scope) read the live markdown for the image budget
+  // check. Updated below as soon as useEditor returns.
+  const editorInstance = useRef<Editor | null>(null);
+  const getMarkdownFromView = () => (editorInstance.current ? readMarkdown(editorInstance.current) : '');
 
   const extensions = useMemo(
     () => [
@@ -211,7 +216,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
         const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
         if (files.length === 0) return false;
         event.preventDefault();
-        void insertImageFiles(view, files);
+        void insertImageFiles(view, files, undefined, getMarkdownFromView);
         return true;
       },
       handleDrop: (view, event, _slice, moved) => {
@@ -219,7 +224,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
         const files = Array.from(event.dataTransfer?.files ?? []).filter(isImageFile);
         if (files.length === 0) return false;
         event.preventDefault();
-        void insertImageFiles(view, files, { x: event.clientX, y: event.clientY });
+        void insertImageFiles(view, files, { x: event.clientX, y: event.clientY }, getMarkdownFromView);
         return true;
       },
     },
@@ -230,6 +235,12 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       if (dirty && saveState === 'saved') setSaveState('idle');
     },
   });
+
+  // Keep the ref pointing at the live editor so handlePaste/handleDrop can
+  // compute the markdown size for the image-insert budget. Setting it
+  // in render is safe because useEditor's returned value is stable until
+  // the editor disposes.
+  editorInstance.current = editor;
 
   const handleSave = useCallback(async () => {
     if (!editor || !initial.canEdit) return;
@@ -364,9 +375,20 @@ async function insertImageFiles(
   view: import('@tiptap/pm/view').EditorView,
   files: File[],
   dropCoords?: { x: number; y: number },
+  getMarkdown?: () => string,
 ) {
-  const datas = await Promise.all(files.map(fileToDataURI));
-  const valid = datas.filter((d): d is string => !!d);
+  // Encode sequentially so each image is evaluated against the running
+  // budget — otherwise pasting/dropping multiple images at once could each
+  // independently fit but overflow the save cap in aggregate.
+  const valid: string[] = [];
+  let usedBytes = getMarkdown ? markdownByteLength(getMarkdown()) : 0;
+  for (const file of files) {
+    const budget = getMarkdown !== undefined ? Math.max(0, MAX_CONTENT_BYTES - usedBytes) : undefined;
+    const dataUri = await fileToDataURI(file, budget);
+    if (!dataUri) continue;
+    valid.push(dataUri);
+    usedBytes += dataUri.length + 8;
+  }
   if (valid.length === 0) return;
   // The view can be torn down while we were awaiting FileReader for large
   // files. Dispatching on a destroyed view throws — bail out cleanly.

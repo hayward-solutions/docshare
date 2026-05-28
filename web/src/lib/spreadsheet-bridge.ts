@@ -106,6 +106,24 @@ export function workbookToCSV(snapshot: UniverWorkbookSnapshot): string {
   return Papa.unparse(rows, { newline: '\n' });
 }
 
+// Counts sheets beyond the first that have at least one cell with a value.
+// CSV can only represent one sheet, so the spreadsheet editor uses this to
+// refuse a save that would silently discard data the user added on a second
+// sheet via Univer's sheet controls.
+export function extraNonEmptySheetCount(snapshot: UniverWorkbookSnapshot): number {
+  let count = 0;
+  for (let i = 1; i < snapshot.sheetOrder.length; i++) {
+    const sheet = snapshot.sheets[snapshot.sheetOrder[i]];
+    if (!sheet) continue;
+    const cellData = sheet.cellData ?? {};
+    const hasData = Object.values(cellData).some((row) =>
+      Object.values(row ?? {}).some((cell) => cell?.v !== null && cell?.v !== undefined && cell?.v !== ''),
+    );
+    if (hasData) count += 1;
+  }
+  return count;
+}
+
 function excelValueToScalar(value: CellValue): string | number | boolean | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
