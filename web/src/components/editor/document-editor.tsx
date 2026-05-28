@@ -42,6 +42,7 @@ interface LoadedFile {
   name: string;
   mimeType: string;
   canEdit: boolean;
+  canDownload: boolean;
   content: string;
 }
 
@@ -92,6 +93,7 @@ export function DocumentEditor({ fileId }: DocumentEditorProps) {
           name: contentRes.data.name,
           mimeType: contentRes.data.mimeType,
           canEdit: contentRes.data.canEdit,
+          canDownload: contentRes.data.canDownload,
           content: contentRes.data.content,
         });
       } catch (err) {
@@ -288,7 +290,7 @@ function MarkdownEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge="Markdown"
-      exportMime={initial.mimeType}
+      exportMime={initial.canDownload ? initial.mimeType : undefined}
     >
       {editor ? (
         <>
@@ -365,7 +367,7 @@ function PlainTextEditor({ fileId, initial }: EditorVariantProps) {
       saveError={saveError}
       onSave={handleSave}
       mimeBadge={badge}
-      exportMime={initial.mimeType}
+      exportMime={initial.canDownload ? initial.mimeType : undefined}
     >
       <textarea
         value={value}

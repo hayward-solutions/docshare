@@ -145,6 +145,7 @@ export interface FileContentResponse {
   name: string;
   size: number;
   canEdit: boolean;
+  canDownload: boolean;
 }
 
 export interface FileBinaryResponse {

@@ -245,13 +245,19 @@ func (e *ExportService) runPandoc(ctx context.Context, source []byte, fromFmt, t
 	execCtx, cancel := context.WithTimeout(ctx, pandocExecTimeout)
 	defer cancel()
 
-	args := []string{"-f", fromFmt, "-t", toFmt, "--standalone"}
-	// HTML output is self-contained so the downloaded file renders without
-	// the browser needing to fetch our editor's stylesheet. Pandoc inlines
-	// CSS and embeds images.
-	if toFmt == "html" {
-		args = append(args, "--embed-resources")
-	}
+	// `-o -` forces pandoc to write to stdout. Binary formats (docx, odt,
+	// epub) refuse a TTY-bound stdout in some versions and require either
+	// a file path or this explicit dash; including it for all formats
+	// keeps behavior consistent.
+	//
+	// We intentionally do NOT pass --embed-resources: pandoc would resolve
+	// `![](http://…)` references over the network, giving an authenticated
+	// user an SSRF primitive from the api container (cloud metadata,
+	// internal services, etc.). Editor-pasted images are already data
+	// URIs (see web/src/lib/editor-images.ts) so they survive without
+	// remote fetching. Remote URLs in markdown survive as plain HTML
+	// references that the consumer's browser resolves.
+	args := []string{"-f", fromFmt, "-t", toFmt, "--standalone", "-o", "-"}
 
 	cmd := exec.CommandContext(execCtx, e.PandocPath, args...)
 	cmd.Stdin = bytes.NewReader(source)
