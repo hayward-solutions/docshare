@@ -132,14 +132,13 @@ func TestMimeFor(t *testing.T) {
 }
 
 func TestSourceFormatFor(t *testing.T) {
-	if sourceFormatFor("text/markdown") != "gfm" {
-		t.Errorf("markdown should map to gfm")
-	}
-	if sourceFormatFor("text/x-markdown; charset=utf-8") != "gfm" {
-		t.Errorf("text/x-markdown should map to gfm")
-	}
-	if sourceFormatFor("text/plain") != "plain" {
-		t.Errorf("plain text should map to plain")
+	// Pandoc has no `plain` reader (only a writer), so we use gfm for
+	// every text source. Plain text round-trips through gfm cleanly.
+	mimes := []string{"text/markdown", "text/x-markdown; charset=utf-8", "text/plain", "text/csv", "text/typescript"}
+	for _, m := range mimes {
+		if got := sourceFormatFor(m); got != "gfm" {
+			t.Errorf("sourceFormatFor(%q) = %q, want \"gfm\"", m, got)
+		}
 	}
 }
 
@@ -274,6 +273,43 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			name:        "preserves data: url() in style block",
 			input:       `<html><head><style>.icon { background: url(data:image/png;base64,iVBOR); }</style></head><body></body></html>`,
 			wantContain: []string{"data:image/png;base64,iVBOR"},
+		},
+		{
+			name:           "drops srcset entirely (multi-candidate bypass)",
+			input:          `<html><body><img src="data:image/png;base64,iV" srcset="data:,x 1w, http://169.254.169.254/ 9999w"></body></html>`,
+			wantContain:    []string{"data:image/png;base64,iV"},
+			wantNotContain: []string{"srcset", "169.254.169.254"},
+		},
+		{
+			name:           "drops imagesrcset on link/img",
+			input:          `<html><body><img imagesrcset="http://internal/x 1x"></body></html>`,
+			wantNotContain: []string{"imagesrcset", "internal"},
+		},
+		{
+			name:           "drops base element (rebase attack)",
+			input:          `<html><head><base href="http://169.254.169.254/"></head><body><img src="#x"></body></html>`,
+			wantNotContain: []string{"<base", "169.254.169.254"},
+		},
+		{
+			name:           "drops svg element with image href",
+			input:          `<html><body><p>text</p><svg><image href="http://169.254.169.254/"></image></svg></body></html>`,
+			wantContain:    []string{"text"},
+			wantNotContain: []string{"<svg", "<image", "169.254.169.254"},
+		},
+		{
+			name:           "drops iframe with srcdoc (HTML injection)",
+			input:          `<html><body><iframe srcdoc="&lt;script&gt;fetch('http://internal')&lt;/script&gt;"></iframe></body></html>`,
+			wantNotContain: []string{"<iframe", "srcdoc", "internal"},
+		},
+		{
+			name:           "drops meta refresh redirect",
+			input:          `<html><head><meta http-equiv="refresh" content="0;url=http://169.254.169.254/"></head><body></body></html>`,
+			wantNotContain: []string{"<meta", "169.254.169.254"},
+		},
+		{
+			name:           "drops math (MathML foreign content)",
+			input:          `<html><body><math><mi>x</mi></math></body></html>`,
+			wantNotContain: []string{"<math"},
 		},
 	}
 	for _, tt := range tests {

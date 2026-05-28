@@ -227,14 +227,14 @@ func (e *ExportService) readSource(ctx context.Context, file *models.File) ([]by
 }
 
 // sourceFormatFor maps a stored MIME type to the format flag pandoc
-// expects on its -f argument. Markdown is `gfm` so tables and task lists
-// from the TipTap editor round-trip correctly.
+// expects on its -f argument. Pandoc has no `plain` reader (only a
+// writer of that name), so we use `gfm` for every text source — gfm
+// treats plain text as markdown with no formatting, which is harmless
+// for actual plain text and preserves tables/task lists when the source
+// really is markdown.
 func sourceFormatFor(mimeType string) string {
-	m := strings.ToLower(mimeType)
-	if strings.HasPrefix(m, "text/markdown") || strings.HasPrefix(m, "text/x-markdown") {
-		return "gfm"
-	}
-	return "plain"
+	_ = mimeType
+	return "gfm"
 }
 
 // runPandoc invokes pandoc, piping the source on stdin and capturing the
@@ -401,19 +401,35 @@ func extensionFor(format ExportFormat) string {
 // remoteFetchAttrs maps element names to the attributes Chromium would
 // hit the network for when rendering. Anchor `<a href>` is intentionally
 // excluded — those are user clicks, not auto-fetches, and stripping them
-// would degrade the PDF as a usable document. `<script>` elements are
-// removed wholesale below so the `src` entry here is mostly defensive.
+// would degrade the PDF as a usable document. Elements that have no
+// safe rendering at all in our pipeline (script, link, base, svg,
+// iframe, embed, object, meta) are dropped wholesale in sanitizeNode
+// rather than appearing here.
 var remoteFetchAttrs = map[string][]string{
-	"img":    {"src", "srcset", "longdesc"},
-	"source": {"src", "srcset"},
+	"img":    {"src", "longdesc"},
+	"source": {"src"},
 	"track":  {"src"},
 	"video":  {"src", "poster"},
 	"audio":  {"src"},
-	"iframe": {"src"},
-	"embed":  {"src"},
-	"object": {"data"},
-	"link":   {"href"},
 	"input":  {"src"},
+}
+
+// dropElements names HTML elements that are removed wholesale before the
+// rendered HTML reaches Gotenberg's Chromium. Each entry exists because
+// the element either has no legitimate place in pandoc's standalone
+// output or carries an attack surface (srcdoc, base href, foreign-content
+// SVG image refs, http-equiv refresh, etc.) that's costly to whitelist.
+var dropElements = map[string]bool{
+	"script": true,
+	"link":   true,
+	"base":   true, // <base href="http://internal"> would re-anchor #fragment refs
+	"iframe": true, // srcdoc carries arbitrary HTML; src is a network fetch
+	"embed":  true,
+	"object": true,
+	"meta":   true, // http-equiv="refresh" content="0;url=http://internal"
+	"svg":    true, // <image href="..."> and <use href="..."> bypass img sanitization
+	"math":   true, // MathML parallels SVG's foreign-content attack surface
+	"form":   true, // not auto-fetching but no use in PDFs
 }
 
 // cssURLPattern matches CSS `url(...)` references — quoted or bare, with
@@ -430,17 +446,23 @@ var cssImportPattern = regexp.MustCompile(`(?i)@import\s+[^;]+;?`)
 // that would cause Chromium to issue outbound requests, execute scripts,
 // or trigger event handlers when rendering for PDF export. This blunts an
 // SSRF primitive: without it, an authenticated user could drop a remote
-// image, inline script, or `url()` reference in markdown (pandoc's gfm
-// reader passes raw HTML through) and the gotenberg container would
-// dutifully fetch internal services.
+// image, inline script, `url()` reference, `<base href>`, or inline SVG
+// `<image href>` in markdown (pandoc's gfm reader passes raw HTML
+// through) and the gotenberg container would dutifully fetch internal
+// services.
 //
 // What it does:
-//   - removes <script> and <link> elements entirely
+//   - removes elements in dropElements wholesale (script, link, base,
+//     iframe, embed, object, meta, svg, math, form)
 //   - scrubs <style> body content of url() and @import references
-//   - drops `style=` attributes on all elements (inline CSS can carry url())
-//   - drops `on*=` event handler attributes
-//   - strips src/href/data/etc. attributes on auto-fetching tags when the
-//     URL isn't a data:/cid:/fragment URL
+//   - drops `style=`, `srcset=`, `imagesrcset=`, and `on*=` attributes
+//     from every element
+//   - strips src/href/data attributes on auto-fetching tags when the
+//     URL isn't a data:/cid:/fragment URL. Fragments survive because
+//     `<base>` is in dropElements, so there is no injected base URL
+//     for a `#frag` ref to rebase against — the `<base href="http://
+//     internal">` + `<img src="#x">` attack pattern is closed by the
+//     base drop, not by reclassifying fragments
 //
 // `data:` and `cid:` URLs survive so editor-pasted images (encoded as
 // data URIs by the TipTap upload path) still render.
@@ -473,24 +495,17 @@ func sanitizeNode(n *html.Node) {
 
 		data := strings.ToLower(c.Data)
 
-		// Drop <script> outright. The inline body, not just the src, is
-		// the danger: `<script>fetch('http://169.254.169.254/...')</script>`
-		// would execute when Chromium renders the page.
-		if data == "script" {
+		// Drop entire elements with no safe rendering. See dropElements
+		// for why each one is here.
+		if dropElements[data] {
 			n.RemoveChild(c)
 			continue
 		}
 
-		// Drop <link> outright. Pandoc's --standalone output doesn't use
-		// it (CSS goes in an inline <style>), and user-injected raw
-		// <link rel="stylesheet"> / <link rel="preload"> would fetch.
-		if data == "link" {
-			n.RemoveChild(c)
-			continue
-		}
-
-		// Strip inline event handlers and `style=` attributes (which can
-		// embed `background:url(...)` etc.).
+		// Strip inline event handlers, `style=` attributes (which can
+		// embed `background:url(...)`), and `srcset` (parsed as multiple
+		// candidates by Chromium, so a `data:,x 1w, http://... 9999w`
+		// bypass slips past a naïve src-style check).
 		c.Attr = filterDangerousAttrs(c.Attr)
 
 		// Strip remote URLs in src/href/data attributes for auto-fetching
@@ -516,10 +531,17 @@ func filterDangerousAttrs(attrs []html.Attribute) []html.Attribute {
 	out := attrs[:0]
 	for _, a := range attrs {
 		key := strings.ToLower(a.Key)
-		if key == "style" {
+		switch {
+		case key == "style":
+			// inline CSS can embed url(http://internal)
 			continue
-		}
-		if strings.HasPrefix(key, "on") {
+		case key == "srcset", key == "imagesrcset":
+			// comma-separated candidate list — Chromium can pick any
+			// candidate, so a single safe data: entry doesn't make the
+			// whole attribute safe. Drop unconditionally.
+			continue
+		case strings.HasPrefix(key, "on"):
+			// onclick, onload, onerror, etc.
 			continue
 		}
 		out = append(out, a)
