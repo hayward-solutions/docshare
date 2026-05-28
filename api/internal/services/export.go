@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -244,26 +245,39 @@ func isMarkdownMime(mimeType string) bool {
 }
 
 // tildeFenceFor returns a tilde fence guaranteed to be longer than any
-// line-leading tilde run in source, so a wrapped fenced code block
-// cannot be closed prematurely by content.
+// candidate fence-closer in source, so a wrapped fenced code block
+// cannot be closed prematurely by content. GFM permits the closing
+// fence to be indented by 0-3 spaces (4+ spaces puts the line in a
+// nested code block), so we count tilde runs that start at columns
+// 0-3 after a newline. Tabs are treated as ≥4 spaces of indentation,
+// which can't close the fence, so tab-indented tildes are ignored.
 func tildeFenceFor(source []byte) string {
 	longest := 0
-	atLineStart := true
+	leadingSpaces := 0
+	inIndent := true
 	run := 0
 	for _, b := range source {
 		switch b {
 		case '\n':
-			atLineStart = true
+			leadingSpaces = 0
+			inIndent = true
+			run = 0
+		case ' ':
+			if inIndent && leadingSpaces < 3 {
+				leadingSpaces++
+			} else {
+				inIndent = false
+			}
 			run = 0
 		case '~':
-			if atLineStart {
+			if inIndent {
 				run++
 				if run > longest {
 					longest = run
 				}
 			}
 		default:
-			atLineStart = false
+			inIndent = false
 			run = 0
 		}
 	}
@@ -477,16 +491,20 @@ var remoteFetchAttrs = map[string][]string{
 // output or carries an attack surface (srcdoc, base href, foreign-content
 // SVG image refs, http-equiv refresh, etc.) that's costly to whitelist.
 var dropElements = map[string]bool{
-	"script": true,
-	"link":   true,
-	"base":   true, // <base href="http://internal"> would re-anchor #fragment refs
-	"iframe": true, // srcdoc carries arbitrary HTML; src is a network fetch
-	"embed":  true,
-	"object": true,
-	"meta":   true, // http-equiv="refresh" content="0;url=http://internal"
-	"svg":    true, // <image href="..."> and <use href="..."> bypass img sanitization
-	"math":   true, // MathML parallels SVG's foreign-content attack surface
-	"form":   true, // not auto-fetching but no use in PDFs
+	"script":   true,
+	"link":     true,
+	"base":     true, // <base href="http://internal"> would re-anchor #fragment refs
+	"iframe":   true, // srcdoc carries arbitrary HTML; src is a network fetch
+	"embed":    true,
+	"object":   true,
+	"meta":     true, // http-equiv="refresh" content="0;url=http://internal"
+	"svg":      true, // <image href="..."> and <use href="..."> bypass img sanitization
+	"math":     true, // MathML parallels SVG's foreign-content attack surface
+	"form":     true, // not auto-fetching but no use in PDFs
+	"frame":    true, // legacy framesets — `src` fetches like iframe
+	"frameset": true,
+	"applet":   true, // deprecated Java applet; Chromium ignores but be defensive
+	"portal":   true, // experimental Chromium-only; same surface as iframe
 }
 
 // cssURLPattern matches CSS `url(...)` references — quoted or bare, with
@@ -506,6 +524,14 @@ var cssImportPattern = regexp.MustCompile(`(?is)@import\b[^;]*;?`)
 // `@import/**/"http://..."` would bypass cssImportPattern unless we
 // strip comments first.
 var cssCommentPattern = regexp.MustCompile(`/\*[\s\S]*?\*/`)
+
+// cssEscapePattern matches a CSS character escape — either a hex form
+// `\HHHHHH` (1-6 hex digits, optionally followed by a single trailing
+// whitespace that gets consumed) or a literal form `\X` (any single
+// non-hex non-newline char). Chromium decodes these before rendering,
+// so a payload like `\75\72\6c(http://...)` decodes to `url(http://...)`
+// and reaches the network unless we decode first.
+var cssEscapePattern = regexp.MustCompile(`\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])`)
 
 // sanitizeHTMLForChromium walks the parsed HTML tree and removes anything
 // that would cause Chromium to issue outbound requests, execute scripts,
@@ -629,11 +655,13 @@ func scrubStyleContent(n *html.Node) {
 
 // scrubCSSResources rewrites `url(...)` references in a CSS snippet to
 // `url()` when the referenced URL would trigger a fetch, and removes
-// `@import` directives entirely. CSS comments are stripped first so
-// constructs like `@import/**/"http://..."` (Chromium parses comments
-// as whitespace) can't bypass the import-removal pattern.
+// `@import` directives entirely. Comments are stripped first
+// (Chromium parses them as whitespace), then CSS character escapes
+// are decoded so payloads like `\75\72\6c(http://...)` or
+// `\@import "http://..."` don't slip past the keyword patterns.
 func scrubCSSResources(css string) string {
 	css = cssCommentPattern.ReplaceAllString(css, "")
+	css = decodeCSSEscapes(css)
 	css = cssImportPattern.ReplaceAllString(css, "")
 	css = cssURLPattern.ReplaceAllStringFunc(css, func(match string) string {
 		sub := cssURLPattern.FindStringSubmatch(match)
@@ -648,6 +676,38 @@ func scrubCSSResources(css string) string {
 		return "url()"
 	})
 	return css
+}
+
+// decodeCSSEscapes resolves CSS character escapes to their literal
+// characters. Both forms are handled:
+//   - `\HHHHHH` — 1-6 hex digits, optionally followed by one whitespace
+//     char (which is consumed). Decodes to the Unicode codepoint.
+//   - `\X` — a single non-hex, non-newline character. Decodes to that
+//     literal character.
+//
+// This normalizes CSS so payloads like `\75\72\6c(http://...)` or
+// `\@import "http://..."` can be matched by the subsequent keyword
+// patterns instead of slipping through unchanged.
+func decodeCSSEscapes(css string) string {
+	return cssEscapePattern.ReplaceAllStringFunc(css, func(match string) string {
+		sub := cssEscapePattern.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		// Hex form.
+		if sub[1] != "" {
+			n, err := strconv.ParseUint(sub[1], 16, 32)
+			if err != nil || n == 0 || n > 0x10FFFF {
+				return match
+			}
+			return string(rune(n))
+		}
+		// Literal form: \X → X.
+		if sub[2] != "" {
+			return sub[2]
+		}
+		return match
+	})
 }
 
 func stripRemoteAttr(n *html.Node, attrName string) {

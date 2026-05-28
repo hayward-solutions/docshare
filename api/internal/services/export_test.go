@@ -186,11 +186,44 @@ func TestTildeFenceFor(t *testing.T) {
 		{"line-leading 3 tildes need 4", "~~~\nbody", "~~~~"},
 		{"line-leading 5 tildes need 6", "~~~~~\nbody", "~~~~~~"},
 		{"tildes mid-line ignored", "foo ~~~~~ bar", "~~~"},
+		// GFM fence closers may be indented 0-3 spaces; we must
+		// count tilde runs at each of those positions or a `   ~~~`
+		// line will close the wrapper early.
+		{"1-space indent counts", " ~~~~\nbody", "~~~~~"},
+		{"2-space indent counts", "  ~~~~~\nbody", "~~~~~~"},
+		{"3-space indent counts", "   ~~~\nbody", "~~~~"},
+		// 4+ spaces puts the line in a nested code block, so the
+		// tildes there can't act as a closing fence.
+		{"4-space indent ignored", "    ~~~~~~~~~\nbody", "~~~"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tildeFenceFor([]byte(tt.source)); got != tt.want {
 				t.Errorf("tildeFenceFor(%q) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeCSSEscapes(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"hex form letters", `\75\72\6c`, "url"},
+		{"hex with trailing space", `\75 \72 \6c`, "url"},
+		{"literal at-sign", `\@import`, "@import"},
+		{"literal paren", `\(http://x\)`, "(http://x)"},
+		{"long hex", `\000075`, "u"},
+		{"null escape preserved (denied)", `\0`, `\0`},
+		{"no escapes", "url(http://x)", "url(http://x)"},
+		{"mixed", `\75 r\6C(http://x)`, "url(http://x)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := decodeCSSEscapes(tt.in); got != tt.want {
+				t.Errorf("decodeCSSEscapes(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -387,6 +420,26 @@ func TestSanitizeHTMLForChromium(t *testing.T) {
 			input:          `<html><body><table><tr><td background="http://169.254.169.254/">x</td></tr></table></body></html>`,
 			wantContain:    []string{">x<"},
 			wantNotContain: []string{"background=", "169.254.169.254"},
+		},
+		{
+			name:           "scrubs hex-escaped url() in style block",
+			input:          `<html><head><style>body{background:\75\72\6c(http://169.254.169.254/)}</style></head><body></body></html>`,
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:           "scrubs literal-escaped @import",
+			input:          `<html><head><style>\@import "http://169.254.169.254/x.css";</style></head><body></body></html>`,
+			wantNotContain: []string{"169.254.169.254"},
+		},
+		{
+			name:           "drops frameset and frame",
+			input:          `<html><frameset><frame src="http://169.254.169.254/"></frameset></html>`,
+			wantNotContain: []string{"<frame", "169.254.169.254"},
+		},
+		{
+			name:           "drops applet",
+			input:          `<html><body><applet code="evil.class" archive="http://internal/x.jar"></applet></body></html>`,
+			wantNotContain: []string{"<applet", "internal"},
 		},
 	}
 	for _, tt := range tests {
