@@ -229,6 +229,15 @@ export async function xlsxBufferToWorkbook(
           else if (cell.value instanceof Date) {
             hasComplexFormatting = true;
           }
+          // Hyperlink cells ({ text, hyperlink }) and rich-text cells
+          // ({ richText: [...] }) survive as their display string only —
+          // excelValueToScalar drops the URL target and per-run formatting.
+          else if (cell.value && typeof cell.value === 'object') {
+            const v = cell.value as { hyperlink?: unknown; richText?: unknown };
+            if (v.hyperlink !== undefined || v.richText !== undefined) {
+              hasComplexFormatting = true;
+            }
+          }
         }
         const scalar = excelValueToScalar(cell.value);
         if (scalar === null || scalar === '') return;

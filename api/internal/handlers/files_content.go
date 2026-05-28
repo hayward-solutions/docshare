@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docshare/api/internal/middleware"
 	"github.com/docshare/api/internal/models"
@@ -466,13 +467,11 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusRequestEntityTooLarge, fmt.Sprintf("content exceeds editor maximum of %d bytes", editableBinaryMaxBytes))
 	}
 
-	// Snapshot the set of preview-job IDs that exist BEFORE we update the
-	// file. The fenced-conversion path in PreviewService can race with us:
-	// once we bump file.updated_at below, an in-flight worker returns
-	// ErrPreviewSuperseded and processJob enqueues a fresh job against the
-	// new bytes. Deleting by file_id at the end would also wipe that fresh
-	// job — by remembering the prior IDs and deleting only them, the
-	// replacement survives so a polling viewer sees forward progress.
+	// Snapshot the preview-job IDs that exist before we touch anything.
+	// Once we bump updated_at below, an in-flight worker hits the fence
+	// in ConvertToPreview, returns ErrPreviewSuperseded, and processJob
+	// enqueues a fresh replacement job against the new bytes. Cleaning
+	// up only the IDs we captured here leaves that replacement alone.
 	var priorJobIDs []uuid.UUID
 	if err := h.DB.Model(&models.PreviewJob{}).Where("file_id = ?", file.ID).Pluck("id", &priorJobIDs).Error; err != nil {
 		logger.Error("preview_job_snapshot_failed", err, map[string]interface{}{
@@ -480,22 +479,34 @@ func (h *FilesHandler) SaveBinary(c *fiber.Ctx) error {
 		})
 	}
 
+	// Bump updated_at and clear thumbnail_path BEFORE uploading bytes.
+	// This closes a race where a worker that started before us could
+	// finish its render and write thumbnail_path between our upload and
+	// our metadata update — at that point the fence sees the old
+	// updated_at and lets the stale PDF land. By advancing updated_at
+	// first, the worker's UPDATE thumbnail_path WHERE updated_at <=
+	// started_at trips immediately. We re-read file.ThumbnailPath
+	// after the UPDATE so we still clean up whatever was there
+	// (including a thumbnail the worker may have just published
+	// between our SELECT and this UPDATE).
+	preUpdates := map[string]interface{}{"updated_at": time.Now().UTC(), "thumbnail_path": nil}
+	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(preUpdates).Error; err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "failed updating file metadata")
+	}
+	// Capture whatever thumbnail_path the row holds right now — could be
+	// the value we read at SELECT, or a stale one the worker just wrote.
+	// Either way the row is now nil, so any S3 object the path points
+	// to is unreferenced and safe to delete.
+	priorThumb := ""
+	if file.ThumbnailPath != nil {
+		priorThumb = *file.ThumbnailPath
+	}
+
 	if err := h.Storage.Upload(c.Context(), file.StoragePath, bytes.NewReader(body), int64(len(body)), file.MimeType); err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed saving file content")
 	}
 
-	updates := map[string]interface{}{"size": int64(len(body))}
-	// The previously-rendered preview (PDF thumbnail of the pre-edit
-	// workbook) no longer reflects what's in storage. Clear the pointer
-	// so PreviewURL/ProxyPreview don't serve a stale image, drop the old
-	// thumbnail object best-effort, and delete the completed PreviewJob
-	// so the viewer re-enqueues a fresh render on next open.
-	priorThumb := ""
-	if file.ThumbnailPath != nil {
-		priorThumb = *file.ThumbnailPath
-		updates["thumbnail_path"] = nil
-	}
-	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(updates).Error; err != nil {
+	if err := h.DB.Model(&models.File{}).Where("id = ?", file.ID).Updates(map[string]interface{}{"size": int64(len(body))}).Error; err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed updating file metadata")
 	}
 	if priorThumb != "" {
