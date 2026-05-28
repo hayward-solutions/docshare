@@ -124,3 +124,237 @@
     @apply bg-background text-foreground;
   }
 }
+
+.editor-content .ProseMirror {
+  outline: none;
+  min-height: 60vh;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.editor-content .ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+
+.editor-content .ProseMirror h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 1.5em;
+}
+
+.editor-content .ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+
+.editor-content .ProseMirror h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.3em;
+}
+
+.editor-content .ProseMirror h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.2em;
+}
+
+.editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.editor-content .ProseMirror ul,
+.editor-content .ProseMirror ol {
+  padding-left: 1.5rem;
+}
+
+.editor-content .ProseMirror ul {
+  list-style: disc;
+}
+
+.editor-content .ProseMirror ol {
+  list-style: decimal;
+}
+
+.editor-content .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.editor-content .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.editor-content .ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 0.25rem;
+  user-select: none;
+}
+
+.editor-content .ProseMirror blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.editor-content .ProseMirror code {
+  background: var(--muted);
+  color: var(--foreground);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  font-family: var(--font-mono);
+}
+
+.editor-content .ProseMirror pre {
+  background: oklch(0.18 0 0);
+  color: oklch(0.95 0 0);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.editor-content .ProseMirror pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.editor-content .ProseMirror hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.editor-content .ProseMirror img.editor-image,
+.editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  display: block;
+  margin: 0.5em 0;
+}
+
+.editor-content .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid oklch(0.55 0.18 250);
+  outline-offset: 2px;
+}
+
+.editor-content .ProseMirror a {
+  color: oklch(0.55 0.18 250);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dark .editor-content .ProseMirror a {
+  color: oklch(0.75 0.18 250);
+}
+
+.editor-content .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.75em 0;
+  overflow: hidden;
+}
+
+.editor-content .ProseMirror th,
+.editor-content .ProseMirror td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  position: relative;
+}
+
+.editor-content .ProseMirror th {
+  background: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.editor-content .ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: oklch(0.6 0.18 250 / 0.12);
+  pointer-events: none;
+}
+
+.editor-content--plain .ProseMirror {
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Syntax highlighting for tiptap code blocks via lowlight + highlight.js
+   class names. Tokens stay readable in both light and dark themes by
+   sticking to a small palette tuned for the dark code-block background. */
+.editor-content .ProseMirror pre code .hljs-comment,
+.editor-content .ProseMirror pre code .hljs-quote {
+  color: oklch(0.65 0.02 250);
+  font-style: italic;
+}
+
+.editor-content .ProseMirror pre code .hljs-keyword,
+.editor-content .ProseMirror pre code .hljs-selector-tag,
+.editor-content .ProseMirror pre code .hljs-literal,
+.editor-content .ProseMirror pre code .hljs-section,
+.editor-content .ProseMirror pre code .hljs-link {
+  color: oklch(0.78 0.16 290);
+}
+
+.editor-content .ProseMirror pre code .hljs-string,
+.editor-content .ProseMirror pre code .hljs-attr,
+.editor-content .ProseMirror pre code .hljs-template-tag,
+.editor-content .ProseMirror pre code .hljs-template-variable,
+.editor-content .ProseMirror pre code .hljs-addition {
+  color: oklch(0.82 0.16 145);
+}
+
+.editor-content .ProseMirror pre code .hljs-number,
+.editor-content .ProseMirror pre code .hljs-symbol,
+.editor-content .ProseMirror pre code .hljs-bullet,
+.editor-content .ProseMirror pre code .hljs-meta,
+.editor-content .ProseMirror pre code .hljs-built_in,
+.editor-content .ProseMirror pre code .hljs-builtin-name {
+  color: oklch(0.78 0.17 70);
+}
+
+.editor-content .ProseMirror pre code .hljs-title,
+.editor-content .ProseMirror pre code .hljs-name,
+.editor-content .ProseMirror pre code .hljs-type {
+  color: oklch(0.85 0.17 220);
+}
+
+.editor-content .ProseMirror pre code .hljs-attribute,
+.editor-content .ProseMirror pre code .hljs-variable,
+.editor-content .ProseMirror pre code .hljs-tag {
+  color: oklch(0.85 0.15 30);
+}
+
+.editor-content .ProseMirror pre code .hljs-deletion {
+  color: oklch(0.7 0.2 25);
+}
+
+.editor-content .ProseMirror pre code .hljs-strong {
+  font-weight: 600;
+}
+
+.editor-content .ProseMirror pre code .hljs-emphasis {
+  font-style: italic;
+}

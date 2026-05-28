@@ -46,6 +46,11 @@ export interface File {
   shared?: boolean;
   sharedWith?: number;
   parentName?: string;
+  // Set by /files/:id Get; absent in list endpoints. Used to gate the
+  // viewer Edit button so view-only shares of editable mimes don't
+  // expose a link that would only 403 inside the editor.
+  canEdit?: boolean;
+  canDownload?: boolean;
 }
 
 export type ShareType = 'private' | 'public_anyone' | 'public_logged_in';

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -13,6 +14,7 @@ import (
 	"github.com/docshare/api/internal/config"
 	"github.com/docshare/api/internal/models"
 	"github.com/docshare/api/internal/storage"
+	"github.com/docshare/api/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -35,7 +37,22 @@ func NewPreviewService(db *gorm.DB, storageClient *storage.S3Client, gotenberg c
 	}
 }
 
-func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File) (string, error) {
+// ErrPreviewSuperseded is returned by ConvertToPreview when the file was
+// edited after the conversion started, so the freshly-rendered PDF is
+// already stale. Callers (the preview queue) should re-enqueue against
+// the latest bytes rather than marking the job completed-without-thumbnail.
+var ErrPreviewSuperseded = errors.New("preview superseded by later file edit")
+
+// ConvertToPreview renders a PDF preview for file and publishes the
+// thumbnail_path so the viewer serves it. The notAfter parameter guards
+// against a race: if the file was edited after the caller decided to run
+// this conversion (e.g. SaveBinary cleared the previous thumbnail mid-
+// render), the publish becomes a no-op, the freshly-uploaded PDF is
+// cleaned up, and ErrPreviewSuperseded is returned so the queue can
+// re-enqueue against the current bytes.
+// Callers pass the job's StartedAt as notAfter; a zero value skips the
+// guard.
+func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File, notAfter time.Time) (string, error) {
 	if file.IsDirectory {
 		return "", fmt.Errorf("cannot preview a directory")
 	}
@@ -91,10 +108,35 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 		return "", err
 	}
 
-	file.ThumbnailPath = &previewPath
-	if err := p.DB.WithContext(ctx).Model(&models.File{}).Where("id = ?", file.ID).Update("thumbnail_path", previewPath).Error; err != nil {
-		return "", err
+	// Gate the publish on the file not having been edited since the job
+	// started. If a SaveBinary landed mid-render, file.updated_at has
+	// advanced past notAfter and the UPDATE matches 0 rows — we then
+	// drop the thumbnail bytes we just uploaded and bail without
+	// claiming a stale PDF as the current preview.
+	q := p.DB.WithContext(ctx).Model(&models.File{}).Where("id = ?", file.ID)
+	if !notAfter.IsZero() {
+		q = q.Where("updated_at <= ?", notAfter)
 	}
+	result := q.Update("thumbnail_path", previewPath)
+	if result.Error != nil {
+		return "", result.Error
+	}
+	if result.RowsAffected == 0 {
+		// File was edited mid-render; the bytes we just rendered are stale.
+		// Best-effort cleanup so we don't leak orphan PDFs in S3, then
+		// signal the queue to re-enqueue against the latest bytes.
+		if delErr := p.Storage.Delete(ctx, previewPath); delErr != nil {
+			logger.Error("preview_stale_thumb_cleanup_failed", delErr, map[string]interface{}{
+				"file_id":      file.ID.String(),
+				"preview_path": previewPath,
+			})
+		}
+		logger.Info("preview_publish_skipped_stale", map[string]interface{}{
+			"file_id": file.ID.String(),
+		})
+		return "", ErrPreviewSuperseded
+	}
+	file.ThumbnailPath = &previewPath
 
 	return p.Storage.PresignedGetURLWithResponse(ctx, previewPath, 15*time.Minute, "application/pdf", "inline")
 }

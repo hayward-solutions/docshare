@@ -35,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { 
-  LayoutGrid, 
-  List, 
-  MoreVertical, 
-  Download, 
-  Trash2, 
+import {
+  LayoutGrid,
+  List,
+  MoreVertical,
+  Download,
+  Trash2,
   Move,
   ChevronRight,
   ArrowLeft,
@@ -48,8 +48,10 @@ import {
   Share2,
   Search,
   FolderOpen,
-  Globe
+  Globe,
+  Pencil
 } from 'lucide-react';
+import { isAnyEditableMime, isSpreadsheetBinaryMime } from '@/lib/mime';
 import { FileIconComponent } from '@/components/file-icon';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { FileSortMenu } from '@/components/file-sort-menu';
@@ -298,6 +300,14 @@ const handleDownload = async (fileId: string, fileName: string) => {
         )}
         
         <div className="flex items-center gap-2">
+          {!file.isDirectory && isAnyEditableMime(file.mimeType) && file.size <= editorSizeCapFor(file.mimeType) && canOpenInEditor(file) && (
+            <Button variant="outline" asChild>
+              <Link href={`/edit/${file.id}`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          )}
           {!file.isDirectory && (
             <Button variant="outline" onClick={() => handleDownload(file.id, file.name)}>
               <Download className="mr-2 h-4 w-4" />
@@ -624,6 +634,28 @@ const handleDownload = async (fileId: string, fileName: string) => {
       />
     </div>
   );
+}
+
+// Gate the viewer Edit button on the byte-level permission the editor
+// will actually need. Spreadsheet binaries (XLSX) require download (the
+// /binary endpoint mirrors /download's permission); text/markdown still
+// uses /content which only needs view, so the legacy isAnyEditableMime
+// check is sufficient. canDownload is set by /files/:id; if it's
+// absent (older list-endpoint payload), fall back to permissive.
+function canOpenInEditor(file: { mimeType: string; canDownload?: boolean }): boolean {
+  if (!isSpreadsheetBinaryMime(file.mimeType)) return true;
+  return file.canDownload !== false;
+}
+
+function editorSizeCapFor(mimeType: string): number {
+  // Mirror of the backend caps in api/internal/handlers/files_content.go.
+  // 8 MiB for spreadsheet binaries (capped below the
+  // SmallBodyLimitForNonUploadRoutes middleware), 1 MiB for text (lower
+  // so worst-case JSON-encoded content — quotes, backslashes, control
+  // chars can inflate 2-6× — still fits inside the middleware limit).
+  // Keep these aligned with the server so the Edit button doesn't
+  // promise the user something the API will refuse.
+  return isSpreadsheetBinaryMime(mimeType) ? 8 * 1024 * 1024 : 1 * 1024 * 1024;
 }
 
 function formatBytes(bytes: number, decimals = 2) {

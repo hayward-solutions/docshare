@@ -19,4 +19,11 @@ type File struct {
 	Shares     []Share `json:"-" gorm:"foreignKey:FileID"`
 	SharedWith int64   `json:"sharedWith" gorm:"-"`
 	ParentName string  `json:"parentName,omitempty" gorm:"-"`
+	// CanEdit/CanDownload are populated by handlers that have access to
+	// the AccessService and the calling user (e.g. Get). The frontend
+	// uses them to gate the Edit button on the file viewer so view-only
+	// shares of a binary editable file (XLSX) don't surface a link that
+	// would only 403 inside the editor's /binary fetch.
+	CanEdit     bool `json:"canEdit" gorm:"-"`
+	CanDownload bool `json:"canDownload" gorm:"-"`
 }
