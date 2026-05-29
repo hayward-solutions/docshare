@@ -838,8 +838,17 @@ func (h *FilesHandler) PreviewURL(c *fiber.Ctx) error {
 
 	token := previewtoken.Generate(fileID.String(), currentUser.ID.String())
 
+	// The variant param is propagated into the returned path so the client
+	// builds one URL: ?variant=thumb selects the small JPEG thumbnail (for
+	// grid view); absent/any other value selects the renderable form (for
+	// the viewer: original for images, PDF render for Office docs).
+	path := "/files/" + fileID.String() + "/proxy"
+	if c.Query("variant") == "thumb" {
+		path += "?variant=thumb"
+	}
+
 	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"path":  "/files/" + fileID.String() + "/proxy",
+		"path":  path,
 		"token": token,
 	})
 }
@@ -883,9 +892,28 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	// Path selection:
+	//   variant=thumb  → force the small derived asset (ThumbnailPath);
+	//                    404 if none exists so the grid can fall back to
+	//                    the icon without downloading the full original.
+	//   default         → the renderable form. For images, that's the
+	//                    full StoragePath (the viewer needs the original
+	//                    resolution; the 400px JPEG would render blurry).
+	//                    For non-images with a generated preview (e.g.
+	//                    Office → PDF), that's still ThumbnailPath.
+	variant := c.Query("variant")
+	isImage := strings.HasPrefix(file.MimeType, "image/")
+	hasThumbnail := file.ThumbnailPath != nil && *file.ThumbnailPath != ""
+
 	storagePath := file.StoragePath
 	servingThumbnail := false
-	if file.ThumbnailPath != nil && *file.ThumbnailPath != "" {
+	if variant == "thumb" {
+		if !hasThumbnail {
+			return utils.Error(c, fiber.StatusNotFound, "thumbnail not available")
+		}
+		storagePath = *file.ThumbnailPath
+		servingThumbnail = true
+	} else if hasThumbnail && !isImage {
 		storagePath = *file.ThumbnailPath
 		servingThumbnail = true
 	}
@@ -901,16 +929,20 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	// When we're serving the thumbnail (a PDF rendering of the original) the
-	// DB's MimeType still reflects the original file (e.g. DOCX), so use S3's
-	// reported content-type — PreviewService uploaded the thumbnail with the
-	// correct one. For the original file, prefer DB MimeType, since
-	// pre-signed PUT uploads land in S3 as application/octet-stream.
+	// When we're serving a derived thumbnail, S3's reported content-type is
+	// authoritative (PreviewService uploaded with the correct one — JPEG
+	// for image thumbnails, PDF for Office-doc thumbnails). For the
+	// original, prefer DB MimeType, since pre-signed PUT uploads land in
+	// S3 as application/octet-stream.
 	var contentType string
 	if servingThumbnail {
 		contentType = stat.ContentType
 		if contentType == "" {
-			contentType = "application/pdf"
+			if isImage {
+				contentType = "image/jpeg"
+			} else {
+				contentType = "application/pdf"
+			}
 		}
 	} else {
 		contentType = file.MimeType

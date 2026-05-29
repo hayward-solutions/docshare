@@ -410,13 +410,17 @@ const handleDownload = async (fileId: string, fileName: string) => {
                   className={`group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md ${selection.isSelected(child.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
                 >
                   <Link href={`/files/${child.id}`} className="absolute inset-0 z-0" />
-                  <div className="relative aspect-square bg-muted">
+                  {/* pointer-events-none lets clicks fall through to the
+                      underlying Link so the whole tile opens the file. The
+                      checkbox + dropdown nested inside re-enable themselves
+                      with pointer-events-auto. */}
+                  <div className="pointer-events-none relative aspect-square bg-muted">
                     <FileThumbnail
                       file={child}
                       className="absolute inset-0"
                       iconClassName="h-14 w-14 text-blue-600 dark:text-blue-400"
                     />
-                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">
+                    <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">
                       <Checkbox
                         checked={selection.isSelected(child.id)}
                         onCheckedChange={() => selection.toggle(child.id)}

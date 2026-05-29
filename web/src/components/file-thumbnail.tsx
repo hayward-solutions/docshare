@@ -17,7 +17,12 @@ type ThumbKind = 'image' | 'video' | null;
 
 function thumbnailKind(file: File): ThumbKind {
   if (file.isDirectory) return null;
-  if (file.mimeType.startsWith('image/')) return 'image';
+  // Only fetch for images the server has already generated a thumbnail for.
+  // Without this gate, pre-feature uploads (no thumbnail_path) would still
+  // hit /preview, which falls back to streaming the full original — a grid
+  // of 50 phone photos would download hundreds of MB. Files whose job is
+  // still pending/failed also fall through here and just show the icon.
+  if (file.mimeType.startsWith('image/') && file.thumbnailPath) return 'image';
   if (file.mimeType.startsWith('video/')) return 'video';
   return null;
 }
@@ -60,15 +65,23 @@ export function FileThumbnail({ file, className, iconClassName }: FileThumbnailP
 
     (async () => {
       try {
-        const res = await apiMethods.get<{ path: string; token: string }>(
-          `/files/${file.id}/preview`,
-        );
+        // variant=thumb steers ProxyPreview to the small derived asset
+        // (image: 400px JPEG, office: PDF render). Without it the proxy
+        // default for images is the full original — fine for the viewer,
+        // wrong for grid tiles.
+        const previewEndpoint = kind === 'image'
+          ? `/files/${file.id}/preview?variant=thumb`
+          : `/files/${file.id}/preview`;
+        const res = await apiMethods.get<{ path: string; token: string }>(previewEndpoint);
         if (cancelled) return;
         if (!res.success) {
           setError(true);
           return;
         }
-        const proxyUrl = `${API_URL}${res.data.path}?token=${res.data.token}`;
+        // PreviewURL may embed its own query (?variant=thumb), so pick the
+        // right separator instead of producing `...?variant=thumb?token=`.
+        const sep = res.data.path.includes('?') ? '&' : '?';
+        const proxyUrl = `${API_URL}${res.data.path}${sep}token=${res.data.token}`;
 
         if (kind === 'image') {
           // Match FileViewer: fetch as blob so the short-lived preview token

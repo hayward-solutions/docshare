@@ -46,6 +46,11 @@ export interface File {
   shared?: boolean;
   sharedWith?: number;
   parentName?: string;
+  // Present when the server has generated a derived asset for this file
+  // (small JPEG for images, PDF render for Office docs). FileThumbnail
+  // gates on this so a grid of pre-feature uploads shows icons instead
+  // of fetching multi-MB originals.
+  thumbnailPath?: string;
   // Set by /files/:id Get; absent in list endpoints. Used to gate the
   // viewer Edit button so view-only shares of editable mimes don't
   // expose a link that would only 403 inside the editor.
