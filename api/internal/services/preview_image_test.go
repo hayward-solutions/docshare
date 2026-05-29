@@ -106,30 +106,50 @@ func TestResizeImageToJPEG_RejectsGarbage(t *testing.T) {
 	}
 }
 
-// TestResizeImageToJPEG_RejectsPixelBomb feeds in a PNG whose IHDR claims a
-// 20000×20000 canvas. DecodeConfig succeeds (it reads the header), the size
-// check fires, and we never reach the full decode that would allocate
-// ~1.6 GB. Verifies the OOM guard.
-func TestResizeImageToJPEG_RejectsPixelBomb(t *testing.T) {
-	src := makeTestPNG(t, 32, 32) // valid small PNG we'll rewrite the dims of
-
-	// PNG layout: 8-byte signature, then chunks. IHDR is the first chunk
-	// and stores width (4B big-endian) at byte offset 16 and height at 20.
-	// The IHDR length and CRC don't change so we can just splice the dims.
-	bigW, bigH := uint32(20000), uint32(20000)
-	binary.BigEndian.PutUint32(src[16:20], bigW)
-	binary.BigEndian.PutUint32(src[20:24], bigH)
-	// Recompute the IHDR CRC (covers the type tag + 13-byte body, offsets
-	// 12..29) so DecodeConfig accepts the chunk.
-	src[29-4], src[29-3], src[29-2], src[29-1] = 0, 0, 0, 0 // placeholder
+// forgeSourcePNGDims rewrites the IHDR width/height of a valid PNG (so
+// DecodeConfig reports the forged dimensions) without touching the IDAT
+// stream. Used to construct minimal-bytes test cases for the size guards.
+func forgeSourcePNGDims(t *testing.T, src []byte, w, h uint32) []byte {
+	t.Helper()
+	// PNG layout: 8-byte signature, then chunks. IHDR is the first chunk;
+	// width and height are 4-byte big-endian at offsets 16 and 20. The
+	// IHDR CRC covers the type tag + 13-byte body (bytes 12..29).
+	binary.BigEndian.PutUint32(src[16:20], w)
+	binary.BigEndian.PutUint32(src[20:24], h)
 	crc := crc32.ChecksumIEEE(src[12:29])
 	binary.BigEndian.PutUint32(src[29:33], crc)
+	return src
+}
+
+// TestResizeImageToJPEG_RejectsPixelBomb feeds in a PNG whose IHDR claims a
+// 20000×20000 canvas. DecodeConfig succeeds (it reads the header), the
+// per-axis cap fires, and we never reach the full decode that would
+// allocate ~1.6 GB. Verifies the OOM guard against the obvious bomb shape.
+func TestResizeImageToJPEG_RejectsPixelBomb(t *testing.T) {
+	src := forgeSourcePNGDims(t, makeTestPNG(t, 32, 32), 20000, 20000)
 
 	_, err := resizeImageToJPEG(bytes.NewReader(src), 400, 80)
 	if err == nil {
 		t.Fatal("expected pixel-bomb rejection")
 	}
 	if !strings.Contains(err.Error(), "exceed max") {
-		t.Errorf("expected size-cap error, got %v", err)
+		t.Errorf("expected per-axis cap error, got %v", err)
+	}
+}
+
+// TestResizeImageToJPEG_RejectsTotalPixelBomb hits the second guard: a
+// 9000×9000 image is under the 10000 per-axis cap but its 81 MP demand
+// (~324 MB RGBA buffer) blows past the total-pixel budget. Without the
+// width*height check a single legitimately-uploadable image could OOM the
+// worker.
+func TestResizeImageToJPEG_RejectsTotalPixelBomb(t *testing.T) {
+	src := forgeSourcePNGDims(t, makeTestPNG(t, 32, 32), 9000, 9000)
+
+	_, err := resizeImageToJPEG(bytes.NewReader(src), 400, 80)
+	if err == nil {
+		t.Fatal("expected total-pixel rejection")
+	}
+	if !strings.Contains(err.Error(), "total pixel budget") {
+		t.Errorf("expected total-pixel cap error, got %v", err)
 	}
 }

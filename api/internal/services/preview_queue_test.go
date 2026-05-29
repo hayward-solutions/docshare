@@ -202,3 +202,109 @@ func TestPreviewQueueService_Retry(t *testing.T) {
 		}
 	})
 }
+
+func TestPreviewQueueService_RecoverStaleJobs(t *testing.T) {
+	db := setupPreviewQueueTestDB(t)
+
+	owner := &models.User{
+		Email:        "preview-recover@test.com",
+		PasswordHash: "hash",
+		FirstName:    "Recover",
+		LastName:     "Test",
+		Role:         models.UserRoleUser,
+	}
+	db.Create(owner)
+
+	mkfile := func(name string) *models.File {
+		f := &models.File{
+			Name:        name,
+			MimeType:    "image/png",
+			Size:        1,
+			IsDirectory: false,
+			OwnerID:     owner.ID,
+			StoragePath: name,
+		}
+		db.Create(f)
+		return f
+	}
+
+	cfg := config.PreviewConfig{
+		QueueBufferSize: 10,
+		MaxAttempts:     3,
+		RetryDelays:     []time.Duration{1 * time.Second},
+		// StaleRecoveryInterval intentionally zero: we drive RecoverStaleJobs
+		// directly and don't want a concurrent background tick racing the
+		// channel-drain assertions below.
+	}
+	previewService := NewPreviewService(db, nil, config.GotenbergConfig{})
+	// Construct without NewPreviewQueueService to keep the processQueue
+	// worker out of the picture — RecoverStaleJobs is the unit under test
+	// and we want to assert on the channel contents directly, not race a
+	// worker (which would also nil-deref on the nil storage client).
+	service := &PreviewQueueService{
+		DB:             db,
+		PreviewService: previewService,
+		queue:          make(chan PreviewJobTask, cfg.QueueBufferSize),
+		config:         cfg,
+	}
+
+	future := time.Now().UTC().Add(5 * time.Minute)
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	earlier := time.Now().UTC().Add(-15 * time.Minute)
+
+	// fresh pending (no NextRetryAt) — should be re-enqueued
+	freshFile := mkfile("fresh.png")
+	freshJob := &models.PreviewJob{FileID: freshFile.ID, Status: models.PreviewJobStatusPending, MaxAttempts: 3}
+	db.Create(freshJob)
+
+	// pending whose retry is due — should be re-enqueued
+	dueFile := mkfile("due.png")
+	dueJob := &models.PreviewJob{FileID: dueFile.ID, Status: models.PreviewJobStatusPending, MaxAttempts: 3, Attempts: 1, NextRetryAt: &past}
+	db.Create(dueJob)
+
+	// pending whose retry is still in the future — must NOT be re-enqueued
+	scheduledFile := mkfile("scheduled.png")
+	scheduledJob := &models.PreviewJob{FileID: scheduledFile.ID, Status: models.PreviewJobStatusPending, MaxAttempts: 3, Attempts: 1, NextRetryAt: &future}
+	db.Create(scheduledJob)
+
+	// stuck processing (older than 10 min) — should flip to pending and re-enqueue
+	stuckFile := mkfile("stuck.png")
+	stuckJob := &models.PreviewJob{FileID: stuckFile.ID, Status: models.PreviewJobStatusProcessing, MaxAttempts: 3, StartedAt: &earlier}
+	db.Create(stuckJob)
+	// Force updated_at backward — RecoverStaleJobs picks by status+updated_at age.
+	db.Model(stuckJob).UpdateColumn("updated_at", earlier)
+
+	service.RecoverStaleJobs()
+
+	// Drain the channel; capture every FileID we received.
+	got := map[uuid.UUID]bool{}
+	timeout := time.After(200 * time.Millisecond)
+collect:
+	for {
+		select {
+		case task := <-service.queue:
+			got[task.FileID] = true
+		case <-timeout:
+			break collect
+		}
+	}
+
+	if !got[freshFile.ID] {
+		t.Error("fresh pending job was not recovered")
+	}
+	if !got[dueFile.ID] {
+		t.Error("due-retry pending job was not recovered")
+	}
+	if got[scheduledFile.ID] {
+		t.Error("future-retry pending job should NOT have been recovered (would burn retries)")
+	}
+	if !got[stuckFile.ID] {
+		t.Error("stuck-processing job was not recovered")
+	}
+
+	var revived models.PreviewJob
+	db.First(&revived, "file_id = ?", stuckFile.ID)
+	if revived.Status != models.PreviewJobStatusPending {
+		t.Errorf("expected stuck job to flip to pending, got %s", revived.Status)
+	}
+}

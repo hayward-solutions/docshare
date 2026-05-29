@@ -26,10 +26,17 @@ const (
 	// maxSourceDimension caps the per-axis pixel count we'll feed to a full
 	// decoder. A "pixel bomb" — a tiny compressed file claiming huge
 	// dimensions — would otherwise allocate width*height*4 bytes during
-	// decode (10000^2 * 4 ≈ 400 MB; 65535^2 * 4 ≈ 17 GB) and OOM the
-	// worker. We sniff the header with image.DecodeConfig first and reject
-	// above this bound; the FileThumbnail UI falls back to the icon.
+	// decode (65535^2 * 4 ≈ 17 GB) and OOM the worker. The decode buffer
+	// for any image we accept is bounded by maxSourcePixels below.
 	maxSourceDimension = 10000
+
+	// maxSourcePixels caps total decoded pixels (width × height) at 50 MP.
+	// The per-axis cap alone permits a legitimately-uploadable 10000×10000
+	// JPEG (~few MB on disk) that still demands ~400 MB of RGBA buffer
+	// during decode. 50 MP × 4 B ≈ 200 MB worst-case, manageable for the
+	// single-worker queue while comfortably covering common camera
+	// resolutions (24 MP DSLRs, 48 MP phone "high-res" modes).
+	maxSourcePixels = 50_000_000
 )
 
 // IsThumbnailableImage reports whether a raster image with the given mime can
@@ -92,6 +99,10 @@ func resizeImageToJPEG(r io.Reader, maxDim, quality int) ([]byte, error) {
 	}
 	if cfg.Width > maxSourceDimension || cfg.Height > maxSourceDimension {
 		return nil, fmt.Errorf("image dimensions %dx%d exceed max %d", cfg.Width, cfg.Height, maxSourceDimension)
+	}
+	// Multiplied as int64 so 65535×65535 doesn't wrap on a 32-bit int.
+	if int64(cfg.Width)*int64(cfg.Height) > int64(maxSourcePixels) {
+		return nil, fmt.Errorf("image %dx%d exceeds total pixel budget %d", cfg.Width, cfg.Height, maxSourcePixels)
 	}
 
 	img, err := imaging.Decode(io.MultiReader(&header, r), imaging.AutoOrientation(true))

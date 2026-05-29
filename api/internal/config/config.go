@@ -75,6 +75,12 @@ type PreviewConfig struct {
 	QueueBufferSize int
 	MaxAttempts     int
 	RetryDelays     []time.Duration
+	// StaleRecoveryInterval is the cadence at which RecoverStaleJobs runs
+	// to re-enqueue jobs that didn't make it onto the in-memory channel
+	// (channel-full on burst uploads, worker crash mid-processing, jobs
+	// left pending across an API restart). Zero disables the loop — set
+	// in tests; production should leave the default.
+	StaleRecoveryInterval time.Duration
 }
 
 type SSOConfig struct {
@@ -168,9 +174,10 @@ func Load() *Config {
 			ExportInterval: getEnvAsDuration("AUDIT_EXPORT_INTERVAL", 1*time.Hour),
 		},
 		Preview: PreviewConfig{
-			QueueBufferSize: getEnvAsInt("PREVIEW_QUEUE_BUFFER_SIZE", 100),
-			MaxAttempts:     getEnvAsInt("PREVIEW_JOB_MAX_ATTEMPTS", 3),
-			RetryDelays:     []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute},
+			QueueBufferSize:       getEnvAsInt("PREVIEW_QUEUE_BUFFER_SIZE", 100),
+			MaxAttempts:           getEnvAsInt("PREVIEW_JOB_MAX_ATTEMPTS", 3),
+			RetryDelays:           []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute},
+			StaleRecoveryInterval: getEnvAsDuration("PREVIEW_STALE_RECOVERY_INTERVAL", 60*time.Second),
 		},
 		SSO: SSOConfig{
 			AutoRegister: getEnvAsBool("SSO_AUTO_REGISTER", true),

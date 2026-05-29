@@ -17,12 +17,19 @@ type ThumbKind = 'image' | 'video' | null;
 
 function thumbnailKind(file: File): ThumbKind {
   if (file.isDirectory) return null;
-  // Only fetch for images the server has already generated a thumbnail for.
-  // Without this gate, pre-feature uploads (no thumbnail_path) would still
-  // hit /preview, which falls back to streaming the full original — a grid
-  // of 50 phone photos would download hundreds of MB. Files whose job is
-  // still pending/failed also fall through here and just show the icon.
-  if (file.mimeType.startsWith('image/') && file.thumbnailPath) return 'image';
+  // Both branches gate on a server-generated thumbnail. Without this:
+  //   - Images without a thumbnail (pre-feature, pending, or failed) would
+  //     fall back to streaming the full original — a grid of 50 phone
+  //     photos = hundreds of MB.
+  //   - Videos would be fetched via <video src=...proxy> at the original
+  //     URL. ProxyPreview doesn't honor Range headers, so browsers asking
+  //     for video metadata receive the full file instead of a partial
+  //     response. There's no server-side video thumbnail pipeline yet, so
+  //     thumbnailPath is never set for videos and they correctly fall
+  //     through to the icon. When ffmpeg-class frame extraction lands,
+  //     populating thumbnailPath will turn video tiles back on for free.
+  if (!file.thumbnailPath) return null;
+  if (file.mimeType.startsWith('image/')) return 'image';
   if (file.mimeType.startsWith('video/')) return 'video';
   return null;
 }
