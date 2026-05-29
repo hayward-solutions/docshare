@@ -22,10 +22,15 @@ function thumbnailKind(file: File): ThumbKind {
   return null;
 }
 
+// State is reset by remount, not by an effect: callers must render
+// FileThumbnail under key={file.id} (both file grids in
+// /files and /files/[id] do). If a future caller breaks that contract the
+// previous thumbnail would briefly flash for the wrong file — fix it by
+// adding the key, not by adding a reset effect here (React's recommended
+// pattern, see react.dev/learn/you-might-not-need-an-effect).
 export function FileThumbnail({ file, className, iconClassName }: FileThumbnailProps) {
   const kind = thumbnailKind(file);
   const containerRef = useRef<HTMLDivElement>(null);
-  const blobUrlRef = useRef<string | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -46,11 +51,12 @@ export function FileThumbnail({ file, className, iconClassName }: FileThumbnailP
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [kind]);
+  }, [kind, file.id]);
 
   useEffect(() => {
     if (!inView || !kind) return;
     let cancelled = false;
+    let objectUrl: string | null = null;
 
     (async () => {
       try {
@@ -75,8 +81,7 @@ export function FileThumbnail({ file, className, iconClassName }: FileThumbnailP
           }
           const blob = await response.blob();
           if (cancelled) return;
-          const objectUrl = URL.createObjectURL(blob);
-          blobUrlRef.current = objectUrl;
+          objectUrl = URL.createObjectURL(blob);
           setImageSrc(objectUrl);
         } else if (kind === 'video') {
           // #t=0.1 nudges the browser to render the frame at 0.1s as the
@@ -90,17 +95,14 @@ export function FileThumbnail({ file, className, iconClassName }: FileThumbnailP
 
     return () => {
       cancelled = true;
-    };
-  }, [inView, kind, file.id]);
-
-  useEffect(() => {
-    return () => {
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
+      // Revoke the URL this effect run created. Cleanup fires before the
+      // next effect run (on file.id / kind / inView change) and on unmount,
+      // so the URL stays valid exactly as long as the <img> consuming it.
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
     };
-  }, []);
+  }, [inView, kind, file.id]);
 
   if (kind === 'image' && imageSrc && !error) {
     return (

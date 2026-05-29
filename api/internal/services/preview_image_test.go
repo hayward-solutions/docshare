@@ -2,10 +2,13 @@ package services
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"strings"
 	"testing"
 )
 
@@ -100,5 +103,33 @@ func TestResizeImageToJPEG_RejectsGarbage(t *testing.T) {
 	_, err := resizeImageToJPEG(bytes.NewReader([]byte("not an image, just text bytes")), 400, 80)
 	if err == nil {
 		t.Fatal("expected decode error on garbage input")
+	}
+}
+
+// TestResizeImageToJPEG_RejectsPixelBomb feeds in a PNG whose IHDR claims a
+// 20000×20000 canvas. DecodeConfig succeeds (it reads the header), the size
+// check fires, and we never reach the full decode that would allocate
+// ~1.6 GB. Verifies the OOM guard.
+func TestResizeImageToJPEG_RejectsPixelBomb(t *testing.T) {
+	src := makeTestPNG(t, 32, 32) // valid small PNG we'll rewrite the dims of
+
+	// PNG layout: 8-byte signature, then chunks. IHDR is the first chunk
+	// and stores width (4B big-endian) at byte offset 16 and height at 20.
+	// The IHDR length and CRC don't change so we can just splice the dims.
+	bigW, bigH := uint32(20000), uint32(20000)
+	binary.BigEndian.PutUint32(src[16:20], bigW)
+	binary.BigEndian.PutUint32(src[20:24], bigH)
+	// Recompute the IHDR CRC (covers the type tag + 13-byte body, offsets
+	// 12..29) so DecodeConfig accepts the chunk.
+	src[29-4], src[29-3], src[29-2], src[29-1] = 0, 0, 0, 0 // placeholder
+	crc := crc32.ChecksumIEEE(src[12:29])
+	binary.BigEndian.PutUint32(src[29:33], crc)
+
+	_, err := resizeImageToJPEG(bytes.NewReader(src), 400, 80)
+	if err == nil {
+		t.Fatal("expected pixel-bomb rejection")
+	}
+	if !strings.Contains(err.Error(), "exceed max") {
+		t.Errorf("expected size-cap error, got %v", err)
 	}
 }

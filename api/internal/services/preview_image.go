@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"io"
 	"time"
 
@@ -18,9 +19,17 @@ import (
 )
 
 const (
-	imageThumbnailMaxDim       = 400
-	imageThumbnailJPEGQuality  = 80
-	imageThumbnailContentType  = "image/jpeg"
+	imageThumbnailMaxDim      = 400
+	imageThumbnailJPEGQuality = 80
+	imageThumbnailContentType = "image/jpeg"
+
+	// maxSourceDimension caps the per-axis pixel count we'll feed to a full
+	// decoder. A "pixel bomb" — a tiny compressed file claiming huge
+	// dimensions — would otherwise allocate width*height*4 bytes during
+	// decode (10000^2 * 4 ≈ 400 MB; 65535^2 * 4 ≈ 17 GB) and OOM the
+	// worker. We sniff the header with image.DecodeConfig first and reject
+	// above this bound; the FileThumbnail UI falls back to the icon.
+	maxSourceDimension = 10000
 )
 
 // IsThumbnailableImage reports whether a raster image with the given mime can
@@ -68,9 +77,24 @@ func (p *PreviewService) renderImageThumbnail(ctx context.Context, file *models.
 // resizeImageToJPEG decodes an image from r, fits it into a maxDim×maxDim
 // box (preserving aspect ratio), and re-encodes it as JPEG at the given
 // quality (1-100). EXIF orientation is applied on decode so phone photos
-// come out upright. The returned byte slice is the encoded JPEG.
+// come out upright. Sources whose advertised dimensions exceed
+// maxSourceDimension on either axis are rejected before full decode to
+// avoid OOM via pixel-bomb inputs. The returned byte slice is the
+// encoded JPEG.
 func resizeImageToJPEG(r io.Reader, maxDim, quality int) ([]byte, error) {
-	img, err := imaging.Decode(r, imaging.AutoOrientation(true))
+	// Peel the header off into a buffer so DecodeConfig can inspect
+	// dimensions without consuming bytes Decode still needs. Replaying
+	// via MultiReader yields the full original stream to Decode below.
+	var header bytes.Buffer
+	cfg, _, err := image.DecodeConfig(io.TeeReader(r, &header))
+	if err != nil {
+		return nil, fmt.Errorf("image header decode failed: %w", err)
+	}
+	if cfg.Width > maxSourceDimension || cfg.Height > maxSourceDimension {
+		return nil, fmt.Errorf("image dimensions %dx%d exceed max %d", cfg.Width, cfg.Height, maxSourceDimension)
+	}
+
+	img, err := imaging.Decode(io.MultiReader(&header, r), imaging.AutoOrientation(true))
 	if err != nil {
 		return nil, fmt.Errorf("image decode failed: %w", err)
 	}
