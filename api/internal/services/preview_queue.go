@@ -33,7 +33,28 @@ func NewPreviewQueueService(db *gorm.DB, previewService *PreviewService, cfg con
 		config:         cfg,
 	}
 	go s.processQueue()
+	// Channel sends in Enqueue are non-blocking — when the buffer fills
+	// (e.g. a burst upload exceeds QueueBufferSize while the single worker
+	// is busy) the DB row is still created but the in-memory dispatch is
+	// dropped. Without a periodic sweep those jobs stay pending forever
+	// and the dedup guard in Enqueue means later upload attempts can't
+	// requeue them. The loop also recovers jobs stuck mid-processing if
+	// the worker crashed and drains pending jobs across API restarts.
+	if cfg.StaleRecoveryInterval > 0 {
+		go s.staleRecoveryLoop()
+	}
 	return s
+}
+
+// staleRecoveryLoop runs RecoverStaleJobs once at startup (to drain
+// anything left behind by a previous process) and then on a ticker.
+func (s *PreviewQueueService) staleRecoveryLoop() {
+	s.RecoverStaleJobs()
+	ticker := time.NewTicker(s.config.StaleRecoveryInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.RecoverStaleJobs()
+	}
 }
 
 func (s *PreviewQueueService) Enqueue(fileID uuid.UUID, requestedByID *uuid.UUID) (*models.PreviewJob, error) {
@@ -280,10 +301,18 @@ func (s *PreviewQueueService) RecoverStaleJobs() {
 		})
 	}
 
+	// Pending jobs whose NextRetryAt is in the future are intentionally
+	// deferred by markJobFailed — re-enqueueing them on every tick would
+	// burn through MaxAttempts ahead of the configured backoff. Match
+	// failed-with-retry-due the same way: NextRetryAt must be NULL (fresh
+	// pending) or in the past.
+	now := time.Now().UTC()
 	var pendingJobs []models.PreviewJob
-	s.DB.Where("status = ?", models.PreviewJobStatusPending).
-		Or("status = ? AND next_retry_at <= ?", models.PreviewJobStatusFailed, time.Now().UTC()).
-		Find(&pendingJobs)
+	s.DB.Where(
+		"(status = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)) OR (status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= ?)",
+		models.PreviewJobStatusPending, now,
+		models.PreviewJobStatusFailed, now,
+	).Find(&pendingJobs)
 
 	for _, job := range pendingJobs {
 		select {

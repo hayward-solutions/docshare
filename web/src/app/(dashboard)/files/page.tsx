@@ -49,6 +49,7 @@ import {
   Globe
 } from 'lucide-react';
 import { FileIconComponent } from '@/components/file-icon';
+import { FileThumbnail } from '@/components/file-thumbnail';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { FileSortMenu } from '@/components/file-sort-menu';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -285,70 +286,74 @@ export default function FilesPage() {
           {displayedFiles.map((file) => (
             <div
               key={file.id}
-              className={`group relative flex flex-col justify-between rounded-lg border bg-card p-4 transition-shadow hover:shadow-md ${selection.isSelected(file.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
+              className={`group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md ${selection.isSelected(file.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
             >
               <Link href={`/files/${file.id}`} className="absolute inset-0 z-0" />
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
+              {/* pointer-events-none lets clicks fall through to the
+                  underlying Link so the whole tile opens the file. The
+                  checkbox + dropdown nested inside re-enable themselves
+                  with pointer-events-auto. */}
+              <div className="pointer-events-none relative aspect-square bg-muted">
+                <FileThumbnail
+                  file={file}
+                  className="absolute inset-0"
+                  iconClassName="h-14 w-14 text-blue-600 dark:text-blue-400"
+                />
+                <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">
                   <Checkbox
                     checked={selection.isSelected(file.id)}
                     onCheckedChange={() => selection.toggle(file.id)}
-                    className={`relative z-10 ${selection.count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                    className={`pointer-events-auto bg-card shadow-sm ${selection.count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
                   />
-                  <FileIconComponent 
-                    mimeType={file.mimeType} 
-                    isDirectory={file.isDirectory} 
-                    className="h-10 w-10 text-blue-600 dark:text-blue-400" 
-                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="pointer-events-auto h-8 w-8 bg-card/80 opacity-0 shadow-sm backdrop-blur group-hover:opacity-100">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => router.push(`/files/${file.id}`)}>
+                        Open
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedFileId(file.id);
+                        setInspectorOpen(true);
+                      }}>
+                        <Info className="mr-2 h-4 w-4" />
+                        Info
+                      </DropdownMenuItem>
+                      {user?.id === file.ownerID && (
+                        <DropdownMenuItem onClick={() => setSharingFile(file)}>
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Share
+                        </DropdownMenuItem>
+                      )}
+                      {!file.isDirectory && (
+                        <DropdownMenuItem onClick={() => handleDownload(file.id, file.name)}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setMovingFile(file)}>
+                        <Move className="mr-2 h-4 w-4" />
+                        Move
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(file.id)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative z-10 -mr-2 -mt-2 h-8 w-8 opacity-0 group-hover:opacity-100">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => router.push(`/files/${file.id}`)}>
-                      Open
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      setSelectedFileId(file.id);
-                      setInspectorOpen(true);
-                    }}>
-                      <Info className="mr-2 h-4 w-4" />
-                      Info
-                    </DropdownMenuItem>
-                    {user?.id === file.ownerID && (
-                      <DropdownMenuItem onClick={() => setSharingFile(file)}>
-                        <Share2 className="mr-2 h-4 w-4" />
-                        Share
-                      </DropdownMenuItem>
-                    )}
-                    {!file.isDirectory && (
-                      <DropdownMenuItem onClick={() => handleDownload(file.id, file.name)}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setMovingFile(file)}>
-                      <Move className="mr-2 h-4 w-4" />
-                      Move
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(file.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
-              <div className="mt-4">
+              <div className="border-t p-3">
                 <div className="flex items-center gap-2">
                   <p className="truncate font-medium text-foreground" title={file.name}>
                     {file.name}
                   </p>
                   {file.sharedWith !== undefined && file.sharedWith > 0 && (
-                    <Share2 className="h-4 w-4 text-blue-400 dark:text-blue-300" />
+                    <Share2 className="h-4 w-4 flex-shrink-0 text-blue-400 dark:text-blue-300" />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">

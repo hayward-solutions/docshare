@@ -100,3 +100,55 @@ func TestPreviewService_ConvertToPreview_Directory(t *testing.T) {
 		}
 	})
 }
+
+// TestPreviewService_publishThumbnail_PreservesUpdatedAt asserts that
+// attaching a derived thumbnail leaves the file's updated_at untouched.
+// Image thumbnails auto-generate after upload, so a background completion
+// must not make the row look user-modified (which would also reorder
+// Modified-sorted folders without an actual edit).
+func TestPreviewService_publishThumbnail_PreservesUpdatedAt(t *testing.T) {
+	db := setupPreviewTestDB(t)
+	service := NewPreviewService(db, nil, config.GotenbergConfig{})
+
+	owner := &models.User{
+		Email:        "preview-updated-at@test.com",
+		PasswordHash: "hash",
+		FirstName:    "Stamp",
+		LastName:     "Test",
+		Role:         models.UserRoleUser,
+	}
+	db.Create(owner)
+
+	original := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Millisecond)
+	file := &models.File{
+		Name:        "photo.png",
+		MimeType:    "image/png",
+		Size:        100,
+		OwnerID:     owner.ID,
+		StoragePath: "photo.png",
+	}
+	db.Create(file)
+	// Force updated_at backward — Create stamps it as "now".
+	db.Model(file).UpdateColumn("updated_at", original)
+
+	// publishThumbnail calls PresignedGetURLWithResponse after the
+	// UPDATE, which panics on the nil storage client in this test setup.
+	// We only care about the side effect on the row, so recover from
+	// the post-update panic and assert on the DB state.
+	previewPath := "0e/previews/abc.jpg"
+	func() {
+		defer func() { _ = recover() }()
+		_, _ = service.publishThumbnail(context.Background(), file, previewPath, time.Now().UTC().Add(time.Hour), "image/jpeg")
+	}()
+
+	var got models.File
+	if err := db.First(&got, "id = ?", file.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got.ThumbnailPath == nil || *got.ThumbnailPath != previewPath {
+		t.Errorf("expected thumbnail_path=%q, got %v", previewPath, got.ThumbnailPath)
+	}
+	if !got.UpdatedAt.Equal(original) {
+		t.Errorf("expected updated_at preserved at %v, got %v", original, got.UpdatedAt)
+	}
+}

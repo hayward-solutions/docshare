@@ -54,10 +54,42 @@ func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *servi
 	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, ExportService: export, Audit: audit, MaxUploadBytes: maxUploadBytes}
 }
 
+// maybeEnqueueImageThumbnail fires the preview pipeline for image uploads so
+// the grid can render a small JPEG thumbnail without pulling the original.
+// Enqueue is best-effort: a queue-full or dedup hit must not fail the upload
+// itself. PreviewQueue.Enqueue already deduplicates by file_id, so racing
+// callers (e.g. multi-tab uploads) won't double-up.
+func (h *FilesHandler) maybeEnqueueImageThumbnail(file *models.File, requestedBy *uuid.UUID) {
+	if file == nil || file.IsDirectory {
+		return
+	}
+	if h.PreviewQueue == nil {
+		return
+	}
+	if !services.IsThumbnailableImage(file.MimeType) {
+		return
+	}
+	if _, err := h.PreviewQueue.Enqueue(file.ID, requestedBy); err != nil {
+		logger.Error("image_thumbnail_enqueue_failed", err, map[string]interface{}{
+			"file_id":   file.ID.String(),
+			"mime_type": file.MimeType,
+		})
+	}
+}
+
 func resolveMimeType(filename, declared string) string {
 	contentType := declared
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
+	// "" and application/octet-stream are both "the caller didn't say" —
+	// the multipart upload path used by the CLI sends octet-stream as a
+	// default because Go's mime/multipart doesn't sniff. Prefer the
+	// extension when it yields something specific, otherwise keep the
+	// generic fallback. Without this, CLI-uploaded .jpg/.png/.pdf files
+	// landed as application/octet-stream and downstream gates (image
+	// thumbnail enqueue, viewer routing) silently skipped them.
+	if contentType == "" || contentType == "application/octet-stream" {
+		if ext := mime.TypeByExtension(filepath.Ext(filename)); ext != "" {
+			contentType = ext
+		}
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -172,6 +204,8 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 		IPAddress:    c.IP(),
 		RequestID:    getRequestID(c),
 	})
+
+	h.maybeEnqueueImageThumbnail(&entry, &currentUser.ID)
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
@@ -452,6 +486,8 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		IPAddress:    c.IP(),
 		RequestID:    getRequestID(c),
 	})
+
+	h.maybeEnqueueImageThumbnail(&entry, &currentUser.ID)
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
@@ -811,8 +847,17 @@ func (h *FilesHandler) PreviewURL(c *fiber.Ctx) error {
 
 	token := previewtoken.Generate(fileID.String(), currentUser.ID.String())
 
+	// The variant param is propagated into the returned path so the client
+	// builds one URL: ?variant=thumb selects the small JPEG thumbnail (for
+	// grid view); absent/any other value selects the renderable form (for
+	// the viewer: original for images, PDF render for Office docs).
+	path := "/files/" + fileID.String() + "/proxy"
+	if c.Query("variant") == "thumb" {
+		path += "?variant=thumb"
+	}
+
 	return utils.Success(c, fiber.StatusOK, fiber.Map{
-		"path":  "/files/" + fileID.String() + "/proxy",
+		"path":  path,
 		"token": token,
 	})
 }
@@ -856,9 +901,28 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusForbidden, "access denied")
 	}
 
+	// Path selection:
+	//   variant=thumb  → force the small derived asset (ThumbnailPath);
+	//                    404 if none exists so the grid can fall back to
+	//                    the icon without downloading the full original.
+	//   default         → the renderable form. For images, that's the
+	//                    full StoragePath (the viewer needs the original
+	//                    resolution; the 400px JPEG would render blurry).
+	//                    For non-images with a generated preview (e.g.
+	//                    Office → PDF), that's still ThumbnailPath.
+	variant := c.Query("variant")
+	isImage := strings.HasPrefix(file.MimeType, "image/")
+	hasThumbnail := file.ThumbnailPath != nil && *file.ThumbnailPath != ""
+
 	storagePath := file.StoragePath
 	servingThumbnail := false
-	if file.ThumbnailPath != nil && *file.ThumbnailPath != "" {
+	if variant == "thumb" {
+		if !hasThumbnail {
+			return utils.Error(c, fiber.StatusNotFound, "thumbnail not available")
+		}
+		storagePath = *file.ThumbnailPath
+		servingThumbnail = true
+	} else if hasThumbnail && !isImage {
 		storagePath = *file.ThumbnailPath
 		servingThumbnail = true
 	}
@@ -874,16 +938,20 @@ func (h *FilesHandler) ProxyPreview(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusInternalServerError, "failed reading object metadata")
 	}
 
-	// When we're serving the thumbnail (a PDF rendering of the original) the
-	// DB's MimeType still reflects the original file (e.g. DOCX), so use S3's
-	// reported content-type — PreviewService uploaded the thumbnail with the
-	// correct one. For the original file, prefer DB MimeType, since
-	// pre-signed PUT uploads land in S3 as application/octet-stream.
+	// When we're serving a derived thumbnail, S3's reported content-type is
+	// authoritative (PreviewService uploaded with the correct one — JPEG
+	// for image thumbnails, PDF for Office-doc thumbnails). For the
+	// original, prefer DB MimeType, since pre-signed PUT uploads land in
+	// S3 as application/octet-stream.
 	var contentType string
 	if servingThumbnail {
 		contentType = stat.ContentType
 		if contentType == "" {
-			contentType = "application/pdf"
+			if isImage {
+				contentType = "image/jpeg"
+			} else {
+				contentType = "application/pdf"
+			}
 		}
 	} else {
 		contentType = file.MimeType
