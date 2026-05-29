@@ -244,7 +244,7 @@ const handleDownload = async (fileId: string, fileName: string) => {
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link href="/files" className="hover:text-accent-foreground">My Files</Link>
-        {breadcrumbs.slice(0, -1).map((crumb) => (
+        {breadcrumbs.filter((crumb) => crumb.id !== id).map((crumb) => (
           <div key={crumb.id} className="flex items-center gap-2">
             <ChevronRight className="h-4 w-4" />
             <Link href={`/files/${crumb.id}`} className="hover:text-accent-foreground">
