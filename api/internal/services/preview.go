@@ -57,6 +57,10 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 		return "", fmt.Errorf("cannot preview a directory")
 	}
 
+	if IsThumbnailableImage(file.MimeType) {
+		return p.renderImageThumbnail(ctx, file, notAfter)
+	}
+
 	if !isOfficeDocument(file.Name) {
 		return p.Storage.PresignedGetURLWithResponse(ctx, file.StoragePath, 15*time.Minute, file.MimeType, "inline")
 	}
@@ -108,11 +112,16 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 		return "", err
 	}
 
-	// Gate the publish on the file not having been edited since the job
-	// started. If a SaveBinary landed mid-render, file.updated_at has
-	// advanced past notAfter and the UPDATE matches 0 rows — we then
-	// drop the thumbnail bytes we just uploaded and bail without
-	// claiming a stale PDF as the current preview.
+	return p.publishThumbnail(ctx, file, previewPath, notAfter, "application/pdf")
+}
+
+// publishThumbnail atomically attaches a freshly-rendered thumbnail to the
+// File row, guarded against a mid-render edit. If the file's updated_at has
+// advanced past notAfter the UPDATE matches 0 rows; we then delete the
+// just-uploaded object and return ErrPreviewSuperseded so the queue can
+// re-enqueue against the latest bytes. On success the row's
+// thumbnail_path is set and an inline presigned URL is returned.
+func (p *PreviewService) publishThumbnail(ctx context.Context, file *models.File, previewPath string, notAfter time.Time, contentType string) (string, error) {
 	q := p.DB.WithContext(ctx).Model(&models.File{}).Where("id = ?", file.ID)
 	if !notAfter.IsZero() {
 		q = q.Where("updated_at <= ?", notAfter)
@@ -122,9 +131,6 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 		return "", result.Error
 	}
 	if result.RowsAffected == 0 {
-		// File was edited mid-render; the bytes we just rendered are stale.
-		// Best-effort cleanup so we don't leak orphan PDFs in S3, then
-		// signal the queue to re-enqueue against the latest bytes.
 		if delErr := p.Storage.Delete(ctx, previewPath); delErr != nil {
 			logger.Error("preview_stale_thumb_cleanup_failed", delErr, map[string]interface{}{
 				"file_id":      file.ID.String(),
@@ -138,7 +144,7 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 	}
 	file.ThumbnailPath = &previewPath
 
-	return p.Storage.PresignedGetURLWithResponse(ctx, previewPath, 15*time.Minute, "application/pdf", "inline")
+	return p.Storage.PresignedGetURLWithResponse(ctx, previewPath, 15*time.Minute, contentType, "inline")
 }
 
 func isOfficeDocument(name string) bool {

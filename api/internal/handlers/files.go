@@ -54,6 +54,29 @@ func NewFilesHandler(db *gorm.DB, storageClient *storage.S3Client, access *servi
 	return &FilesHandler{DB: db, Storage: storageClient, Access: access, PreviewService: preview, PreviewQueue: previewQueue, ExportService: export, Audit: audit, MaxUploadBytes: maxUploadBytes}
 }
 
+// maybeEnqueueImageThumbnail fires the preview pipeline for image uploads so
+// the grid can render a small JPEG thumbnail without pulling the original.
+// Enqueue is best-effort: a queue-full or dedup hit must not fail the upload
+// itself. PreviewQueue.Enqueue already deduplicates by file_id, so racing
+// callers (e.g. multi-tab uploads) won't double-up.
+func (h *FilesHandler) maybeEnqueueImageThumbnail(file *models.File, requestedBy *uuid.UUID) {
+	if file == nil || file.IsDirectory {
+		return
+	}
+	if h.PreviewQueue == nil {
+		return
+	}
+	if !services.IsThumbnailableImage(file.MimeType) {
+		return
+	}
+	if _, err := h.PreviewQueue.Enqueue(file.ID, requestedBy); err != nil {
+		logger.Error("image_thumbnail_enqueue_failed", err, map[string]interface{}{
+			"file_id":   file.ID.String(),
+			"mime_type": file.MimeType,
+		})
+	}
+}
+
 func resolveMimeType(filename, declared string) string {
 	contentType := declared
 	if contentType == "" {
@@ -172,6 +195,8 @@ func (h *FilesHandler) Upload(c *fiber.Ctx) error {
 		IPAddress:    c.IP(),
 		RequestID:    getRequestID(c),
 	})
+
+	h.maybeEnqueueImageThumbnail(&entry, &currentUser.ID)
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }
@@ -452,6 +477,8 @@ func (h *FilesHandler) FinalizeUpload(c *fiber.Ctx) error {
 		IPAddress:    c.IP(),
 		RequestID:    getRequestID(c),
 	})
+
+	h.maybeEnqueueImageThumbnail(&entry, &currentUser.ID)
 
 	return utils.Success(c, fiber.StatusCreated, entry)
 }

@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/coreos/go-oidc/v3 v3.14.1
+	github.com/disintegration/imaging v1.6.2
 	github.com/glebarez/go-sqlite v1.21.2
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-ldap/ldap/v3 v3.4.12
@@ -14,6 +15,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/pquerna/otp v1.5.0
 	golang.org/x/crypto v0.51.0
+	golang.org/x/image v0.41.0
 	golang.org/x/net v0.55.0
 	golang.org/x/oauth2 v0.31.0
 	gorm.io/driver/postgres v1.6.0

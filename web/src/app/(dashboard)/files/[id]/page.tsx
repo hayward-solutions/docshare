@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { isAnyEditableMime, isSpreadsheetBinaryMime } from '@/lib/mime';
 import { FileIconComponent } from '@/components/file-icon';
+import { FileThumbnail } from '@/components/file-thumbnail';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { FileSortMenu } from '@/components/file-sort-menu';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -406,57 +407,57 @@ const handleDownload = async (fileId: string, fileName: string) => {
               {displayedFiles.map((child) => (
                 <div
                   key={child.id}
-                  className={`group relative flex flex-col justify-between rounded-lg border bg-card p-4 transition-shadow hover:shadow-md ${selection.isSelected(child.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
+                  className={`group relative flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md ${selection.isSelected(child.id) ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 dark:border-blue-400' : ''}`}
                 >
                   <Link href={`/files/${child.id}`} className="absolute inset-0 z-0" />
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="relative aspect-square bg-muted">
+                    <FileThumbnail
+                      file={child}
+                      className="absolute inset-0"
+                      iconClassName="h-14 w-14 text-blue-600 dark:text-blue-400"
+                    />
+                    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-2">
                       <Checkbox
                         checked={selection.isSelected(child.id)}
                         onCheckedChange={() => selection.toggle(child.id)}
-                        className={`relative z-10 ${selection.count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                        className={`pointer-events-auto bg-card shadow-sm ${selection.count > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
                       />
-                      <FileIconComponent 
-                        mimeType={child.mimeType} 
-                        isDirectory={child.isDirectory} 
-                        className="h-10 w-10 text-blue-600 dark:text-blue-400" 
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="pointer-events-auto h-8 w-8 bg-card/80 opacity-0 shadow-sm backdrop-blur group-hover:opacity-100">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => router.push(`/files/${child.id}`)}>
+                            Open
+                          </DropdownMenuItem>
+                          {user?.id === child.ownerID && (
+                            <DropdownMenuItem onClick={() => setSharingFile(child)}>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Share
+                            </DropdownMenuItem>
+                          )}
+                          {!child.isDirectory && (
+                            <DropdownMenuItem onClick={() => handleDownload(child.id, child.name)}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setMovingFile(child)}>
+                            <Move className="mr-2 h-4 w-4" />
+                            Move
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(child.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="relative z-10 -mr-2 -mt-2 h-8 w-8 opacity-0 group-hover:opacity-100">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/files/${child.id}`)}>
-                          Open
-                        </DropdownMenuItem>
-                        {user?.id === child.ownerID && (
-                          <DropdownMenuItem onClick={() => setSharingFile(child)}>
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Share
-                          </DropdownMenuItem>
-                        )}
-                        {!child.isDirectory && (
-                          <DropdownMenuItem onClick={() => handleDownload(child.id, child.name)}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setMovingFile(child)}>
-                          <Move className="mr-2 h-4 w-4" />
-                          Move
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(child.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
-                  <div className="mt-4">
+                  <div className="border-t p-3">
                     <p className="truncate font-medium text-foreground" title={child.name}>
                       {child.name}
                     </p>
