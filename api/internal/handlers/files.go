@@ -79,8 +79,17 @@ func (h *FilesHandler) maybeEnqueueImageThumbnail(file *models.File, requestedBy
 
 func resolveMimeType(filename, declared string) string {
 	contentType := declared
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
+	// "" and application/octet-stream are both "the caller didn't say" —
+	// the multipart upload path used by the CLI sends octet-stream as a
+	// default because Go's mime/multipart doesn't sniff. Prefer the
+	// extension when it yields something specific, otherwise keep the
+	// generic fallback. Without this, CLI-uploaded .jpg/.png/.pdf files
+	// landed as application/octet-stream and downstream gates (image
+	// thumbnail enqueue, viewer routing) silently skipped them.
+	if contentType == "" || contentType == "application/octet-stream" {
+		if ext := mime.TypeByExtension(filepath.Ext(filename)); ext != "" {
+			contentType = ext
+		}
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"

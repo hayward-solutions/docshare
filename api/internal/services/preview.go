@@ -121,12 +121,18 @@ func (p *PreviewService) ConvertToPreview(ctx context.Context, file *models.File
 // just-uploaded object and return ErrPreviewSuperseded so the queue can
 // re-enqueue against the latest bytes. On success the row's
 // thumbnail_path is set and an inline presigned URL is returned.
+//
+// UpdateColumn (singular) is used deliberately so writing the derived
+// thumbnail doesn't bump updated_at — image thumbnails auto-generate on
+// upload, and we don't want the background completion to make every
+// fresh file look user-edited (which would also reorder Modified-sorted
+// folders without an actual edit).
 func (p *PreviewService) publishThumbnail(ctx context.Context, file *models.File, previewPath string, notAfter time.Time, contentType string) (string, error) {
 	q := p.DB.WithContext(ctx).Model(&models.File{}).Where("id = ?", file.ID)
 	if !notAfter.IsZero() {
 		q = q.Where("updated_at <= ?", notAfter)
 	}
-	result := q.Update("thumbnail_path", previewPath)
+	result := q.UpdateColumn("thumbnail_path", previewPath)
 	if result.Error != nil {
 		return "", result.Error
 	}
